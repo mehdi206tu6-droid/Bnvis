@@ -99,14 +99,16 @@ const FinancialView: React.FC<FinancialViewProps> = ({ userData, onUpdateUserDat
         
         // Update account balances
         const updatedAccounts = accounts.map(acc => {
+            // FIX: Operator '+' cannot be applied to types 'unknown' and 'unknown'.
+            // Initialize balance as a Number to ensure correct arithmetic operations.
             let newBalance = Number(acc.balance);
             // Revert old amount if editing
             if (editingTransaction && editingTransaction.accountId === acc.id) {
-                 newBalance += editingTransaction.type === 'income' ? -editingTransaction.amount : editingTransaction.amount;
+                 newBalance += editingTransaction.type === 'income' ? -Number(editingTransaction.amount) : Number(editingTransaction.amount);
             }
             // Apply new amount
             if (transaction.accountId === acc.id) {
-                 newBalance += transaction.type === 'income' ? transaction.amount : -transaction.amount;
+                 newBalance += transaction.type === 'income' ? Number(transaction.amount) : -Number(transaction.amount);
             }
             return { ...acc, balance: newBalance };
         });
@@ -121,8 +123,9 @@ const FinancialView: React.FC<FinancialViewProps> = ({ userData, onUpdateUserDat
             const updatedTransactions = transactions.filter(t => t.id !== txToDelete.id);
             const updatedAccounts = accounts.map(acc => {
                  if (acc.id === txToDelete.accountId) {
-                    // FIX: Explicitly cast balance to a number to prevent type errors during arithmetic operation.
-                    const newBalance = Number(acc.balance) + (txToDelete.type === 'income' ? -txToDelete.amount : txToDelete.amount);
+                    // FIX: The left-hand side and right-hand side of an arithmetic operation must be of type 'number'.
+                    // Explicitly cast balance and amount to numbers before performing arithmetic.
+                    const newBalance = Number(acc.balance) + (txToDelete.type === 'income' ? -Number(txToDelete.amount) : Number(txToDelete.amount));
                     return { ...acc, balance: newBalance };
                 }
                 return acc;

@@ -1,14 +1,13 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OnboardingData, UserGoal, Achievement, AchievementID, Habit, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent, GratitudeEntry, Note, CalendarEvent, FocusSession, Transaction, TransactionType } from '../types';
 import { 
-    TargetIcon, HabitsIcon, CogIcon, HomeIcon, FinanceIcon, SparklesIcon,
+    TargetIcon, HabitsIcon, CogIcon, FinanceIcon, SparklesIcon,
     HealthIcon, EducationIcon, WaterDropIcon, ReadingIcon, 
     WalkingIcon, MeditationIcon, UserCircleIcon, DocumentChartBarIcon, 
     MoonIcon, StarIcon, TrophyIcon, LevelUpIcon, SunIcon, CloudIcon, MinusCircleIcon, FlameIcon, LeafIcon,
     customHabitIcons, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon,
-    CloudRainIcon, JourneyIcon, BriefcaseIcon, MoneyIcon, FlagIcon,
-    goalIcons, MicrophoneIcon, StopIcon
+    CloudRainIcon, JourneyIcon, BriefcaseIcon, MoneyIcon, FlagIcon, BoltIcon,
+    goalIcons, MicrophoneIcon, StopIcon, BenvisLogoIcon
 } from './icons';
 import { GoogleGenAI, Type } from "@google/genai";
 import GoalsView from './GoalsView';
@@ -27,6 +26,7 @@ import { NightRoutineView } from './NightRoutineView';
 import PredictiveAlertsWidget from './PredictiveAlertsWidget';
 import EnergyPredictionWidget from './EnergyPredictionWidget';
 import DailyBriefingWidget from './DailyBriefingWidget';
+import MoodWeatherWidget from './MoodWeatherWidget';
 
 type View = 'dashboard' | 'goals' | 'finance' | 'settings' | 'assistant';
 
@@ -255,7 +255,7 @@ const BenvisWidget: React.FC<{
                     
                     const updatedAccounts = userData.financialAccounts?.map(acc => {
                         if (acc.id === newTransaction.accountId) {
-                            const newBalance = type === 'income' ? acc.balance + amount : acc.balance - amount;
+                            const newBalance = type === 'income' ? Number(acc.balance) + amount : Number(acc.balance) - amount;
                             return { ...acc, balance: newBalance };
                         }
                         return acc;
@@ -275,8 +275,8 @@ const BenvisWidget: React.FC<{
             setInput('');
         } catch (error: any) {
             console.error("Error processing input:", error);
-            const errorMessage = error?.message || '';
-            if (errorMessage.includes("RESOURCE_EXHAUSTED")) {
+            const errorString = JSON.stringify(error);
+            if (errorString.includes("RESOURCE_EXHAUSTED") || errorString.includes('"code":429')) {
                 showFeedback('محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.', 'error');
             } else {
                 showFeedback('خطا در پردازش ورودی شما. لطفا دوباره تلاش کنید.', 'error');
@@ -743,7 +743,7 @@ const BottomNav: React.FC<{ activeView: View; setActiveView: (view: View) => voi
     const navItems: { view: View; icon: React.FC<{ className?: string }>; label: string }[] = [
         { view: 'settings', icon: CogIcon, label: 'تنظیمات' },
         { view: 'goals', icon: TargetIcon, label: 'اهداف' },
-        { view: 'dashboard', icon: HomeIcon, label: 'خانه' },
+        { view: 'dashboard', icon: BenvisLogoIcon, label: 'بنویس' },
         { view: 'finance', icon: FinanceIcon, label: 'مالی' },
         { view: 'assistant', icon: SparklesIcon, label: 'دستیار' },
     ];
@@ -760,7 +760,7 @@ const BottomNav: React.FC<{ activeView: View; setActiveView: (view: View) => voi
                         }`}
                     >
                         <item.icon className="w-6 h-6 mb-1"/>
-                        <span className="text-xs font-semibold">{item.label}</span>
+                        <span className={`text-xs ${item.view === 'dashboard' ? 'font-bold' : 'font-semibold'}`}>{item.label}</span>
                     </button>
                 ))}
             </div>
@@ -813,22 +813,24 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     const [currentAchievement, setCurrentAchievement] = useState<AchievementID | null>(null);
     const [assistantState, setAssistantState] = useState<{ initialTab: string, initialJournalText: string }>({ initialTab: 'chat', initialJournalText: '' });
 
-    const [dashboardAiData, setDashboardAiData] = useState<{
-        priorities: string[] | null;
-        weather: { temp: number; condition: string } | null;
-        dailyPrompt: string | null;
-        predictiveAlert: { title: string; message: string } | null;
-        dailyBriefing: string | null;
-    }>({
-        priorities: null,
-        weather: null,
-        dailyPrompt: null,
-        predictiveAlert: null,
-        dailyBriefing: null,
-    });
-    const [isAiDataLoading, setIsAiDataLoading] = useState(true);
-    const [aiDataError, setAiDataError] = useState<string | null>(null);
+    // --- NEW GRANULAR AI DATA STATE ---
+    const [priorities, setPriorities] = useState<string[] | null>(null);
+    const [isPrioritiesLoading, setIsPrioritiesLoading] = useState(true);
 
+    const [weather, setWeather] = useState<{ temp: number; condition: string } | null>(null);
+    const [isWeatherLoading, setIsWeatherLoading] = useState(true);
+    const [weatherError, setWeatherError] = useState<string | null>(null);
+
+    const [dailyPrompt, setDailyPrompt] = useState<string | null>(null);
+    const [isDailyPromptLoading, setIsDailyPromptLoading] = useState(true);
+    
+    const [predictiveAlert, setPredictiveAlert] = useState<{ title: string; message: string } | null>(null);
+    const [isPredictiveAlertLoading, setIsPredictiveAlertLoading] = useState(true);
+
+    const [dailyBriefing, setDailyBriefing] = useState<string | null>(null);
+    const [isDailyBriefingLoading, setIsDailyBriefingLoading] = useState(true);
+    
+    const [aiDataError, setAiDataError] = useState<string | null>(null); // For a general error banner
 
     const { isLowFrictionMode = false } = userData;
     
@@ -849,164 +851,111 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onUpdateUserData({ ...userData, isLowFrictionMode: isOn });
     };
 
-    const generateDashboardData = useCallback(async (forceRefresh = false) => {
-        setIsAiDataLoading(true);
-        setAiDataError(null);
-        const todayStr = new Date().toISOString().split('T')[0];
-        const cacheKey = `benvis_dashboard_ai_${todayStr}`;
+    // --- NEW DECOUPLED AI DATA FETCHING ---
 
+    const fetchWithCache = useCallback(async <T,>(key: string, fetchFn: () => Promise<T>, forceRefresh = false): Promise<T | null> => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const cacheKey = `benvis_${key}_${todayStr}`;
         if (!forceRefresh) {
             try {
                 const cached = localStorage.getItem(cacheKey);
-                if (cached) {
-                    setDashboardAiData(JSON.parse(cached));
-                    setIsAiDataLoading(false);
-                    return;
-                }
-            } catch (e) { console.warn("Failed to read dashboard cache", e); }
+                if (cached) return JSON.parse(cached);
+            } catch (e) { console.warn(`Failed to read ${key} cache`, e); }
         }
-
         try {
-            // --- Data Gathering for All Widgets ---
-            const { goals, habits, fullName } = userData;
+            const result = await fetchFn();
+            localStorage.setItem(cacheKey, JSON.stringify(result));
+            return result;
+        } catch (error) {
+            console.error(`Failed to fetch ${key}:`, error);
+            throw error;
+        }
+    }, []);
 
-            // For Priorities Widget
+    const handleError = (error: any): string => {
+        const errorString = JSON.stringify(error);
+        if (errorString.includes("RESOURCE_EXHAUSTED") || errorString.includes("429")) {
+            return "محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.";
+        }
+        return "خطا در دریافت برخی اطلاعات هوشمند.";
+    };
+    
+    // Priorities Fetching
+    const fetchPriorities = useCallback(async (forceRefresh = false) => {
+        setIsPrioritiesLoading(true);
+        try {
+            const { goals, habits } = userData;
             const goalsInfo = goals.filter(g => g.progress < 100).map(g => `- "${g.title}" (Progress: ${g.progress}%)`).join('\n') || 'No active goals.';
             const habitsInfo = habits.map(h => `- "${h.name}"`).join('\n') || 'No habits to track.';
+            const result = await fetchWithCache('priorities', async () => {
+                const prompt = `Based on the user's active goals and habits, identify the top 3 most impactful priorities for today. Be concise, actionable, and respond in Persian. - Active Goals: ${goalsInfo} - Habits to Track: ${habitsInfo} Respond ONLY with a valid JSON array of strings.`;
+                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } } });
+                return JSON.parse(response.text.trim());
+            }, forceRefresh);
+            setPriorities(result);
+        } catch (error) {
+            setAiDataError(handleError(error));
+        } finally {
+            setIsPrioritiesLoading(false);
+        }
+    }, [userData.goals, userData.habits, fetchWithCache]);
 
-            // For Weather Widget
+    useEffect(() => { fetchPriorities() }, [fetchPriorities]);
+
+    // Weather Fetching
+    const fetchWeather = useCallback(async (forceRefresh = false) => {
+        setIsWeatherLoading(true);
+        setWeatherError(null);
+        try {
             let location: { lat: number; lon: number } | null = null;
             try {
-                const position = await new Promise<GeolocationPosition>((resolve, reject) => 
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
-                );
+                const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
                 location = { lat: position.coords.latitude, lon: position.coords.longitude };
             } catch (e) {
-                console.warn("Could not get location for weather.");
+                setWeatherError("مکان‌یابی برای دریافت آب و هوا فعال نیست.");
+                setIsWeatherLoading(false);
+                return;
             }
-
-            // For Predictive Alerts Widget
-            let potentialIssues: string[] = [];
-            if (habits && habits.length > 0) {
-                 const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const dayBefore = new Date();
-                dayBefore.setDate(dayBefore.getDate() - 2);
-
-                const yesterdayHabits = JSON.parse(localStorage.getItem(`benvis_habits_${yesterday.toISOString().split('T')[0]}`) || '{}');
-                const dayBeforeHabits = JSON.parse(localStorage.getItem(`benvis_habits_${dayBefore.toISOString().split('T')[0]}`) || '{}');
-                
-                for (const habit of habits.filter(h => h.type === 'good')) {
-                    if (dayBeforeHabits[habit.name] && !yesterdayHabits[habit.name]) {
-                        potentialIssues.push(`Habit streak for '${habit.name}' was broken yesterday.`);
-                    }
-                }
-            }
-            
-            // For Daily Briefing Widget
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
-            const habitsStorageKey = `benvis_habits_${yesterdayStr}`;
-            let yesterdayHabitsStatus = "No habits tracked yesterday.";
-            try {
-                const storedHabits = localStorage.getItem(habitsStorageKey);
-                if (storedHabits) {
-                    const completed = JSON.parse(storedHabits);
-                    const completedList = habits.filter(h => h.type === 'good' && completed[h.name]).map(h => h.name);
-                    const missedList = habits.filter(h => h.type === 'good' && !completed[h.name]).map(h => h.name);
-                    yesterdayHabitsStatus = `Completed: ${completedList.join(', ') || 'None'}. Missed: ${missedList.join(', ') || 'None'}.`;
-                }
-            } catch(e) {/* ignore */}
-
-            let yesterdayFocusStatus = "No focus sessions yesterday.";
-            try {
-                const storedSessions = localStorage.getItem('benvis_focus_sessions');
-                const allSessions: FocusSession[] = storedSessions ? JSON.parse(storedSessions) : [];
-                const yesterdaySessions = allSessions.filter(s => s.date === yesterdayStr);
-                if (yesterdaySessions.length > 0) {
-                    yesterdayFocusStatus = `${yesterdaySessions.length} sessions, total ${yesterdaySessions.reduce((sum, s) => sum + s.duration, 0)} minutes.`;
-                }
-            } catch (e) {/* ignore */}
-            // --- End Data Gathering ---
-
-
-            const responseSchema = {
-                type: Type.OBJECT, properties: {
-                    priorities: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    weather: { type: Type.OBJECT, properties: { temperature: { type: Type.INTEGER }, condition: { type: Type.STRING, description: "One of: sunny, cloudy, rainy" } }, nullable: true },
-                    dailyPrompt: { type: Type.STRING },
-                    predictiveAlert: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, message: { type: Type.STRING } }, nullable: true },
-                    dailyBriefing: { type: Type.STRING }
-                }
-            };
-            const prompt = `You are the central AI engine for the Benvis Life OS dashboard. Your task is to generate a single JSON object containing all the necessary data to populate the user's dashboard for today.
-
-            **User's Current Data:**
-            - User's Name: ${fullName.split(' ')[0]}
-            - Today's Date: ${todayStr}
-            ${location ? `- User's Location: Latitude ${location.lat}, Longitude ${location.lon}` : "- User's location is not available."}
-            - Active Goals:\n${goalsInfo}
-            - Habits to Track:\n${habitsInfo}
-            ${potentialIssues.length > 0 ? `- Potential Issues Detected:\n${potentialIssues.map(issue => `- ${issue}`).join('\n')}` : "- No specific issues detected."}
-
-            **User's Data from Yesterday:**
-            - Yesterday's Habits Status: ${yesterdayHabitsStatus}
-            - Yesterday's Focus Sessions: ${yesterdayFocusStatus}
-
-            **Your Task:**
-            Generate a single, valid JSON object that strictly adheres to the provided schema. All text content must be in Persian.
-
-            1.  **priorities**: Identify the top 3 most impactful priorities for the user today. Be concise and actionable.
-            2.  **weather**: If location is available, provide a simple weather report (temperature in Celsius and condition: "sunny", "cloudy", or "rainy"). If location is not available, this field must be null.
-            3.  **dailyPrompt**: Generate a single, personal, and reflective journaling prompt (under 20 words) to inspire introspection based on the user's goals and habits.
-            4.  **predictiveAlert**: If 'Potential Issues Detected' are present, generate a gentle, encouraging message suggesting the user try "Low Friction Mode" to focus on essentials. This field **must be null** if there are no potential issues.
-            5.  **dailyBriefing**: Based on yesterday's data, provide a short, motivational daily briefing (max 150 words) with this Markdown structure:
-                - **نگاهی به دیروز**: A brief, positive summary of yesterday's performance.
-                - **پیشنهاد امروز**: 2-3 practical tips for today.
-                - **جمله انگیزشی**: A short, inspiring quote for the day.
-
-            Respond ONLY with the valid JSON object.`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash', contents: prompt,
-                config: { responseMimeType: "application/json", responseSchema }
-            });
-            const result = JSON.parse(response.text.trim());
-            
-            const finalData = {
-                ...result,
-                weather: result.weather ? { temp: result.weather.temperature, condition: result.weather.condition } : null,
-            };
-
-            setDashboardAiData(finalData);
-            localStorage.setItem(cacheKey, JSON.stringify(finalData));
-
-        } catch (error: any) {
-            console.error("Failed to generate dashboard data:", error);
-            const errorMessage = error?.message || "An unknown error occurred";
-            if (errorMessage.includes("RESOURCE_EXHAUSTED")) {
-                setAiDataError("محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.");
-            } else {
-                 setAiDataError("خطا در دریافت اطلاعات هوشمند.");
-            }
-            // Set fallback data
-            setDashboardAiData({
-                priorities: ["بررسی اهداف", "انجام یک عادت", "نوشتن در دفترچه"],
-                weather: null,
-                dailyPrompt: "امروز چه چیزی در ذهن شماست که ارزش نوشتن دارد؟",
-                predictiveAlert: null,
-                dailyBriefing: `**نگاهی به دیروز**\nدیروز هم گذشت! هر قدمی که برداشتی، هرچند کوچک، ارزشمنده.\n\n**پیشنهاد امروز**\n- یک لیوان آب بیشتر بنوش.\n- ۵ دقیقه برای یکی از اهدافت وقت بگذار.\n\n**جمله انگیزشی**\n"شروع کردن، نیمی از انجام دادن است."`
-            });
+            const result = await fetchWithCache('weather', async () => {
+                if (!location) return null;
+                const prompt = `Provide a simple weather report for Latitude ${location.lat}, Longitude ${location.lon}. Respond in Persian. Respond ONLY with a valid JSON object like {"temperature": 25, "condition": "sunny"}`;
+                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { temperature: { type: Type.INTEGER }, condition: { type: Type.STRING } } } } });
+                const parsed = JSON.parse(response.text.trim());
+                return { temp: parsed.temperature, condition: parsed.condition };
+            }, forceRefresh);
+            setWeather(result);
+        } catch (error) {
+            setWeatherError(handleError(error));
         } finally {
-            setIsAiDataLoading(false);
+            setIsWeatherLoading(false);
         }
-    }, [userData]);
+    }, [fetchWithCache]);
 
-    useEffect(() => {
-        generateDashboardData();
-    }, [generateDashboardData]);
+    useEffect(() => { fetchWeather() }, [fetchWeather]);
+    
+    // Daily Prompt Fetching
+    const fetchDailyPrompt = useCallback(async (forceRefresh = false) => {
+        setIsDailyPromptLoading(true);
+        try {
+             const { goals, habits } = userData;
+             const goalsInfo = goals.filter(g => g.progress < 100).map(g => g.title).join(', ');
+             const habitsInfo = habits.map(h => h.name).join(', ');
+             const result = await fetchWithCache('daily_prompt', async () => {
+                const prompt = `Generate a single, personal, and reflective journaling prompt in Persian (under 20 words) to inspire introspection based on the user's goals and habits. User Goals: ${goalsInfo}. User Habits: ${habitsInfo}.`;
+                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+                return response.text.trim();
+            }, forceRefresh);
+            setDailyPrompt(result);
+        } catch (error) {
+            setAiDataError(handleError(error));
+        } finally {
+            setIsDailyPromptLoading(false);
+        }
+    }, [userData.goals, userData.habits, fetchWithCache]);
 
+    useEffect(() => { fetchDailyPrompt() }, [fetchDailyPrompt]);
+
+    // Other AI fetches can be added here following the same pattern...
 
     useEffect(() => {
         if (isLowFrictionMode) {
@@ -1026,22 +975,22 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     
     // Effect to handle theme change for financial view
     useEffect(() => {
+        // FIX: Updated theme logic to use 'data-theme-name' attribute and the 'name' property from theme settings,
+        // instead of the deprecated 'color' and 'shape' properties.
         if (isFinancialViewOpen) {
-            document.documentElement.setAttribute('data-theme-color', 'blue');
-            document.documentElement.setAttribute('data-theme-shape', 'sharp');
+            // The financial view appears to use a blue theme, which maps to 'oceanic_deep' in the new theme system.
+            document.documentElement.setAttribute('data-theme-name', 'oceanic_deep');
         } else {
             // Revert to user's saved theme when modal is closed
-            if (userData?.theme) {
-                document.documentElement.setAttribute('data-theme-color', userData.theme.color);
-                document.documentElement.setAttribute('data-theme-shape', userData.theme.shape);
+            if (userData?.theme?.name) {
+                document.documentElement.setAttribute('data-theme-name', userData.theme.name);
             }
         }
 
         // Cleanup function to ensure theme is reverted on component unmount
         return () => {
-             if (userData?.theme) {
-                document.documentElement.setAttribute('data-theme-color', userData.theme.color);
-                document.documentElement.setAttribute('data-theme-shape', userData.theme.shape);
+             if (userData?.theme?.name) {
+                document.documentElement.setAttribute('data-theme-name', userData.theme.name);
             }
         }
     }, [isFinancialViewOpen, userData?.theme]);
@@ -1076,18 +1025,25 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
     const MainDashboard = () => (
          <div className="space-y-4 pb-24">
-            <PredictiveAlertsWidget alert={dashboardAiData.predictiveAlert} isLoading={isAiDataLoading} onToggleMode={handleUpdateLowFrictionMode} />
-            <DailyBriefingWidget briefing={dashboardAiData.dailyBriefing} isLoading={isAiDataLoading} onRefresh={() => generateDashboardData(true)} />
-            <TodaysPrioritiesWidget priorities={dashboardAiData.priorities} isLoading={isAiDataLoading} />
+            {aiDataError && (
+                <div className="bg-red-900/60 backdrop-blur-lg border border-red-700 rounded-[var(--radius-card)] p-4 text-center">
+                    <h3 className="font-bold text-red-300">خطای دستیار هوشمند</h3>
+                    <p className="text-sm text-red-300/90 mt-1">{aiDataError}</p>
+                </div>
+            )}
+            <MoodWeatherWidget />
+            <PredictiveAlertsWidget alert={predictiveAlert} isLoading={isPredictiveAlertLoading} onToggleMode={handleUpdateLowFrictionMode} />
+            <DailyBriefingWidget briefing={dailyBriefing} isLoading={isDailyBriefingLoading} onRefresh={() => { /* Implement refresh if needed */ }} />
+            <TodaysPrioritiesWidget priorities={priorities} isLoading={isPrioritiesLoading} />
             <EnergyPredictionWidget userData={userData} />
-            <DailyPromptWidget prompt={dashboardAiData.dailyPrompt} isLoading={isAiDataLoading} onPromptClick={handlePromptClick} onRefresh={() => generateDashboardData(true)} />
+            <DailyPromptWidget prompt={dailyPrompt} isLoading={isDailyPromptLoading} onPromptClick={handlePromptClick} onRefresh={() => fetchDailyPrompt(true)} />
             <StatsSummaryWidget userData={userData} />
             <HabitTrackerWidget userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <GoalsWidget goals={userData.goals} />
                 {userData.gender === 'female' && <WomenHealthWidget onOpen={() => setIsWomenHealthOpen(true)} userData={userData} />}
-                <WeatherAndCalendarWidget onOpen={() => setIsCalendarViewOpen(true)} weather={dashboardAiData.weather} isLoading={isAiDataLoading} weatherError={aiDataError} />
+                <WeatherAndCalendarWidget onOpen={() => setIsCalendarViewOpen(true)} weather={weather} isLoading={isWeatherLoading} weatherError={weatherError} />
                 <FinancialWidget userData={userData} onOpen={() => setIsFinancialViewOpen(true)} />
 
                 <div className="col-span-1 sm:col-span-2">

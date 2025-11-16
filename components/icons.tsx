@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 // Defined a reusable type for icon components to accept a style prop.
@@ -334,10 +335,36 @@ export const FaceFrownIcon: React.FC<IconProps> = ({ className, style }) => (
     </svg>
 );
 
+export const RouteIcon: React.FC<IconProps> = ({ className, style }) => (
+  <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0h7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+  </svg>
+);
+
+export const ScaleIcon: React.FC<IconProps> = ({ className, style }) => (
+  <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.036.218c-2.291 0-4.545-.16-6.75-.47m-13.5 0c-1.01.143-2.01.317-3 .52m3-.52L2.62 15.7a.996.996 0 00-.589-1.202 5.988 5.988 0 012.036-.218c2.291 0 4.545.16 6.75.47m0 0v-2.25" />
+  </svg>
+);
+
+export const BrainIcon: React.FC<IconProps> = ({ className, style }) => (
+    <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM18 13.5l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 18l-1.035.259a3.375 3.375 0 00-2.456 2.456L18 21.75l-.259-1.035a3.375 3.375 0 00-2.456-2.456L14.25 18l1.035-.259a3.375 3.375 0 002.456-2.456L18 13.5z" />
+    </svg>
+);
+
+export const BenvisLogoIcon: React.FC<IconProps> = ({ className, style }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path opacity="0.9" fillRule="evenodd" clipRule="evenodd" d="M18 16C18 18.2091 16.2091 20 14 20C11.7909 20 10 18.2091 10 16C10 13.7909 11.7909 12 14 12C16.2091 12 18 13.7909 18 16Z" fill="#3b82f6"/>
+        <path d="M10 8C10 6.34315 11.3431 5 13 5H14C16.2091 5 18 6.79086 18 9V16C18 13.7909 16.2091 12 14 12H13C11.3431 12 10 10.6569 10 8Z" fill="#8b5cf6"/>
+        <path d="M10 8C10 6.34315 11.3431 5 13 5H14C16.2091 5 18 6.79086 18 9V11H10V8Z" fill="#f43f5e"/>
+    </svg>
+);
 
 export const customHabitIcons: { [key: string]: React.FC<IconProps> } = {
     WaterDrop: WaterDropIcon,
     Reading: ReadingIcon,
+    BookOpen: BookOpenIcon,
     Walking: WalkingIcon,
     Meditation: MeditationIcon,
     MinusCircle: MinusCircleIcon,
@@ -345,6 +372,12 @@ export const customHabitIcons: { [key: string]: React.FC<IconProps> } = {
     Heart: HealthIcon,
     Bolt: BoltIcon,
     Leaf: LeafIcon,
+    Star: StarIcon,
+    Moon: MoonIcon,
+    Sun: SunIcon,
+    Sparkles: SparklesIcon,
+    Brain: BrainIcon,
+    Pencil: PencilIcon,
     Habits: HabitsIcon,
 };
 

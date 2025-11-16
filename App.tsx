@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import DashboardScreen from './components/DashboardScreen';
-import { OnboardingData, UserGoal, AchievementID, Transaction, FinancialAccount } from './types';
+import { OnboardingData, UserGoal, AchievementID, Transaction, FinancialAccount, ThemeName } from './types';
 
 const App: React.FC = () => {
   const [userData, setUserData] = useState<OnboardingData | null>(null);
@@ -95,13 +96,24 @@ const App: React.FC = () => {
             };
         }
         
-        // Theme migration - Set to blue/sharp as requested
-        if (!userDataFromStorage.theme) {
-            userDataFromStorage.theme = { color: 'blue', shape: 'sharp' };
-        } else {
-            userDataFromStorage.theme.color = 'blue';
-            userDataFromStorage.theme.shape = 'sharp';
+        // Theme migration - Convert old color/shape to new named theme
+        if (!userDataFromStorage.theme || (userDataFromStorage.theme as any).color) {
+            const oldColor = (userDataFromStorage.theme as any)?.color || 'purple';
+            let newThemeName: ThemeName = 'benvis_classic';
+            switch (oldColor) {
+                case 'blue': newThemeName = 'oceanic_deep'; break;
+                case 'green': newThemeName = 'forest_whisper'; break;
+                case 'rose': newThemeName = 'sunset_bliss'; break;
+                case 'purple':
+                default:
+                    newThemeName = 'benvis_classic'; break;
+            }
+            userDataFromStorage.theme = { name: newThemeName };
         }
+        if (userDataFromStorage.theme && !userDataFromStorage.theme.animations) {
+            userDataFromStorage.theme.animations = { enabled: true };
+        }
+
 
         // Initialize habits if they don't exist
         if (!userDataFromStorage.habits) {
@@ -363,9 +375,19 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (userData?.theme) {
-        document.documentElement.setAttribute('data-theme-color', userData.theme.color);
-        document.documentElement.setAttribute('data-theme-shape', userData.theme.shape);
+    if (userData?.theme?.name) {
+        document.documentElement.setAttribute('data-theme-name', userData.theme.name);
+        document.body.setAttribute('data-theme-name', userData.theme.name); // Also apply to body for animations
+    } else {
+        // Fallback for safety
+        document.documentElement.setAttribute('data-theme-name', 'benvis_classic');
+        document.body.setAttribute('data-theme-name', 'benvis_classic');
+    }
+
+    if (userData?.theme?.animations?.enabled === false) {
+        document.body.classList.add('animations-disabled');
+    } else {
+        document.body.classList.remove('animations-disabled');
     }
   }, [userData?.theme]);
   

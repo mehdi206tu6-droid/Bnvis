@@ -1,11 +1,20 @@
 import type { FC } from 'react';
 
-export type ThemeColor = 'purple' | 'blue' | 'green' | 'rose';
-export type ThemeShape = 'rounded' | 'sharp';
+export type ThemeName = 
+  | 'benvis_classic'
+  | 'oceanic_deep'
+  | 'forest_whisper'
+  | 'sunset_bliss'
+  | 'galaxy_dream'
+  | 'cyberpunk_neon'
+  | 'royal_gold'
+  | 'zen_garden'
+  | 'crimson_night'
+  | 'pastel_dream';
 
 export interface ThemeSettings {
-  color: ThemeColor;
-  shape: ThemeShape;
+  name: ThemeName;
+  animations?: { enabled: boolean; };
 }
 
 export interface Habit {
@@ -213,6 +222,19 @@ export interface GratitudeEntry {
   id: string;
   content: string;
   createdAt: string;
+}
+
+// AI Agent Type
+export interface Agent {
+  id: string;
+  title: string;
+  description: string;
+  // FIX: Changed React.FC to FC to fix namespace error.
+  icon: FC<{ className?: string }>;
+  systemPrompt: string;
+  inputSchema: any; 
+  responseSchema: any;
+  model: 'gemini-2.5-pro' | 'gemini-2.5-flash';
 }
 
 // Types for Web Speech API

@@ -1,8 +1,8 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeColor, ThemeShape, Habit, TransactionCategory } from '../types';
-import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon } from './icons';
+import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeName, Habit, TransactionCategory } from '../types';
+import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon } from './icons';
 
 interface SettingsViewProps {
     userData: OnboardingData;
@@ -23,62 +23,72 @@ const allHabitOptions = [
     { name: "چک نکردن شبکه‌های اجتماعی", icon: MinusCircleIcon },
 ];
 
-const AddHabitModal: React.FC<{
+const HabitModal: React.FC<{
+    habitToEdit?: Habit | null;
     currentHabits: Habit[];
-    onAdd: (habit: Habit) => void;
+    onSave: (habit: Habit) => void;
     onClose: () => void;
-}> = ({ currentHabits, onAdd, onClose }) => {
+}> = ({ habitToEdit, currentHabits, onSave, onClose }) => {
+    const isEditing = !!habitToEdit;
     const currentHabitNames = currentHabits.map(h => h.name);
+
     const [customHabitName, setCustomHabitName] = useState('');
     const [customHabitType, setCustomHabitType] = useState<'good' | 'bad'>('good');
     const [customHabitCategory, setCustomHabitCategory] = useState('');
     const [customHabitIcon, setCustomHabitIcon] = useState('Habits');
     const [customHabitColor, setCustomHabitColor] = useState('#a855f7');
 
+    useEffect(() => {
+        if (habitToEdit) {
+            setCustomHabitName(habitToEdit.name);
+            setCustomHabitType(habitToEdit.type);
+            setCustomHabitCategory(habitToEdit.category || '');
+            setCustomHabitIcon(habitToEdit.icon || 'Habits');
+            setCustomHabitColor(habitToEdit.color || '#a855f7');
+        }
+    }, [habitToEdit]);
 
     const availableHabits = allHabitOptions.filter(h => !currentHabitNames.includes(h.name));
     
-    const handleAddCustomHabit = () => {
-        if (customHabitName.trim() && !currentHabitNames.includes(customHabitName.trim())) {
-            onAdd({ 
+    const handleSaveCustomHabit = () => {
+        if (customHabitName.trim() && (isEditing || !currentHabitNames.includes(customHabitName.trim()))) {
+            onSave({ 
                 name: customHabitName.trim(), 
                 type: customHabitType, 
                 category: customHabitCategory.trim() || undefined,
                 icon: customHabitIcon,
                 color: customHabitColor,
             });
-            setCustomHabitName('');
-            setCustomHabitCategory('');
         }
     };
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
             <div className="bg-gray-800 border border-gray-700 rounded-[var(--radius-card)] p-6 w-full max-w-md max-h-[90vh] flex flex-col modal-panel" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold mb-4 flex-shrink-0">افزودن عادت جدید</h2>
+                <h2 className="text-xl font-bold mb-4 flex-shrink-0">{isEditing ? 'ویرایش عادت' : 'افزودن عادت جدید'}</h2>
                 <div className="overflow-y-auto pr-2 space-y-4">
-                    {availableHabits.length > 0 && (
+                    {!isEditing && availableHabits.length > 0 && (
                         <div className="space-y-2">
                             {availableHabits.map(habit => (
-                                <button key={habit.name} onClick={() => { onAdd({ name: habit.name, type: habit.name.includes('نکردن') ? 'bad' : 'good' }); onClose(); }} className="w-full flex items-center gap-4 p-3 rounded-[var(--radius-md)] bg-gray-700/60 hover:bg-gray-700 transition-colors text-right">
+                                <button key={habit.name} onClick={() => { onSave({ name: habit.name, type: habit.name.includes('نکردن') ? 'bad' : 'good' }); }} className="w-full flex items-center gap-4 p-3 rounded-[var(--radius-md)] bg-gray-700/60 hover:bg-gray-700 transition-colors text-right">
                                     <habit.icon className="w-6 h-6 text-gray-300"/>
                                     <span className="font-semibold">{habit.name}</span>
                                 </button>
                             ))}
                         </div>
                     )}
-                    <div className="pt-4 border-t border-gray-600">
-                        <h3 className="font-semibold mb-2">عادت سفارشی</h3>
-                        <input type="text" value={customHabitName} onChange={(e) => setCustomHabitName(e.target.value)} placeholder="نام عادت جدید" className="w-full bg-gray-900/80 border border-gray-700 rounded-[var(--radius-md)] p-3 mb-2 focus:ring-2 focus:ring-[var(--color-primary-500)] focus:outline-none"/>
+                    <div className={isEditing ? "" : "pt-4 border-t border-gray-600"}>
+                        <h3 className="font-semibold mb-2">{isEditing ? 'مشخصات عادت' : 'عادت سفارشی'}</h3>
+                        <input type="text" value={customHabitName} onChange={(e) => setCustomHabitName(e.target.value)} placeholder="نام عادت" readOnly={isEditing} className={`w-full bg-gray-900/80 border border-gray-700 rounded-[var(--radius-md)] p-3 mb-2 focus:ring-2 focus:ring-[var(--color-primary-500)] focus:outline-none ${isEditing ? 'opacity-70 cursor-not-allowed' : ''}`}/>
                         <input type="text" value={customHabitCategory} onChange={(e) => setCustomHabitCategory(e.target.value)} placeholder="دسته‌بندی (اختیاری)" className="w-full bg-gray-900/80 border border-gray-700 rounded-[var(--radius-md)] p-3 focus:ring-2 focus:ring-[var(--color-primary-500)] focus:outline-none"/>
                         <div className="flex gap-2 mt-2 bg-gray-700/50 p-1 rounded-[var(--radius-full)]">
-                            <button onClick={() => setCustomHabitType('good')} className={`flex-1 py-2 text-sm font-semibold rounded-[var(--radius-full)] transition-colors ${customHabitType === 'good' ? 'bg-green-500 text-white' : 'text-gray-300'}`}>عادت خوب (انجام دادن)</button>
-                            <button onClick={() => setCustomHabitType('bad')} className={`flex-1 py-2 text-sm font-semibold rounded-[var(--radius-full)] transition-colors ${customHabitType === 'bad' ? 'bg-red-500 text-white' : 'text-gray-300'}`}>عادت بد (ترک کردن)</button>
+                            <button onClick={() => !isEditing && setCustomHabitType('good')} disabled={isEditing} className={`flex-1 py-2 text-sm font-semibold rounded-[var(--radius-full)] transition-colors ${customHabitType === 'good' ? 'bg-green-500 text-white' : 'text-gray-300'} ${isEditing ? 'opacity-70 cursor-not-allowed' : ''}`}>عادت خوب (انجام دادن)</button>
+                            <button onClick={() => !isEditing && setCustomHabitType('bad')} disabled={isEditing} className={`flex-1 py-2 text-sm font-semibold rounded-[var(--radius-full)] transition-colors ${customHabitType === 'bad' ? 'bg-red-500 text-white' : 'text-gray-300'} ${isEditing ? 'opacity-70 cursor-not-allowed' : ''}`}>عادت بد (ترک کردن)</button>
                         </div>
                         <div className="mt-3">
                             <label className="block text-sm font-medium text-gray-300 mb-2 text-right">آیکون و رنگ</label>
                             <div className="flex items-center gap-4">
-                                <div className="grid grid-cols-5 gap-2 flex-grow bg-gray-900/50 p-2 rounded-[var(--radius-md)]">
+                                <div className="grid grid-cols-6 gap-2 flex-grow bg-gray-900/50 p-2 rounded-[var(--radius-md)]">
                                     {Object.entries(customHabitIcons).map(([key, Icon]) => (
                                         <button key={key} onClick={() => setCustomHabitIcon(key)} className={`p-2 rounded-md aspect-square flex items-center justify-center transition-all ${customHabitIcon === key ? 'bg-gray-600 ring-2 ring-[var(--color-primary-400)]' : 'bg-gray-700/50'}`}>
                                             <Icon className="w-6 h-6" style={{color: customHabitColor}} />
@@ -88,7 +98,9 @@ const AddHabitModal: React.FC<{
                                 <input type="color" value={customHabitColor} onChange={e => setCustomHabitColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 rounded-md cursor-pointer border-2 border-gray-600" />
                             </div>
                         </div>
-                        <button onClick={handleAddCustomHabit} disabled={!customHabitName.trim()} className="w-full mt-4 py-2 bg-[var(--color-primary-800)] rounded-[var(--radius-md)] font-semibold hover:bg-[var(--color-primary-700)] transition-colors disabled:bg-gray-600">افزودن سفارشی</button>
+                        <button onClick={handleSaveCustomHabit} disabled={!customHabitName.trim()} className="w-full mt-4 py-2 bg-[var(--color-primary-800)] rounded-[var(--radius-md)] font-semibold hover:bg-[var(--color-primary-700)] transition-colors disabled:bg-gray-600">
+                            {isEditing ? 'ذخیره تغییرات' : 'افزودن عادت سفارشی'}
+                        </button>
                     </div>
                 </div>
                  <button onClick={onClose} className="w-full mt-4 py-2 bg-gray-600 rounded-[var(--radius-md)] font-semibold hover:bg-gray-500 transition-colors flex-shrink-0">بستن</button>
@@ -97,8 +109,21 @@ const AddHabitModal: React.FC<{
     );
 };
 
+const themes: { id: ThemeName; name: string }[] = [
+    { id: 'benvis_classic', name: 'کلاسیک بنویس' },
+    { id: 'oceanic_deep', name: 'اعماق اقیانوس' },
+    { id: 'forest_whisper', name: 'نجوای جنگل' },
+    { id: 'sunset_bliss', name: 'آرامش غروب' },
+    { id: 'galaxy_dream', name: 'رویای کهکشانی' },
+    { id: 'cyberpunk_neon', name: 'نئون سایبرپانک' },
+    { id: 'royal_gold', name: 'طلایی سلطنتی' },
+    { id: 'zen_garden', name: 'باغ ذن' },
+    { id: 'crimson_night', name: 'شب مخملی' },
+    { id: 'pastel_dream', name: 'رویای پاستلی' },
+];
+
 const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData }) => {
-    const [isAddHabitModalOpen, setIsAddHabitModalOpen] = useState(false);
+    const [habitModal, setHabitModal] = useState<{ isOpen: boolean, habitToEdit?: Habit }>({ isOpen: false });
     const [transactionCategories, setTransactionCategories] = useState<TransactionCategory[]>(userData.transactionCategories || []);
     const [newCategory, setNewCategory] = useState('');
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -156,11 +181,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         }
     };
     
-    const handleAddHabit = (habit: Habit) => {
-        if (!userData.habits.some(h => h.name === habit.name)) {
+    const handleSaveHabit = (habit: Habit) => {
+        const isUpdating = userData.habits.some(h => h.name === habit.name);
+        if (isUpdating) {
+            const updatedHabits = userData.habits.map(h => (h.name === habit.name ? habit : h));
+            onUpdateUserData({ ...userData, habits: updatedHabits });
+        } else {
             const updatedHabits = [...userData.habits, habit];
             onUpdateUserData({ ...userData, habits: updatedHabits });
         }
+        setHabitModal({ isOpen: false });
     };
 
     const handleDeleteHabit = (habitName: string) => {
@@ -194,31 +224,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         onUpdateUserData({ ...userData, transactionCategories: updatedCategories });
     };
     
-    const theme = userData.theme || { color: 'purple', shape: 'rounded' };
-    const themeColors: { id: ThemeColor, class: string }[] = [
-        { id: 'purple', class: 'bg-purple-500' },
-        { id: 'blue', class: 'bg-blue-500' },
-        { id: 'green', class: 'bg-green-500' },
-        { id: 'rose', class: 'bg-rose-500' },
-    ];
-     const themeShapes: { id: ThemeShape, label: string }[] = [
-        { id: 'rounded', label: 'گرد' },
-        { id: 'sharp', label: 'تیز' },
-    ];
-     const soundOptions = [
+    const soundOptions = [
         { value: 'default', label: 'پیش‌فرض' },
         { value: 'chime', label: 'زنگوله' },
         { value: 'melody', label: 'ملودی' },
     ];
 
-    const handleThemeChange = (key: 'color' | 'shape', value: ThemeColor | ThemeShape) => {
-        const newTheme = { ...theme, [key]: value };
-        onUpdateUserData({ ...userData, theme: newTheme });
+    const handleThemeChange = (name: ThemeName) => {
+        onUpdateUserData({ ...userData, theme: { ...userData.theme, name } });
     };
 
     return (
      <div className="pb-24 space-y-6">
-        {isAddHabitModalOpen && <AddHabitModal currentHabits={userData.habits} onAdd={handleAddHabit} onClose={() => setIsAddHabitModalOpen(false)} />}
+        {habitModal.isOpen && <HabitModal habitToEdit={habitModal.habitToEdit} currentHabits={userData.habits} onSave={handleSaveHabit} onClose={() => setHabitModal({isOpen: false})} />}
         <div>
             <h3 className="text-lg font-semibold text-gray-400 mb-2">حساب کاربری</h3>
             <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 flex justify-between items-center">
@@ -252,13 +270,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                                     </span>
                                 )}
                             </div>
-                            <button onClick={() => handleDeleteHabit(habit.name)} className="text-gray-400 hover:text-red-400 p-1">
-                                <TrashIcon className="w-5 h-5"/>
-                            </button>
+                            <div className="flex items-center">
+                                <button onClick={() => setHabitModal({ isOpen: true, habitToEdit: habit })} className="text-gray-400 hover:text-white p-1">
+                                    <PencilIcon className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => handleDeleteHabit(habit.name)} className="text-gray-400 hover:text-red-400 p-1">
+                                    <TrashIcon className="w-5 h-5"/>
+                                </button>
+                            </div>
                         </div>
                      )
                 })}
-                 <button onClick={() => setIsAddHabitModalOpen(true)} className="w-full flex items-center justify-center gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--color-primary-600)]/20 text-[var(--color-primary-300)] hover:bg-[var(--color-primary-600)]/40 transition-colors">
+                 <button onClick={() => setHabitModal({ isOpen: true })} className="w-full flex items-center justify-center gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--color-primary-600)]/20 text-[var(--color-primary-300)] hover:bg-[var(--color-primary-600)]/40 transition-colors">
                     <PlusIcon className="w-5 h-5"/>
                     <span className="font-semibold">افزودن عادت جدید</span>
                 </button>
@@ -291,28 +314,46 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         </div>
         
         <div>
-            <h3 className="text-lg font-semibold text-gray-400 mb-2">شخصی‌سازی تم</h3>
-            <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 space-y-4">
-                <div>
-                    <h4 className="font-semibold mb-2">رنگ اصلی</h4>
-                    <div className="flex gap-4">
-                        {themeColors.map(color => (
-                            <button key={color.id} onClick={() => handleThemeChange('color', color.id)} className={`w-10 h-10 rounded-full ${color.class} ${theme.color === color.id ? 'ring-2 ring-offset-2 ring-offset-gray-800 ring-white' : ''}`}></button>
-                        ))}
-                    </div>
+            <h3 className="text-lg font-semibold text-gray-400 mb-2">ظاهر و تم</h3>
+            <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {themes.map(theme => {
+                        const isSelected = userData.theme.name === theme.id;
+                        return (
+                            <div key={theme.id} className="text-center">
+                                <button
+                                    onClick={() => handleThemeChange(theme.id)}
+                                    className={`w-full rounded-lg p-1 border-2 transition-colors ${isSelected ? 'border-[var(--color-primary-500)]' : 'border-transparent'}`}
+                                >
+                                    <div data-theme-name={theme.id} className={`h-20 w-full rounded-md theme-preview flex flex-col justify-end p-2`}>
+                                        <div className="w-1/2 h-2.5 bg-[var(--color-primary-500)] rounded-sm mb-1"></div>
+                                        <div className="w-2/3 h-2.5 bg-[var(--color-primary-400)] rounded-sm"></div>
+                                    </div>
+                                </button>
+                                <p className={`mt-2 text-sm font-semibold transition-colors ${isSelected ? 'text-[var(--color-primary-300)]' : 'text-gray-400'}`}>
+                                    {theme.name}
+                                </p>
+                            </div>
+                        );
+                    })}
                 </div>
-                 <div>
-                    <h4 className="font-semibold mb-2">شکل ظاهری</h4>
-                    <div className="flex gap-2 bg-gray-700/50 p-1 rounded-[var(--radius-full)]">
-                         {themeShapes.map(shape => (
-                            <button key={shape.id} onClick={() => handleThemeChange('shape', shape.id)} className={`flex-1 py-2 text-sm font-semibold rounded-[var(--radius-full)] transition-colors ${theme.shape === shape.id ? 'bg-white text-gray-900' : 'text-gray-300'}`}>
-                                {shape.label}
-                            </button>
-                        ))}
+                <div className="mt-6 pt-4 border-t border-gray-700">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h4 className="font-semibold">انیمیشن پس‌زمینه</h4>
+                            <p className="text-sm text-gray-400">ممکن است بر روی عملکرد تاثیر بگذارد.</p>
+                        </div>
+                        <button 
+                            onClick={() => onUpdateUserData({ ...userData, theme: { ...userData.theme, name: userData.theme.name, animations: { enabled: !(userData.theme.animations?.enabled ?? true) } } })}
+                            className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${(userData.theme.animations?.enabled ?? true) ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}
+                        >
+                            <div className="w-5 h-5 bg-white rounded-full"></div>
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
+
 
         <div>
             <h3 className="text-lg font-semibold text-gray-400 mb-2">اعلان‌ها</h3>

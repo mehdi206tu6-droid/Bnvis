@@ -4,69 +4,203 @@
 @tailwind components;
 @tailwind utilities;
 
-:root, [data-theme-color="purple"] {
-    --color-primary-200: #c4b5fd; /* violet-300 */
-    --color-primary-300: #a78bfa; /* violet-400 */
-    --color-primary-400: #8b5cf6; /* violet-500 */
-    --color-primary-500: #7c3aed; /* violet-600 */
-    --color-primary-600: #6d28d9; /* violet-700 */
-    --color-primary-700: #5b21b6; /* violet-800 */
-    --color-primary-800: #4c1d95; /* violet-900 */
+/* --- KEYFRAMES FOR ANIMATED THEMES --- */
+@keyframes move-stars {
+  from { background-position: 0 0; }
+  to { background-position: -10000px 5000px; }
 }
 
-[data-theme-color="blue"] {
-    --color-primary-200: #93c5fd; /* blue-300 */
-    --color-primary-300: #60a5fa; /* blue-400 */
-    --color-primary-400: #3b82f6; /* blue-500 */
-    --color-primary-500: #2563eb; /* blue-600 */
-    --color-primary-600: #1d4ed8; /* blue-700 */
-    --color-primary-700: #1e40af; /* blue-800 */
-    --color-primary-800: #1e3a8a; /* blue-900 */
+@keyframes move-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
-[data-theme-color="green"] {
-    --color-primary-200: #86efac; /* green-300 */
-    --color-primary-300: #4ade80; /* green-400 */
-    --color-primary-400: #22c55e; /* green-500 */
-    --color-primary-500: #16a34a; /* green-600 */
-    --color-primary-600: #15803d; /* green-700 */
-    --color-primary-700: #166534; /* green-800 */
-    --color-primary-800: #14532d; /* green-900 */
+@keyframes move-ocean {
+  0% { background-position: 0% 80%; }
+  50% { background-position: 100% 20%; }
+  100% { background-position: 0% 80%; }
 }
 
-[data-theme-color="rose"] {
-    --color-primary-200: #fda4af; /* rose-300 */
-    --color-primary-300: #fb7185; /* rose-400 */
-    --color-primary-400: #f43f5e; /* rose-500 */
-    --color-primary-500: #e11d48; /* rose-600 */
-    --color-primary-600: #be123c; /* rose-700 */
-    --color-primary-700: #9f1239; /* rose-800 */
-    --color-primary-800: #881337; /* rose-900 */
-}
+/* --- THEME DEFINITIONS --- */
 
-/* Modernized Shape System */
-:root, [data-theme-shape="rounded"] {
-    --radius-card: 1.5rem; /* rounded-3xl */
-    --radius-lg: 1rem; /* rounded-2xl */
-    --radius-md: 0.75rem; /* rounded-xl */
-    --radius-sm: 0.5rem; /* rounded-lg */
+/* 1. Benvis Classic (Default) */
+:root, [data-theme-name="benvis_classic"] {
+    --color-primary-200: #c4b5fd;
+    --color-primary-300: #a78bfa;
+    --color-primary-400: #8b5cf6;
+    --color-primary-500: #7c3aed;
+    --color-primary-600: #6d28d9;
+    --color-primary-700: #5b21b6;
+    --color-primary-800: #4c1d95;
+    --radius-card: 1.5rem;
+    --radius-lg: 1rem;
+    --radius-md: 0.75rem;
+    --radius-sm: 0.5rem;
     --radius-full: 9999px;
+    --bg-color: #020617;
+    --bg-image: radial-gradient(at 20% 20%, hsla(259, 70%, 25%, 0.3) 0px, transparent 50%),
+                radial-gradient(at 80% 80%, hsla(214, 70%, 30%, 0.2) 0px, transparent 50%),
+                radial-gradient(at 90% 10%, hsla(320, 60%, 30%, 0.25) 0px, transparent 50%);
 }
 
-[data-theme-shape="sharp"] {
-    --radius-card: 0.5rem;
-    --radius-lg: 0.25rem;
-    --radius-md: 0.125rem;
-    --radius-sm: 0px;
-    --radius-full: 0.25rem;
+/* 2. Oceanic Deep */
+[data-theme-name="oceanic_deep"] {
+    --color-primary-200: #93c5fd;
+    --color-primary-300: #60a5fa;
+    --color-primary-400: #3b82f6;
+    --color-primary-500: #2563eb;
+    --color-primary-600: #1d4ed8;
+    --color-primary-700: #1e40af;
+    --color-primary-800: #1e3a8a;
+    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --bg-color: #0c1427;
+    --bg-image: linear-gradient(170deg, rgba(29, 78, 216, 0.3), rgba(30, 64, 175, 0) 50%),
+                linear-gradient(330deg, rgba(30, 58, 138, 0.4), rgba(30, 58, 138, 0) 50%);
+}
+body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; }
+
+/* 3. Forest Whisper */
+[data-theme-name="forest_whisper"] {
+    --color-primary-200: #86efac;
+    --color-primary-300: #4ade80;
+    --color-primary-400: #22c55e;
+    --color-primary-500: #16a34a;
+    --color-primary-600: #15803d;
+    --color-primary-700: #166534;
+    --color-primary-800: #14532d;
+    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --bg-color: #0f1c14;
+    --bg-image: radial-gradient(at 10% 90%, hsla(140, 60%, 20%, 0.4) 0px, transparent 50%),
+                radial-gradient(at 80% 20%, hsla(130, 50%, 25%, 0.3) 0px, transparent 50%);
 }
 
+/* 4. Sunset Bliss */
+[data-theme-name="sunset_bliss"] {
+    --color-primary-200: #fda4af;
+    --color-primary-300: #fb7185;
+    --color-primary-400: #f43f5e;
+    --color-primary-500: #e11d48;
+    --color-primary-600: #be123c;
+    --color-primary-700: #9f1239;
+    --color-primary-800: #881337;
+    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --bg-color: #2c0b2d;
+    --bg-image: linear-gradient(45deg, #ff8c00, #f43f5e, #8b5cf6, #e11d48);
+}
+body[data-theme-name="sunset_bliss"] { background-size: 400% 400%; animation: move-gradient 15s ease infinite; }
+
+/* 5. Galaxy Dream */
+[data-theme-name="galaxy_dream"] {
+    --color-primary-200: #c4b5fd;
+    --color-primary-300: #a78bfa;
+    --color-primary-400: #8b5cf6;
+    --color-primary-500: #7c3aed;
+    --color-primary-600: #6d28d9;
+    --color-primary-700: #5b21b6;
+    --color-primary-800: #4c1d95;
+    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --bg-color: #0c0a18;
+    --bg-image: radial-gradient(1px 1px at 20% 30%, white, rgba(255,255,255,0)),
+                radial-gradient(1px 1px at 70% 80%, white, rgba(255,255,255,0)),
+                radial-gradient(2px 2px at 40% 60%, #ccc, rgba(255,255,255,0)),
+                radial-gradient(2px 2px at 90% 10%, #fff, rgba(255,255,255,0)),
+                radial-gradient(1px 1px at 50% 50%, white, rgba(255,255,255,0));
+}
+body[data-theme-name="galaxy_dream"] { background-size: 100% 100%, 2000px 2000px; animation: move-stars 200s linear infinite; }
+
+/* 6. Cyberpunk Neon */
+[data-theme-name="cyberpunk_neon"] {
+    --color-primary-200: #f9a8d4;
+    --color-primary-300: #f472b6;
+    --color-primary-400: #ec4899;
+    --color-primary-500: #db2777;
+    --color-primary-600: #be185d;
+    --color-primary-700: #9d174d;
+    --color-primary-800: #831843;
+    --radius-card: 0.5rem; --radius-lg: 0.25rem; --radius-md: 0.125rem; --radius-sm: 0px; --radius-full: 0.25rem;
+    --bg-color: #030712;
+    --bg-image: linear-gradient(rgba(236, 72, 153, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(236, 72, 153, 0.1) 1px, transparent 1px);
+}
+body[data-theme-name="cyberpunk_neon"] { background-size: 20px 20px; }
+
+/* 7. Royal Gold */
+[data-theme-name="royal_gold"] {
+    --color-primary-200: #fde68a;
+    --color-primary-300: #fcd34d;
+    --color-primary-400: #fbbf24;
+    --color-primary-500: #f59e0b;
+    --color-primary-600: #d97706;
+    --color-primary-700: #b45309;
+    --color-primary-800: #92400e;
+    --radius-card: 0.5rem; --radius-lg: 0.25rem; --radius-md: 0.125rem; --radius-sm: 0px; --radius-full: 0.25rem;
+    --bg-color: #111111;
+    --bg-image: none;
+}
+
+/* 8. Zen Garden */
+[data-theme-name="zen_garden"] {
+    --color-primary-200: #a3a3a3;
+    --color-primary-300: #737373;
+    --color-primary-400: #525252;
+    --color-primary-500: #404040;
+    --color-primary-600: #262626;
+    --color-primary-700: #171717;
+    --color-primary-800: #0a0a0a;
+    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --bg-color: #f5f5f5;
+    --bg-image: none;
+}
+/* Special overrides for light theme */
+body[data-theme-name="zen_garden"] { color: #262626; }
+[data-theme-name="zen_garden"] .bg-slate-950 { background-color: #e5e5e5 !important; }
+[data-theme-name="zen_garden"] .text-slate-200 { color: #262626 !important; }
+[data-theme-name="zen_garden"] .text-slate-400 { color: #737373 !important; }
+[data-theme-name="zen_garden"] .border-slate-800 { border-color: #d4d4d4 !important; }
+[data-theme-name="zen_garden"] .bg-slate-900\/60 { background-color: rgba(255,255,255,0.6) !important; }
+[data-theme-name="zen_garden"] .bg-slate-800\/50 { background-color: rgba(229,229,229,0.5) !important; }
+
+/* 9. Crimson Night */
+[data-theme-name="crimson_night"] {
+    --color-primary-200: #fca5a5;
+    --color-primary-300: #f87171;
+    --color-primary-400: #ef4444;
+    --color-primary-500: #dc2626;
+    --color-primary-600: #b91c1c;
+    --color-primary-700: #991b1b;
+    --color-primary-800: #7f1d1d;
+    --radius-card: 0.5rem; --radius-lg: 0.25rem; --radius-md: 0.125rem; --radius-sm: 0px; --radius-full: 0.25rem;
+    --bg-color: #100a0b;
+    --bg-image: radial-gradient(at 90% 90%, hsla(0, 50%, 20%, 0.3) 0px, transparent 50%);
+}
+
+/* 10. Pastel Dream */
+[data-theme-name="pastel_dream"] {
+    --color-primary-200: #bae6fd;
+    --color-primary-300: #7dd3fc;
+    --color-primary-400: #38bdf8;
+    --color-primary-500: #0ea5e9;
+    --color-primary-600: #0284c7;
+    --color-primary-700: #0369a1;
+    --color-primary-800: #075985;
+    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --bg-color: #f0f9ff;
+    --bg-image: linear-gradient(120deg, #a1c4fd, #c2e9fb);
+}
+/* Special overrides for light theme */
+body[data-theme-name="pastel_dream"] { color: #075985; }
+[data-theme-name="pastel_dream"] .bg-slate-950 { background-color: #e0f2fe !important; }
+[data-theme-name="pastel_dream"] .text-slate-200 { color: #075985 !important; }
+[data-theme-name="pastel_dream"] .text-slate-400 { color: #38bdf8 !important; }
+[data-theme-name="pastel_dream"] .border-slate-800 { border-color: #bae6fd !important; }
+[data-theme-name="pastel_dream"] .bg-slate-900\/60 { background-color: rgba(255,255,255,0.6) !important; }
+[data-theme-name="pastel_dream"] .bg-slate-800\/50 { background-color: rgba(240, 249, 255, 0.5) !important; }
+
+/* --- BASE STYLES --- */
 body {
-    background-color: #020617; /* slate-950 */
-    background-image:
-        radial-gradient(at 20% 20%, hsla(259, 70%, 25%, 0.3) 0px, transparent 50%),
-        radial-gradient(at 80% 80%, hsla(214, 70%, 30%, 0.2) 0px, transparent 50%),
-        radial-gradient(at 90% 10%, hsla(320, 60%, 30%, 0.25) 0px, transparent 50%);
+    background-color: var(--bg-color);
+    background-image: var(--bg-image);
     color: #e2e8f0; /* slate-200 */
     transition: background-color 0.5s ease;
 }
@@ -79,88 +213,11 @@ body.low-friction-mode {
     --color-primary-600: #475569;
     --color-primary-700: #334155;
     --color-primary-800: #1e293b;
-    background-color: #0f172a;
-    background-image: none;
+    --bg-color: #0f172a;
+    --bg-image: none;
 }
+body.low-friction-mode { background-image: var(--bg-image); background-color: var(--bg-color); }
+
 
 /* --- MODAL & POPUP ANIMATIONS --- */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scale-up {
-  from { transform: scale(0.95); opacity: 0.2; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-@keyframes bounce-in {
-  0% { transform: scale(0.8); opacity: 0; }
-  60% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(1); }
-}
-
-.modal-backdrop {
-  animation: fade-in 0.3s ease-out forwards;
-}
-
-.modal-panel {
-  animation: scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-bounce-in {
-  animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-.progress-bar-fill {
-  transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-/* Make time input picker match theme */
-input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(75%) sepia(50%) saturate(6000%) hue-rotate(230deg) brightness(1.2);
-}
-
-html[data-theme-color="blue"] input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(50%) sepia(90%) saturate(1500%) hue-rotate(190deg);
-}
-html[data-theme-color="green"] input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(50%) sepia(90%) saturate(1500%) hue-rotate(90deg);
-}
-html[data-theme-color="rose"] input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(50%) sepia(90%) saturate(1500%) hue-rotate(320deg);
-}
-
-/* Updated Celebrate Animation */
-@keyframes celebrate-animation {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0); /* lime-400 */
-  }
-  25% {
-    transform: scale(1.05);
-    box-shadow: 0 0 15px 20px rgba(132, 204, 22, 0.3);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0);
-  }
-}
-.animate-celebrate {
-  animation: celebrate-animation 1s ease-out;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-    width: 6px;
-}
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-::-webkit-scrollbar-thumb {
-    background: #475569; /* slate-600 */
-    border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: #64748b; /* slate-500 */
-}
+@keyframes

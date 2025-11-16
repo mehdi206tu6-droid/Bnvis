@@ -43,9 +43,14 @@ export const NightRoutineView: React.FC<NightRoutineViewProps> = ({ userData, on
             try {
                 const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
                 setDaySummary(response.text);
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Failed to generate day summary:", error);
-                setDaySummary("امروز هم یک روز پر از تلاش و تجربه بود. به خودت برای تمام کارهایی که انجام دادی افتخار کن.");
+                const errorString = JSON.stringify(error);
+                if (errorString.includes("RESOURCE_EXHAUSTED") || errorString.includes("429")) {
+                    setDaySummary("محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید. می‌توانید به صورت دستی روز خود را مرور کنید.");
+                } else {
+                    setDaySummary("امروز هم یک روز پر از تلاش و تجربه بود. به خودت برای تمام کارهایی که انجام دادی افتخار کن.");
+                }
             } finally {
                 setIsLoading(false);
             }

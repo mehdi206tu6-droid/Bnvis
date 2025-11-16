@@ -1,14 +1,18 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+
+
+import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat, Modality } from "@google/genai";
 import { 
-    ChatMessage, OnboardingData, Note, FocusSession, SpeechRecognition,
-    SpeechRecognitionEvent, SpeechRecognitionErrorEvent 
+    ChatMessage, OnboardingData, Note, GratitudeEntry, SpeechRecognition,
+    SpeechRecognitionEvent, SpeechRecognitionErrorEvent, Agent 
 } from '../types';
 import { 
     SparklesIcon, MicrophoneIcon, StopIcon, DocumentScannerIcon, ImageEditIcon, 
-    UserIcon, SpeakerWaveIcon, BookOpenIcon, PencilIcon, TrashIcon
+    UserIcon, SpeakerWaveIcon, BookOpenIcon, PencilIcon, TrashIcon, BriefcaseIcon
 } from './icons';
 import GratitudeJournal from './GratitudeJournal';
+import AiAgentsHub from './AiAgentsHub';
+import AiAgentRunner from './AiAgentRunner';
 
 // Helper to convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -426,145 +430,6 @@ const ImageEditor: React.FC = () => {
 };
 
 
-const MonthlyBiography: React.FC<{ userData: OnboardingData }> = ({ userData }) => {
-    const [reports, setReports] = useState<{ date: string; content: string }[]>([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
-    const STORAGE_KEY = 'benvis_monthly_biographies';
-
-    useEffect(() => {
-        try {
-            const storedReports = localStorage.getItem(STORAGE_KEY);
-            if (storedReports) {
-                const parsedReports = JSON.parse(storedReports);
-                setReports(parsedReports);
-                setCurrentIndex(parsedReports.length - 1);
-            }
-        } catch (error) {
-            console.error('Failed to load monthly reports:', error);
-        }
-    }, []);
-
-    const generateReport = async () => {
-        setIsLoading(true);
-        setError('');
-        
-        try {
-            const { goals, habits } = userData;
-            
-            const habitsHistory: Record<string, number> = {};
-            habits.forEach(h => habitsHistory[h.name] = 0);
-            for (let i = 0; i < 30; i++) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                const dateString = d.toISOString().split('T')[0];
-                const storedHabits = localStorage.getItem(`benvis_habits_${dateString}`);
-                if (storedHabits) {
-                    const dailyHabits = JSON.parse(storedHabits);
-                    habits.forEach(habit => {
-                        const isSuccess = habit.type === 'good' ? dailyHabits[habit.name] : !dailyHabits[habit.name];
-                        if (isSuccess) habitsHistory[habit.name]++;
-                    });
-                } else {
-                    habits.forEach(habit => {
-                        if (habit.type === 'bad') habitsHistory[habit.name]++;
-                    });
-                }
-            }
-            const habitsHistoryString = habits.map(h => `- ${h.name} (${h.type}): ${((habitsHistory[h.name] / 30) * 100).toFixed(0)}% consistency`).join('\n');
-
-            const completedGoals = goals.filter(g => g.progress === 100).length;
-            const avgProgress = goals.length > 0 ? goals.reduce((sum, g) => sum + g.progress, 0) / goals.length : 0;
-            const goalsHistoryString = `Completed ${completedGoals}/${goals.length} goals. Average progress: ${avgProgress.toFixed(0)}%`;
-
-            const storedSessions = localStorage.getItem('benvis_focus_sessions');
-            const allSessions: FocusSession[] = storedSessions ? JSON.parse(storedSessions) : [];
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            const recentSessions = allSessions.filter(s => new Date(s.date) >= thirtyDaysAgo);
-            const focusTotalString = `${recentSessions.length} sessions, total ${recentSessions.reduce((sum, s) => sum + s.duration, 0)} minutes in the last 30 days.`;
-
-            const prompt = `
-            You are an AI life analyst for Benvis Life OS. Create a personalized "Life Biography" monthly report based on the user's data for the last 30 days. Be insightful, use data-driven insights, and predict future trends. The output MUST be in Persian.
-
-            User data for the last 30 days:
-            - Goals History: ${goalsHistoryString}
-            - Habits History: ${habitsHistoryString}
-            - Focus Sessions: ${focusTotalString}
-            
-            Structure the report with the following sections using Markdown:
-            1.  **داستان این ماه شما**: A narrative story of the month (e.g., "This month was a chapter of growth in your life story...").
-            2.  **تحلیل داده‌های شما**: 3-5 key metrics with explanations (use simple stats like averages, trends).
-            3.  **چالش‌ها و یادگیری‌ها**: An honest but positive review of setbacks.
-            4.  **پیش‌بینی آینده**: Predict the next 30 days (e.g., "If habits continue, you'll reach 80% on health goal").
-            5.  **برنامه اقدام شما**: A customized 1-week action plan with 3-5 concrete steps.
-            
-            Keep the report under 400 words. Use an empathetic, storytelling tone.
-            `;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: prompt,
-            });
-            
-            const newReport = { date: new Date().toISOString(), content: response?.text || '' };
-            const updatedReports = [...reports, newReport];
-            setReports(updatedReports);
-            setCurrentIndex(updatedReports.length - 1);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedReports));
-
-        } catch (err: any) {
-            console.error(err);
-            const errorMessage = err?.message || '';
-            if (errorMessage.includes("RESOURCE_EXHAUSTED")) {
-                setError('محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.');
-            } else {
-                setError('خطا در تولید گزارش ماهانه.');
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
-     const currentReport = reports[currentIndex];
-
-     return (
-        <div className="space-y-4 p-4 bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)]">
-            <h3 className="font-bold text-lg">زندگی‌نامه ماهانه شما</h3>
-            <p className="text-sm text-slate-400">تحلیل عمیق از عملکرد یک ماه گذشته شما و پیش‌بینی آینده.</p>
-            <button onClick={generateReport} disabled={isLoading} className="w-full py-3 bg-violet-800 rounded-[var(--radius-md)] font-semibold disabled:bg-slate-500 hover:bg-violet-700">
-                {isLoading ? 'در حال تولید گزارش...' : 'تولید گزارش جدید'}
-            </button>
-            {error && <p className="text-red-400">{error}</p>}
-            {currentReport && (
-                 <div className="whitespace-pre-wrap leading-relaxed text-right prose prose-invert prose-p:text-slate-300 prose-headings:text-white prose-headings:font-bold prose-headings:text-violet-300" dir="rtl">
-                    {currentReport.content.split('\n').map((line, i) => {
-                        const trimmedLine = line.trim();
-                        if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
-                            return <h3 key={i} className="text-lg font-bold mt-4 mb-2">{trimmedLine.replace(/\*\*/g, '').trim()}</h3>
-                        }
-                        if (trimmedLine.startsWith('* ')) {
-                            return <p key={i} className="mb-2 pl-4 relative before:content-['•'] before:absolute before:right-full before:mr-2 before:text-violet-400">{trimmedLine.substring(2)}</p>;
-                        }
-                        if (/^\d+\.\s/.test(trimmedLine)) {
-                             return <p key={i} className="mb-2 pl-4">{trimmedLine}</p>;
-                        }
-                        return <p key={i} className="mb-2">{line}</p>;
-                    })}
-                </div>
-            )}
-            {reports.length > 0 && (
-                <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
-                    <button onClick={() => setCurrentIndex(i => Math.max(0, i - 1))} disabled={currentIndex === 0} className="px-4 py-2 bg-slate-700 rounded-md font-semibold disabled:opacity-50">قبلی</button>
-                    <span className="text-sm text-slate-400">گزارش {currentIndex + 1} از {reports.length}</span>
-                    <button onClick={() => setCurrentIndex(i => Math.min(reports.length - 1, i + 1))} disabled={currentIndex === reports.length - 1} className="px-4 py-2 bg-slate-700 rounded-md font-semibold disabled:opacity-50">بعدی</button>
-                </div>
-            )}
-        </div>
-    );
-};
-
 const Journal: React.FC<{ initialText?: string }> = ({ initialText }) => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [currentNote, setCurrentNote] = useState(initialText || '');
@@ -657,27 +522,37 @@ interface SmartAssistantViewProps {
 
 const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, initialTab = 'chat', initialJournalText = '' }) => {
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
 
     useEffect(() => {
         setActiveTab(initialTab);
+        setActiveAgent(null);
     }, [initialTab]);
 
     const tabs = [
         { id: 'chat', label: 'چت', icon: SparklesIcon },
+        { id: 'agents', label: 'ابزارهای هوشمند', icon: BriefcaseIcon },
         { id: 'journal', label: 'ژورنال', icon: PencilIcon },
         { id: 'gratitude', label: 'شکرگزاری', icon: BookOpenIcon },
-        { id: 'biography', label: 'زندگی‌نامه', icon: BookOpenIcon },
         { id: 'analyzer', label: 'تحلیل تصویر', icon: DocumentScannerIcon },
         { id: 'editor', label: 'ویرایش تصویر', icon: ImageEditIcon },
     ];
 
+    const handleTabChange = (tabId: string) => {
+        setActiveTab(tabId);
+        setActiveAgent(null); // Reset agent when switching main tabs
+    }
+
     const renderContent = () => {
+        if (activeAgent) {
+             return <AiAgentRunner agent={activeAgent} onBack={() => setActiveAgent(null)} />;
+        }
         switch (activeTab) {
+            case 'agents': return <AiAgentsHub onAgentSelect={setActiveAgent} />;
             case 'journal': return <Journal initialText={initialJournalText} />;
             case 'gratitude': return <GratitudeJournal />;
             case 'analyzer': return <ImageAnalyzer />;
             case 'editor': return <ImageEditor />;
-            case 'biography': return <MonthlyBiography userData={userData} />;
             case 'chat':
             default:
                 return <ChatBot />;
@@ -691,9 +566,9 @@ const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, initi
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => handleTabChange(tab.id)}
                             className={`flex items-center gap-2 px-3 py-3 font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                                activeTab === tab.id
+                                activeTab === tab.id && !activeAgent
                                     ? 'border-violet-500 text-violet-400'
                                     : 'border-transparent text-slate-400 hover:text-white'
                             }`}

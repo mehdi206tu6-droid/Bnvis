@@ -52,7 +52,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     const finalData: OnboardingData = {
         ...data,
         habits: data.habits.map(name => ({ name, type: name.includes('نکردن') ? 'bad' : 'good' })),
-        theme: { color: 'blue', shape: 'sharp' },
+        // FIX: The theme property now expects a 'name' property of type ThemeName, not 'color' and 'shape'.
+        // Setting to a default theme.
+        theme: { name: 'benvis_classic' },
         womenHealth: { cycleLength: 28, periodLength: 5, cycles: [] }
     };
     onComplete(finalData);
