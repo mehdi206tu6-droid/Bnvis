@@ -1,0 +1,166 @@
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root, [data-theme-color="purple"] {
+    --color-primary-200: #c4b5fd; /* violet-300 */
+    --color-primary-300: #a78bfa; /* violet-400 */
+    --color-primary-400: #8b5cf6; /* violet-500 */
+    --color-primary-500: #7c3aed; /* violet-600 */
+    --color-primary-600: #6d28d9; /* violet-700 */
+    --color-primary-700: #5b21b6; /* violet-800 */
+    --color-primary-800: #4c1d95; /* violet-900 */
+}
+
+[data-theme-color="blue"] {
+    --color-primary-200: #93c5fd; /* blue-300 */
+    --color-primary-300: #60a5fa; /* blue-400 */
+    --color-primary-400: #3b82f6; /* blue-500 */
+    --color-primary-500: #2563eb; /* blue-600 */
+    --color-primary-600: #1d4ed8; /* blue-700 */
+    --color-primary-700: #1e40af; /* blue-800 */
+    --color-primary-800: #1e3a8a; /* blue-900 */
+}
+
+[data-theme-color="green"] {
+    --color-primary-200: #86efac; /* green-300 */
+    --color-primary-300: #4ade80; /* green-400 */
+    --color-primary-400: #22c55e; /* green-500 */
+    --color-primary-500: #16a34a; /* green-600 */
+    --color-primary-600: #15803d; /* green-700 */
+    --color-primary-700: #166534; /* green-800 */
+    --color-primary-800: #14532d; /* green-900 */
+}
+
+[data-theme-color="rose"] {
+    --color-primary-200: #fda4af; /* rose-300 */
+    --color-primary-300: #fb7185; /* rose-400 */
+    --color-primary-400: #f43f5e; /* rose-500 */
+    --color-primary-500: #e11d48; /* rose-600 */
+    --color-primary-600: #be123c; /* rose-700 */
+    --color-primary-700: #9f1239; /* rose-800 */
+    --color-primary-800: #881337; /* rose-900 */
+}
+
+/* Modernized Shape System */
+:root, [data-theme-shape="rounded"] {
+    --radius-card: 1.5rem; /* rounded-3xl */
+    --radius-lg: 1rem; /* rounded-2xl */
+    --radius-md: 0.75rem; /* rounded-xl */
+    --radius-sm: 0.5rem; /* rounded-lg */
+    --radius-full: 9999px;
+}
+
+[data-theme-shape="sharp"] {
+    --radius-card: 0.5rem;
+    --radius-lg: 0.25rem;
+    --radius-md: 0.125rem;
+    --radius-sm: 0px;
+    --radius-full: 0.25rem;
+}
+
+body {
+    background-color: #020617; /* slate-950 */
+    background-image:
+        radial-gradient(at 20% 20%, hsla(259, 70%, 25%, 0.3) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, hsla(214, 70%, 30%, 0.2) 0px, transparent 50%),
+        radial-gradient(at 90% 10%, hsla(320, 60%, 30%, 0.25) 0px, transparent 50%);
+    color: #e2e8f0; /* slate-200 */
+    transition: background-color 0.5s ease;
+}
+
+body.low-friction-mode {
+    --color-primary-200: #e2e8f0;
+    --color-primary-300: #cbd5e1;
+    --color-primary-400: #94a3b8;
+    --color-primary-500: #64748b;
+    --color-primary-600: #475569;
+    --color-primary-700: #334155;
+    --color-primary-800: #1e293b;
+    background-color: #0f172a;
+    background-image: none;
+}
+
+/* --- MODAL & POPUP ANIMATIONS --- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-up {
+  from { transform: scale(0.95); opacity: 0.2; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.modal-backdrop {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.modal-panel {
+  animation: scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.progress-bar-fill {
+  transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Make time input picker match theme */
+input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(75%) sepia(50%) saturate(6000%) hue-rotate(230deg) brightness(1.2);
+}
+
+html[data-theme-color="blue"] input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(50%) sepia(90%) saturate(1500%) hue-rotate(190deg);
+}
+html[data-theme-color="green"] input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(50%) sepia(90%) saturate(1500%) hue-rotate(90deg);
+}
+html[data-theme-color="rose"] input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(50%) sepia(90%) saturate(1500%) hue-rotate(320deg);
+}
+
+/* Updated Celebrate Animation */
+@keyframes celebrate-animation {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0); /* lime-400 */
+  }
+  25% {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px 20px rgba(132, 204, 22, 0.3);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0);
+  }
+}
+.animate-celebrate {
+  animation: celebrate-animation 1s ease-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #475569; /* slate-600 */
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #64748b; /* slate-500 */
+}

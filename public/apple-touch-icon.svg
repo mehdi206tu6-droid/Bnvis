@@ -1,0 +1,10 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="paint0_linear_1_2" x1="0" y1="0" x2="180" y2="180">
+<stop stop-color="#8B5CF6"/>
+<stop offset="1" stop-color="#4C1D95"/>
+</linearGradient>
+</defs>
+<rect width="180" height="180" rx="42" fill="url(#paint0_linear_1_2)"/>
+<text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-family="Vazirmatn, sans-serif" font-size="105" font-weight="700" fill="white">ب</text>
+</svg>
