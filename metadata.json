@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Benvis ",
+  "name": "Benvis ",
   "description": "A smart life management system to help you organize your goals, habits, and daily life, based on the Benvis Life OS concept. This is a React web application implementation.",
   "requestFramePermissions": [
     "microphone",
