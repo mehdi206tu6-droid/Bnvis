@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import DashboardScreen from './components/DashboardScreen';
@@ -129,12 +127,27 @@ const App: React.FC = () => {
             }));
         }
 
-        // Configure per-habit notification setting for 'مطالعه'
+        // Configure per-habit notification setting
         userDataFromStorage.habits.forEach(habit => {
             if (habit.name === 'مطالعه') {
                 habit.notification = { enabled: true, timing: '1d', sound: 'chime' };
+                habit.icon = 'Reading';
+                habit.color = '#3b82f6';
+            }
+            if (habit.name === 'نوشیدن آب') {
+                habit.notification = { enabled: true, timing: '1h', sound: 'chime' };
             }
         });
+
+        // Add 'مراقبه روزانه' habit if it doesn't exist
+        if (!userDataFromStorage.habits.some(h => h.name === 'مراقبه روزانه')) {
+            userDataFromStorage.habits.push({
+                name: 'مراقبه روزانه',
+                type: 'good',
+                icon: 'Meditation',
+                color: '#a78bfa',
+            });
+        }
 
 
         // Women's Health Feature Migration
@@ -289,7 +302,7 @@ const App: React.FC = () => {
         }
 
         // Add 'First Goal' if it doesn't exist
-        const firstGoalExists = userDataFromStorage.goals.some(g => g.title === 'First Goal');
+        const firstGoalExists = userDataFromStorage.goals.some(g => g.title === 'هدف اول' || g.title === 'First Goal');
         if (!firstGoalExists) {
             const targetDate = new Date();
             targetDate.setDate(targetDate.getDate() + 7);
@@ -298,7 +311,7 @@ const App: React.FC = () => {
             userDataFromStorage.goals.push({
                 id: `goal-${Date.now()}-first`,
                 type: 'simple',
-                title: 'First Goal',
+                title: 'هدف اول',
                 icon: 'Target',
                 progress: 0,
                 targetDate: targetDateString,
@@ -345,6 +358,35 @@ const App: React.FC = () => {
             });
         }
         
+        // Add 'Learn Python' simple goal
+        if (!userDataFromStorage.goals.some(g => g.title === 'یادگیری پایتون')) {
+            const targetDate = new Date();
+            targetDate.setMonth(targetDate.getMonth() + 3);
+            const targetDateString = targetDate.toISOString().split('T')[0];
+
+            userDataFromStorage.goals.push({
+                id: `goal-python-${Date.now()}`,
+                type: 'simple',
+                title: 'یادگیری پایتون',
+                icon: 'Education',
+                progress: 0,
+                targetDate: targetDateString,
+            });
+        }
+
+        // Add 'complete 10 pomodoros of meditation' goal
+        if (!userDataFromStorage.goals.some(g => g.title === 'تکمیل ۱۰ پومودورو مدیتیشن')) {
+            userDataFromStorage.goals.push({
+                id: `goal-pomodoro-meditation-${Date.now()}`,
+                type: 'simple',
+                title: 'تکمیل ۱۰ پومودورو مدیتیشن',
+                icon: 'Target',
+                progress: 0,
+                pomodorosToComplete: 10,
+                pomodorosCompleted: 0,
+            });
+        }
+
         // Low Friction Mode Migration
         if (userDataFromStorage.isLowFrictionMode === undefined) {
             userDataFromStorage.isLowFrictionMode = false;
@@ -359,6 +401,9 @@ const App: React.FC = () => {
                 color: '#2563eb',
             });
         }
+
+        // Theme Override
+        userDataFromStorage.theme = { name: 'galaxy_dream', animations: { enabled: false } };
 
 
         localStorage.setItem('benvis_user_data', JSON.stringify(userDataFromStorage));
@@ -513,7 +558,7 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0F0B1A]">
-        <div className="text-white">Loading...</div>
+        <div className="text-white">در حال بارگذاری...</div>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 {
   "name": "Benvis ",
-  "description": "A smart life management system to help you organize your goals, habits, and daily life, based on the Benvis Life OS concept. This is a React web application implementation.",
+  "description": "یک سیستم مدیریت هوشمند زندگی برای کمک به شما در سازماندهی اهداف، عادت‌ها و زندگی روزمره، بر اساس مفهوم سیستم عامل زندگی بنویس. این یک پیاده‌سازی وب اپلیکیشن با ری‌اکت است.",
   "requestFramePermissions": [
     "microphone",
     "geolocation"

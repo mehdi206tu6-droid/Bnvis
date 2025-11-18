@@ -22,9 +22,35 @@
   100% { background-position: 0% 80%; }
 }
 
+/* New keyframes for UI polish */
+@keyframes bounce-in {
+  0% { transform: scale(0.9); opacity: 0; }
+  70% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes celebrate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px var(--color-primary-500); }
+  100% { transform: scale(1); }
+}
+
+@keyframes placeholder-fade {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+
 /* --- THEME DEFINITIONS --- */
 
-/* 1. Benvis Classic (Default) */
+/* 1. Benvis Classic (Default) - Redesigned */
 :root, [data-theme-name="benvis_classic"] {
     --color-primary-200: #c4b5fd;
     --color-primary-300: #a78bfa;
@@ -33,15 +59,15 @@
     --color-primary-600: #6d28d9;
     --color-primary-700: #5b21b6;
     --color-primary-800: #4c1d95;
-    --radius-card: 1.5rem;
-    --radius-lg: 1rem;
-    --radius-md: 0.75rem;
-    --radius-sm: 0.5rem;
+    --radius-card: 1.25rem; /* 20px */
+    --radius-lg: 0.75rem; /* 12px */
+    --radius-md: 0.5rem; /* 8px */
+    --radius-sm: 0.25rem; /* 4px */
     --radius-full: 9999px;
-    --bg-color: #020617;
-    --bg-image: radial-gradient(at 20% 20%, hsla(259, 70%, 25%, 0.3) 0px, transparent 50%),
-                radial-gradient(at 80% 80%, hsla(214, 70%, 30%, 0.2) 0px, transparent 50%),
-                radial-gradient(at 90% 10%, hsla(320, 60%, 30%, 0.25) 0px, transparent 50%);
+    --bg-color: #0f172a; /* slate-900 */
+    --bg-image: radial-gradient(at 20% 20%, hsla(259, 70%, 25%, 0.15) 0px, transparent 50%),
+                radial-gradient(at 80% 80%, hsla(214, 70%, 30%, 0.1) 0px, transparent 50%),
+                radial-gradient(at 90% 10%, hsla(320, 60%, 30%, 0.1) 0px, transparent 50%);
 }
 
 /* 2. Oceanic Deep */
@@ -53,7 +79,7 @@
     --color-primary-600: #1d4ed8;
     --color-primary-700: #1e40af;
     --color-primary-800: #1e3a8a;
-    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
     --bg-color: #0c1427;
     --bg-image: linear-gradient(170deg, rgba(29, 78, 216, 0.3), rgba(30, 64, 175, 0) 50%),
                 linear-gradient(330deg, rgba(30, 58, 138, 0.4), rgba(30, 58, 138, 0) 50%);
@@ -69,7 +95,7 @@ body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; 
     --color-primary-600: #15803d;
     --color-primary-700: #166534;
     --color-primary-800: #14532d;
-    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
     --bg-color: #0f1c14;
     --bg-image: radial-gradient(at 10% 90%, hsla(140, 60%, 20%, 0.4) 0px, transparent 50%),
                 radial-gradient(at 80% 20%, hsla(130, 50%, 25%, 0.3) 0px, transparent 50%);
@@ -84,7 +110,7 @@ body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; 
     --color-primary-600: #be123c;
     --color-primary-700: #9f1239;
     --color-primary-800: #881337;
-    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
     --bg-color: #2c0b2d;
     --bg-image: linear-gradient(45deg, #ff8c00, #f43f5e, #8b5cf6, #e11d48);
 }
@@ -99,7 +125,7 @@ body[data-theme-name="sunset_bliss"] { background-size: 400% 400%; animation: mo
     --color-primary-600: #6d28d9;
     --color-primary-700: #5b21b6;
     --color-primary-800: #4c1d95;
-    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
     --bg-color: #0c0a18;
     --bg-image: radial-gradient(1px 1px at 20% 30%, white, rgba(255,255,255,0)),
                 radial-gradient(1px 1px at 70% 80%, white, rgba(255,255,255,0)),
@@ -148,7 +174,7 @@ body[data-theme-name="cyberpunk_neon"] { background-size: 20px 20px; }
     --color-primary-600: #262626;
     --color-primary-700: #171717;
     --color-primary-800: #0a0a0a;
-    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
     --bg-color: #f5f5f5;
     --bg-image: none;
 }
@@ -184,7 +210,7 @@ body[data-theme-name="zen_garden"] { color: #262626; }
     --color-primary-600: #0284c7;
     --color-primary-700: #0369a1;
     --color-primary-800: #075985;
-    --radius-card: 1.5rem; --radius-lg: 1rem; --radius-md: 0.75rem; --radius-sm: 0.5rem; --radius-full: 9999px;
+    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
     --bg-color: #f0f9ff;
     --bg-image: linear-gradient(120deg, #a1c4fd, #c2e9fb);
 }
@@ -195,29 +221,70 @@ body[data-theme-name="pastel_dream"] { color: #075985; }
 [data-theme-name="pastel_dream"] .text-slate-400 { color: #38bdf8 !important; }
 [data-theme-name="pastel_dream"] .border-slate-800 { border-color: #bae6fd !important; }
 [data-theme-name="pastel_dream"] .bg-slate-900\/60 { background-color: rgba(255,255,255,0.6) !important; }
-[data-theme-name="pastel_dream"] .bg-slate-800\/50 { background-color: rgba(240, 249, 255, 0.5) !important; }
+[data-theme-name="pastel_dream"] .bg-slate-800\/50 { background-color: rgba(240, 249, 255, 0.7) !important; }
 
-/* --- BASE STYLES --- */
+
+/* --- BASE STYLES & THEME APPLY --- */
 body {
     background-color: var(--bg-color);
     background-image: var(--bg-image);
-    color: #e2e8f0; /* slate-200 */
     transition: background-color 0.5s ease;
 }
 
-body.low-friction-mode {
-    --color-primary-200: #e2e8f0;
-    --color-primary-300: #cbd5e1;
-    --color-primary-400: #94a3b8;
-    --color-primary-500: #64748b;
-    --color-primary-600: #475569;
-    --color-primary-700: #334155;
-    --color-primary-800: #1e293b;
-    --bg-color: #0f172a;
-    --bg-image: none;
+body:not(.animations-disabled) {
+  /* Apply animations only when not disabled */
 }
-body.low-friction-mode { background-image: var(--bg-image); background-color: var(--bg-color); }
 
+/* --- UI POLISH & UTILITIES --- */
+.modal-backdrop {
+    animation: fadeIn 0.3s ease-out;
+}
 
-/* --- MODAL & POPUP ANIMATIONS --- */
-@keyframes
+.modal-panel {
+    animation: slideInUp 0.4s ease-out;
+}
+
+.progress-bar-fill {
+    transition: width 0.5s ease-out;
+}
+
+.animate-bounce-in {
+    animation: bounce-in 0.5s ease-out;
+}
+.animate-celebrate {
+    animation: celebrate 0.6s ease-in-out;
+}
+
+.animate-placeholder {
+    animation: placeholder-fade 3s infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Low Friction Mode */
+.low-friction-mode {
+    filter: saturate(0.8) contrast(0.9);
+}
+
+.low-friction-mode .progress-bar-fill,
+.low-friction-mode .bg-violet-600,
+.low-friction-mode .bg-violet-800 {
+    background-color: #52525b !important; /* zinc-600 */
+}
+.low-friction-mode .text-violet-400 {
+    color: #a1a1aa !important; /* zinc-400 */
+}
+
+/* Remove scrollbar */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent; /* make scrollbar transparent */
+}

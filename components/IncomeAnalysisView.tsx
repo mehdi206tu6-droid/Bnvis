@@ -8,7 +8,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 interface IncomeAnalysisViewProps {
     userData: OnboardingData;
     onUpdateUserData: (data: OnboardingData) => void;
-    onClose: () => void;
 }
 
 const defaultSource: Omit<IncomeSource, 'id' | 'name' | 'type' | 'avgMonthlyIncome'> = {
@@ -19,7 +18,7 @@ const defaultSource: Omit<IncomeSource, 'id' | 'name' | 'type' | 'avgMonthlyInco
     associatedCosts: '',
 };
 
-const IncomeAnalysisView: React.FC<IncomeAnalysisViewProps> = ({ userData, onUpdateUserData, onClose }) => {
+const IncomeAnalysisView: React.FC<IncomeAnalysisViewProps> = ({ userData, onUpdateUserData }) => {
     const [step, setStep] = useState(0);
     const [sources, setSources] = useState<IncomeSource[]>(userData.incomeAnalysis?.sources || []);
     const [isLoading, setIsLoading] = useState(false);
@@ -182,25 +181,22 @@ const IncomeAnalysisView: React.FC<IncomeAnalysisViewProps> = ({ userData, onUpd
     };
 
     return (
-         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onClose}>
-            <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700 rounded-[var(--radius-card)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] flex flex-col modal-panel" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                    <h2 className="text-xl font-bold text-white">دستیار تحلیل درآمد</h2>
-                     <div className="w-48 bg-slate-700 rounded-full h-2.5">
-                        <div className="bg-violet-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}></div>
-                    </div>
-                    <button onClick={onClose} className="text-2xl text-slate-400 hover:text-white">&times;</button>
-                </div>
-                
-                <div className="overflow-y-auto pr-2 flex-grow min-h-0">
-                    {renderContent()}
-                </div>
+        <div className="w-full max-w-2xl mx-auto">
+            <div className="w-full bg-slate-700 rounded-full h-2.5 mb-6">
+                <div className="bg-violet-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}></div>
+            </div>
 
-                <div className="mt-6 pt-4 border-t border-slate-700 flex-shrink-0 flex gap-4">
-                    {step > 0 && <button onClick={handleBack} className="flex-1 py-2 bg-slate-600 rounded-[var(--radius-md)] font-semibold hover:bg-slate-500">قبلی</button>}
-                    {step < TOTAL_STEPS - 1 && <button onClick={handleNext} className="flex-1 py-2 bg-violet-700 rounded-[var(--radius-md)] font-semibold hover:bg-violet-800">{step === 0 ? 'شروع' : 'تولید گزارش'}</button>}
-                    {step === TOTAL_STEPS - 1 && <button onClick={onClose} className="w-full py-2 bg-violet-700 rounded-[var(--radius-md)] font-semibold hover:bg-violet-800">اتمام</button>}
-                </div>
+            <div className="min-h-[400px]">
+                {renderContent()}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-700 flex-shrink-0 flex gap-4">
+                {step > 0 && <button onClick={handleBack} className="flex-1 py-2 bg-slate-600 rounded-[var(--radius-md)] font-semibold hover:bg-slate-500">قبلی</button>}
+                {step < TOTAL_STEPS - 1 ? (
+                    <button onClick={handleNext} className="flex-1 py-2 bg-violet-700 rounded-[var(--radius-md)] font-semibold hover:bg-violet-800">{step === 0 ? 'شروع' : 'تولید گزارش'}</button>
+                ) : (
+                    <button onClick={() => setStep(0)} className="w-full py-2 bg-violet-700 rounded-[var(--radius-md)] font-semibold hover:bg-violet-800">شروع مجدد</button>
+                )}
             </div>
         </div>
     );

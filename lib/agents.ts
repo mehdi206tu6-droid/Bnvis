@@ -5,8 +5,8 @@ import {
     MoonIcon, LightBulbIcon, DocumentTextIcon, ChartBarIcon, FlagIcon,
     PencilIcon, BookOpenIcon, UserIcon, ClockIcon, BoltIcon, CloudIcon,
     MagnifyingGlassIcon, ScaleIcon, RouteIcon, BrainIcon, ShareIcon,
-    // FIX: Added missing icon imports.
-    CalendarIcon, StarIcon, FaceSmileIcon
+    CalendarIcon, StarIcon, FaceSmileIcon, LeafIcon, LockClosedIcon, ReceiptPercentIcon,
+    BriefcaseIcon
 } from '../components/icons';
 
 export const agents: Agent[] = [
@@ -57,7 +57,7 @@ export const agents: Agent[] = [
 {userInput}
 [rules]
 - حداکثر 7 تسک در کل.
-- هر تسک: {title, durationMin, priority(1-3), linkedGoalId|null, xp}
+- هر تسک: {title, durationMin, priority(1-3), linkedGoalId|null, xp, start(HH:mm)}
 - Provide brief rationale string (<=30 words).
 - Output JSON.`,
         inputSchema: {
@@ -80,7 +80,8 @@ export const agents: Agent[] = [
                                     durationMin: { type: Type.NUMBER },
                                     priority: { type: Type.NUMBER },
                                     linkedGoalId: { type: Type.STRING, nullable: true },
-                                    xp: { type: Type.NUMBER }
+                                    xp: { type: Type.NUMBER },
+                                    start: { type: Type.STRING }
                                 }
                             }}
                         }
@@ -709,6 +710,123 @@ export const agents: Agent[] = [
                 risks: { type: Type.ARRAY, items: { type: Type.STRING } },
                 evaluationPlan: { type: Type.STRING },
                 confidence: { type: Type.NUMBER }
+            }
+        }
+    },
+    {
+        id: 'calm-sos',
+        title: 'SOS آرامش',
+        description: 'یک تمرین فوری برای کاهش استرس و ایجاد آرامش در لحظات بحرانی.',
+        icon: LeafIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You are an AI providing immediate emotional stabilization in a crisis.
+        Based on the user's feeling, generate a 90-second grounding script, one simple action step, and one supportive message.
+        The response must be in Persian and a valid JSON object.
+        
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "feeling": "احساس می‌کنم غرق شده‌ام و استرس زیادی دارم"
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                groundingScript: { type: Type.STRING },
+                actionStep: { type: Type.STRING },
+                supportMessage: { type: Type.STRING }
+            }
+        }
+    },
+    {
+        id: 'skill-builder',
+        title: 'مربی میکرو-دوره',
+        description: 'برای یادگیری یک مهارت جدید، یک نقشه راه و دوره آموزشی کوتاه ایجاد می‌کند.',
+        icon: EducationIcon,
+        model: 'gemini-2.5-pro',
+        systemPrompt: `You are an AI course designer creating 7–14 day micro-learning paths based on a single user goal.
+        Given a goal (e.g., "build reading habit"), generate a 10-day micro-course.
+        Each day must include:
+        - skill focus
+        - micro-lesson (<100 words)
+        - challenge
+        - reflection question
+        The response MUST be in Persian and a valid JSON object matching the schema.
+        
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "goal": "یادگیری اصول اولیه سرمایه‌گذاری",
+            "durationDays": 10
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                courseTitle: { type: Type.STRING },
+                days: {
+                    type: Type.ARRAY, items: {
+                        type: Type.OBJECT, properties: {
+                            day: { type: Type.NUMBER },
+                            focus: { type: Type.STRING },
+                            lesson: { type: Type.STRING },
+                            challenge: { type: Type.STRING },
+                            reflection: { type: Type.STRING }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        id: 'privacy-advisor',
+        title: 'مشاور حریم خصوصی',
+        description: 'یک طرح امنیتی برای ذخیره‌سازی امن داده‌های حساس شما ایجاد می‌کند.',
+        icon: LockClosedIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You generate encryption policies and secure storage recommendations for sensitive local data in a PWA environment.
+    Create a security plan for storing journals, finance logs, and health data.
+    The output MUST include: encryption method, key rotation logic, backup strategy, and risk analysis.
+    The response must be a valid JSON object and in Persian.
+    
+    [input]
+    {userInput}`,
+        inputSchema: {
+            "dataTypes": ["journals", "finance", "health"]
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                encryptionMethod: { type: Type.STRING },
+                keyManagement: { type: Type.STRING },
+                backupPlan: { type: Type.STRING },
+                riskNotes: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+        }
+    },
+    {
+        id: 'financial-autopilot',
+        title: 'خلبان خودکار مالی',
+        description: 'قوانین خودکار ساده برای مدیریت پول شما بر اساس ساختار IF-THEN ایجاد می‌کند.',
+        icon: FinanceIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You create simple automation rules for money management using the IF–THEN structure.
+    Generate 3 personalized automations based on user financial data.
+    The response must be a valid JSON object and in Persian.
+
+    [input]
+    {userInput}`,
+        inputSchema: {
+            "monthlyIncome": 5000000,
+            "savingsGoal": 1000000,
+            "budgets": { "diningOut": 500000 }
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                rules: {
+                    type: Type.ARRAY, items: {
+                        type: Type.OBJECT, properties: {
+                            "if": { type: Type.STRING },
+                            "then": { type: Type.STRING },
+                            "reason": { type: Type.STRING }
+                        }
+                    }
+                }
             }
         }
     }

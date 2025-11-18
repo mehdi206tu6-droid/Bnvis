@@ -7,7 +7,7 @@ import {
     MoonIcon, StarIcon, TrophyIcon, LevelUpIcon, SunIcon, CloudIcon, MinusCircleIcon, FlameIcon, LeafIcon,
     customHabitIcons, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon,
     CloudRainIcon, JourneyIcon, BriefcaseIcon, MoneyIcon, FlagIcon, BoltIcon,
-    goalIcons, MicrophoneIcon, StopIcon, BenvisLogoIcon
+    goalIcons, MicrophoneIcon, StopIcon, BenvisLogoIcon, ArrowUturnLeftIcon, DocumentTextIcon
 } from './icons';
 import { GoogleGenAI, Type } from "@google/genai";
 import GoalsView from './GoalsView';
@@ -19,7 +19,8 @@ import SettingsView from './SettingsView';
 import FinancialWidget from './FinancialWidget';
 import WomenHealthView from './WomenHealthView';
 import CalendarView from './CalendarView';
-import FinancialView from './FinancialView';
+// FIX: Changed to a named import as FinancialView does not have a default export.
+import { FinancialView } from './FinancialView';
 import DailyPromptWidget from './DailyPromptWidget';
 // Fix: Changed to named import as NightRoutineView does not have a default export.
 import { NightRoutineView } from './NightRoutineView';
@@ -27,6 +28,7 @@ import PredictiveAlertsWidget from './PredictiveAlertsWidget';
 import EnergyPredictionWidget from './EnergyPredictionWidget';
 import DailyBriefingWidget from './DailyBriefingWidget';
 import MoodWeatherWidget from './MoodWeatherWidget';
+import FinancialInsightsWidget from './FinancialInsightsWidget';
 
 type View = 'dashboard' | 'goals' | 'finance' | 'settings' | 'assistant';
 
@@ -77,8 +79,44 @@ const BenvisWidget: React.FC<{
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
-    const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [confirmation, setConfirmation] = useState<{ message: string; type: 'success' | 'error'; onUndo?: () => void } | null>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
+    const prevUserDataRef = useRef<OnboardingData | null>(null);
+    const confirmationTimeoutRef = useRef<number | null>(null);
+
+    const placeholders = [
+        "بنویس تا اتفاق بیفتد...",
+        "قهوه و کیک با دوستم ۳۵ هزار تومان",
+        "قرار ملاقات با دکتر فردا ساعت ۴ بعد از ظهر",
+        "ایده برای کتاب جدیدم: یک داستان علمی تخیلی",
+        "هدف جدید: دویدن ۵ کیلومتر زیر ۳۰ دقیقه",
+        "امروز شکرگزارم برای حمایت خانواده‌ام",
+        "یادآوری: تمدید اشتراک نرم‌افزار",
+        "درآمد پروژه طراحی لوگو: ۱ میلیون و ۵۰۰ هزار تومان",
+    ];
+    const [placeholder, setPlaceholder] = useState(placeholders[0]);
+    
+    // Use an animation class for placeholder changes
+    const placeholderRef = useRef<HTMLTextAreaElement>(null);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (placeholderRef.current) {
+                placeholderRef.current.classList.add('animate-placeholder');
+            }
+            setTimeout(() => {
+                 setPlaceholder(prev => {
+                    const currentIndex = placeholders.indexOf(prev);
+                    return placeholders[(currentIndex + 1) % placeholders.length];
+                });
+                if (placeholderRef.current) {
+                    placeholderRef.current.classList.remove('animate-placeholder');
+                }
+            }, 1500);
+        }, 3000);
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
 
     useEffect(() => {
         const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -95,7 +133,7 @@ const BenvisWidget: React.FC<{
             };
             recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
                 console.error('Speech recognition error:', event.error);
-                setFeedback({ message: 'خطا در تشخیص گفتار', type: 'error' });
+                showConfirmation('خطا در تشخیص گفتار', 'error');
                 setIsRecording(false);
             };
             recognition.onend = () => {
@@ -116,19 +154,44 @@ const BenvisWidget: React.FC<{
         }
     };
 
-    const showFeedback = (message: string, type: 'success' | 'error' = 'success') => {
-        setFeedback({ message, type });
-        setTimeout(() => setFeedback(null), 3000);
+    const showConfirmation = (message: string, type: 'success' | 'error' = 'success', onUndo?: () => void) => {
+        if (confirmationTimeoutRef.current) {
+            clearTimeout(confirmationTimeoutRef.current);
+        }
+        setConfirmation({ message, type, onUndo });
+        confirmationTimeoutRef.current = window.setTimeout(() => {
+            setConfirmation(null);
+            prevUserDataRef.current = null; // Clear undo history after timeout
+        }, 5000); // 5 second window for undo
     };
+    
+    const handleUndo = () => {
+        if (prevUserDataRef.current) {
+            onUpdateUserData(prevUserDataRef.current);
+        }
+        setConfirmation(null);
+        prevUserDataRef.current = null;
+        if (confirmationTimeoutRef.current) {
+            clearTimeout(confirmationTimeoutRef.current);
+        }
+    };
+
 
     const handleSave = async () => {
         if (!input.trim()) return;
         setIsLoading(true);
+        setConfirmation(null);
         
         const { transactionCategories = [] } = userData;
         const expenseCategories = transactionCategories.filter(c => c.type === 'expense').map(c => c.name).join(', ');
         const incomeCategories = transactionCategories.filter(c => c.type === 'income').map(c => c.name).join(', ');
         const todayDate = new Date().toISOString().split('T')[0];
+        
+        const processUpdate = (updatedData: OnboardingData, successMessage: string) => {
+            prevUserDataRef.current = userData;
+            onUpdateUserData(updatedData);
+            showConfirmation(successMessage, 'success', handleUndo);
+        };
 
         const prompt = `
             You are an intelligent input router for a life management app called "Benvis". Your task is to analyze the user's Persian text and classify it into one of the following categories: 'gratitude', 'note', 'goal', 'habit', 'calendar_event', 'financial_transaction'.
@@ -187,7 +250,7 @@ const BenvisWidget: React.FC<{
                     const items: GratitudeEntry[] = stored ? JSON.parse(stored) : [];
                     const newItem: GratitudeEntry = { id: new Date().toISOString(), content: result.content, createdAt: new Date().toISOString() };
                     localStorage.setItem(storageKey, JSON.stringify([newItem, ...items]));
-                    showFeedback('مورد شکرگزاری شما ثبت شد!');
+                    showConfirmation('مورد شکرگزاری شما ثبت شد!');
                     break;
                 }
                 case 'note': {
@@ -196,7 +259,7 @@ const BenvisWidget: React.FC<{
                     const items: Note[] = stored ? JSON.parse(stored) : [];
                     const newItem: Note = { id: new Date().toISOString(), content: result.content, createdAt: new Date().toISOString() };
                     localStorage.setItem(storageKey, JSON.stringify([newItem, ...items]));
-                    showFeedback('یادداشت شما ذخیره شد!');
+                    showConfirmation('یادداشت شما ذخیره شد!');
                     break;
                 }
                 case 'goal': {
@@ -208,8 +271,7 @@ const BenvisWidget: React.FC<{
                         progress: 0,
                         linkedHabits: [],
                     };
-                    onUpdateUserData({ ...userData, goals: [...userData.goals, newGoal] });
-                    showFeedback('هدف جدید شما ساخته شد!');
+                    processUpdate({ ...userData, goals: [...userData.goals, newGoal] }, 'هدف جدید شما ساخته شد!');
                     break;
                 }
                 case 'habit': {
@@ -217,8 +279,7 @@ const BenvisWidget: React.FC<{
                         name: result.content,
                         type: 'good',
                     };
-                    onUpdateUserData({ ...userData, habits: [...userData.habits, newHabit] });
-                    showFeedback('عادت جدید شما اضافه شد!');
+                    processUpdate({ ...userData, habits: [...userData.habits, newHabit] }, 'عادت جدید شما اضافه شد!');
                     break;
                 }
                 case 'calendar_event': {
@@ -228,15 +289,13 @@ const BenvisWidget: React.FC<{
                         time: result.details?.time,
                         text: result.content
                     };
-                    const updatedEvents = [...(userData.calendarEvents || []), newEvent];
-                    onUpdateUserData({ ...userData, calendarEvents: updatedEvents });
-                    showFeedback('رویداد به تقویم اضافه شد!');
+                    processUpdate({ ...userData, calendarEvents: [...(userData.calendarEvents || []), newEvent] }, 'رویداد به تقویم اضافه شد!');
                     break;
                 }
                 case 'financial_transaction': {
                     const { amount, type, category: categoryName } = result.details || {};
                     if (typeof amount !== 'number' || !type) {
-                        showFeedback('اطلاعات تراکنش مالی ناقص است.', 'error');
+                        showConfirmation('اطلاعات تراکنش مالی ناقص است.', 'error');
                         break;
                     }
                     const category = userData.transactionCategories?.find(c => c.name === categoryName && c.type === type);
@@ -261,25 +320,24 @@ const BenvisWidget: React.FC<{
                         return acc;
                     });
 
-                    onUpdateUserData({ 
+                    processUpdate({ 
                         ...userData, 
                         transactions: [...(userData.transactions || []), newTransaction],
                         financialAccounts: updatedAccounts,
-                    });
-                    showFeedback('تراکنش مالی ثبت شد!');
+                    }, 'تراکنش مالی ثبت شد!');
                     break;
                 }
                 default:
-                    showFeedback('دسته بندی ورودی شما مشخص نشد. لطفا واضح تر بنویسید.', 'error');
+                    showConfirmation('دسته بندی ورودی شما مشخص نشد. لطفا واضح تر بنویسید.', 'error');
             }
             setInput('');
         } catch (error: any) {
             console.error("Error processing input:", error);
             const errorString = JSON.stringify(error);
             if (errorString.includes("RESOURCE_EXHAUSTED") || errorString.includes('"code":429')) {
-                showFeedback('محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.', 'error');
+                showConfirmation('محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.', 'error');
             } else {
-                showFeedback('خطا در پردازش ورودی شما. لطفا دوباره تلاش کنید.', 'error');
+                showConfirmation('خطا در پردازش ورودی شما. لطفا دوباره تلاش کنید.', 'error');
             }
         } finally {
             setIsLoading(false);
@@ -290,11 +348,12 @@ const BenvisWidget: React.FC<{
         <div className="mt-4 bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-3 space-y-2">
             <div className="relative">
                 <textarea
+                    ref={placeholderRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="بنویس تا اتفاق بیفتد..."
+                    placeholder={placeholder}
                     rows={2}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 pr-12 focus:ring-2 focus:ring-violet-500 focus:outline-none resize-none"
+                    className={`w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 pr-12 focus:ring-2 focus:ring-violet-500 focus:outline-none resize-none transition-opacity duration-300`}
                     disabled={isLoading}
                 />
                  <button onClick={toggleRecording} className={`absolute top-1/2 -translate-y-1/2 right-3 p-2 rounded-full transition-colors ${isRecording ? 'bg-red-500/50 text-red-300 animate-pulse' : 'text-slate-400 hover:text-white'}`}>
@@ -314,10 +373,16 @@ const BenvisWidget: React.FC<{
                     </>
                 )}
             </button>
-            {feedback && (
-                <p className={`text-center text-sm font-semibold p-2 rounded-md ${feedback.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                    {feedback.message}
-                </p>
+            {confirmation && (
+                <div className={`text-center text-sm font-semibold p-2 rounded-md flex items-center justify-between gap-2 ${confirmation.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                    <span>{confirmation.message}</span>
+                    {confirmation.onUndo && (
+                        <button onClick={handleUndo} className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-black/20 hover:bg-black/40">
+                            <ArrowUturnLeftIcon className="w-4 h-4"/>
+                            <span>بازگشت</span>
+                        </button>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -386,7 +451,7 @@ const WeatherAndCalendarWidget: React.FC<{
     };
 
     useEffect(() => {
-        const jalaliFormatter = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' });
+        const jalaliFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'long', day: 'numeric' });
         setJalaliDate(jalaliFormatter.format(new Date()));
     }, []);
 
@@ -812,6 +877,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     const [isNightRoutineOpen, setIsNightRoutineOpen] = useState(false);
     const [currentAchievement, setCurrentAchievement] = useState<AchievementID | null>(null);
     const [assistantState, setAssistantState] = useState<{ initialTab: string, initialJournalText: string }>({ initialTab: 'chat', initialJournalText: '' });
+    const [greeting, setGreeting] = useState('سلام');
+    const [jalaliDate, setJalaliDate] = useState('');
+
 
     // --- NEW GRANULAR AI DATA STATE ---
     const [priorities, setPriorities] = useState<string[] | null>(null);
@@ -834,6 +902,15 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
     const { isLowFrictionMode = false } = userData;
     
+    useEffect(() => {
+        const hour = new Date().getHours();
+        if (hour < 12) setGreeting('صبح بخیر');
+        else if (hour < 18) setGreeting('عصر بخیر');
+        else setGreeting('شب بخیر');
+
+        setJalaliDate(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { dateStyle: 'full' }).format(new Date()));
+    }, []);
+    
     const { level, xp } = userData;
     const levelProgressPercentage = useMemo(() => {
         let totalXpForPreviousLevels = 0;
@@ -851,8 +928,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onUpdateUserData({ ...userData, isLowFrictionMode: isOn });
     };
 
-    // --- NEW DECOUPLED AI DATA FETCHING ---
-
+    // --- DECOUPLED AI DATA FETCHING ---
     const fetchWithCache = useCallback(async <T,>(key: string, fetchFn: () => Promise<T>, forceRefresh = false): Promise<T | null> => {
         const todayStr = new Date().toISOString().split('T')[0];
         const cacheKey = `benvis_${key}_${todayStr}`;
@@ -879,236 +955,217 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }
         return "خطا در دریافت برخی اطلاعات هوشمند.";
     };
-    
-    // Priorities Fetching
-    const fetchPriorities = useCallback(async (forceRefresh = false) => {
+
+    // New unified fetch function
+    const fetchDashboardData = useCallback(async (currentData: OnboardingData, forceRefresh = false) => {
         setIsPrioritiesLoading(true);
+        setIsWeatherLoading(true);
+        setIsDailyPromptLoading(true);
+        setIsPredictiveAlertLoading(true);
+        setIsDailyBriefingLoading(true);
+        setAiDataError(null);
+
+        let location: { lat: number; lon: number } | null = null;
+        let localWeatherError: string | null = null;
         try {
-            const { goals, habits } = userData;
-            const goalsInfo = goals.filter(g => g.progress < 100).map(g => `- "${g.title}" (Progress: ${g.progress}%)`).join('\n') || 'No active goals.';
-            const habitsInfo = habits.map(h => `- "${h.name}"`).join('\n') || 'No habits to track.';
-            const result = await fetchWithCache('priorities', async () => {
-                const prompt = `Based on the user's active goals and habits, identify the top 3 most impactful priorities for today. Be concise, actionable, and respond in Persian. - Active Goals: ${goalsInfo} - Habits to Track: ${habitsInfo} Respond ONLY with a valid JSON array of strings.`;
-                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } } });
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
+            location = { lat: position.coords.latitude, lon: position.coords.longitude };
+        } catch (e) {
+            localWeatherError = "مکان‌یابی برای دریافت آب و هوا فعال نیست.";
+            setWeatherError(localWeatherError);
+        }
+
+        try {
+            const result = await fetchWithCache('dashboard_data', async () => {
+                const { goals, habits, calendarEvents = [] } = currentData;
+                const goalsInfo = goals.filter(g => g.progress < 100).map(g => `- "${g.title}" (Progress: ${g.progress}%)`).join('\n') || 'No active goals.';
+                const habitsInfo = habits.map(h => `- "${h.name}"`).join('\n') || 'No habits to track.';
+                const todayStr = new Date().toISOString().split('T')[0];
+                const todayEvents = calendarEvents.filter(e => e.date === todayStr).map(e => `- ${e.time || ''}: ${e.text}`).join('\n') || 'No events scheduled.';
+                const upcomingGoals = goals.filter(g => g.targetDate && g.targetDate >= todayStr && g.progress < 100).map(g => `- '${g.title}' is at ${g.progress}%`).join('\n') || 'No goals with upcoming deadlines.';
+                
+                const prompt = `
+                    You are the Benvis AI dashboard generator. Based on the user's data and location, generate all the necessary data for the dashboard in a single JSON response.
+
+                    User Context:
+                    - Active Goals: ${goalsInfo}
+                    - Habits to Track: ${habitsInfo}
+                    - Today's Calendar: ${todayEvents}
+                    - Upcoming Goals: ${upcomingGoals}
+                    - Location: ${location ? `Latitude ${location.lat}, Longitude ${location.lon}` : 'Not provided.'}
+
+                    Generate the following data points:
+                    1.  **priorities**: An array of 3 most impactful priority strings for today.
+                    2.  **weather**: A simple weather report object { "temp": number, "condition": "string" }. If location is not provided, return null for this field.
+                    3.  **dailyPrompt**: A single, unique, insightful journal prompt string.
+                    4.  **predictiveAlert**: An object { "title": "string", "message": "string" } predicting a potential productivity blocker for today.
+                    5.  **dailyBriefing**: A concise, motivational daily briefing string in Markdown format.
+
+                    Respond ONLY with a valid JSON object matching the schema. All text must be in Persian.
+                `;
+
+                const dashboardDataSchema = {
+                    type: Type.OBJECT,
+                    properties: {
+                        priorities: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+                        weather: {
+                            type: Type.OBJECT,
+                            properties: { temp: { type: Type.NUMBER }, condition: { type: Type.STRING } },
+                            nullable: true
+                        },
+                        dailyPrompt: { type: Type.STRING, nullable: true },
+                        predictiveAlert: {
+                            type: Type.OBJECT,
+                            properties: { title: { type: Type.STRING }, message: { type: Type.STRING } },
+                            nullable: true
+                        },
+                        dailyBriefing: { type: Type.STRING, nullable: true }
+                    }
+                };
+                
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: { responseMimeType: "application/json", responseSchema: dashboardDataSchema }
+                });
+
                 return JSON.parse(response.text.trim());
             }, forceRefresh);
-            setPriorities(result);
+
+            if (result) {
+                setPriorities(result.priorities || null);
+                setWeather(result.weather || null);
+                setDailyPrompt(result.dailyPrompt || null);
+                setPredictiveAlert(result.predictiveAlert || null);
+                setDailyBriefing(result.dailyBriefing || null);
+                if (!result.weather && localWeatherError) {
+                    setWeatherError(localWeatherError);
+                } else {
+                    setWeatherError(null);
+                }
+            }
         } catch (error) {
             setAiDataError(handleError(error));
         } finally {
             setIsPrioritiesLoading(false);
-        }
-    }, [userData.goals, userData.habits, fetchWithCache]);
-
-    useEffect(() => { fetchPriorities() }, [fetchPriorities]);
-
-    // Weather Fetching
-    const fetchWeather = useCallback(async (forceRefresh = false) => {
-        setIsWeatherLoading(true);
-        setWeatherError(null);
-        try {
-            let location: { lat: number; lon: number } | null = null;
-            try {
-                const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
-                location = { lat: position.coords.latitude, lon: position.coords.longitude };
-            } catch (e) {
-                setWeatherError("مکان‌یابی برای دریافت آب و هوا فعال نیست.");
-                setIsWeatherLoading(false);
-                return;
-            }
-            const result = await fetchWithCache('weather', async () => {
-                if (!location) return null;
-                const prompt = `Provide a simple weather report for Latitude ${location.lat}, Longitude ${location.lon}. Respond in Persian. Respond ONLY with a valid JSON object like {"temperature": 25, "condition": "sunny"}`;
-                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { temperature: { type: Type.INTEGER }, condition: { type: Type.STRING } } } } });
-                const parsed = JSON.parse(response.text.trim());
-                return { temp: parsed.temperature, condition: parsed.condition };
-            }, forceRefresh);
-            setWeather(result);
-        } catch (error) {
-            setWeatherError(handleError(error));
-        } finally {
             setIsWeatherLoading(false);
+            setIsDailyPromptLoading(false);
+            setIsPredictiveAlertLoading(false);
+            setIsDailyBriefingLoading(false);
         }
     }, [fetchWithCache]);
-
-    useEffect(() => { fetchWeather() }, [fetchWeather]);
     
-    // Daily Prompt Fetching
-    const fetchDailyPrompt = useCallback(async (forceRefresh = false) => {
-        setIsDailyPromptLoading(true);
-        try {
-             const { goals, habits } = userData;
-             const goalsInfo = goals.filter(g => g.progress < 100).map(g => g.title).join(', ');
-             const habitsInfo = habits.map(h => h.name).join(', ');
-             const result = await fetchWithCache('daily_prompt', async () => {
-                const prompt = `Generate a single, personal, and reflective journaling prompt in Persian (under 20 words) to inspire introspection based on the user's goals and habits. User Goals: ${goalsInfo}. User Habits: ${habitsInfo}.`;
-                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-                return response.text.trim();
-            }, forceRefresh);
-            setDailyPrompt(result);
-        } catch (error) {
-            setAiDataError(handleError(error));
-        } finally {
-            setIsDailyPromptLoading(false);
-        }
-    }, [userData.goals, userData.habits, fetchWithCache]);
-
-    useEffect(() => { fetchDailyPrompt() }, [fetchDailyPrompt]);
-
-    // Other AI fetches can be added here following the same pattern...
-
     useEffect(() => {
-        if (isLowFrictionMode) {
-            document.body.classList.add('low-friction-mode');
-        } else {
-            document.body.classList.remove('low-friction-mode');
-        }
-        return () => document.body.classList.remove('low-friction-mode');
-    }, [isLowFrictionMode]);
+        fetchDashboardData(userData);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-
-    useEffect(() => {
-        if (newAchievements.length > 0) {
-            setCurrentAchievement(newAchievements[0]);
-        }
-    }, [newAchievements]);
-    
-    // Effect to handle theme change for financial view
-    useEffect(() => {
-        // FIX: Updated theme logic to use 'data-theme-name' attribute and the 'name' property from theme settings,
-        // instead of the deprecated 'color' and 'shape' properties.
-        if (isFinancialViewOpen) {
-            // The financial view appears to use a blue theme, which maps to 'oceanic_deep' in the new theme system.
-            document.documentElement.setAttribute('data-theme-name', 'oceanic_deep');
-        } else {
-            // Revert to user's saved theme when modal is closed
-            if (userData?.theme?.name) {
-                document.documentElement.setAttribute('data-theme-name', userData.theme.name);
-            }
-        }
-
-        // Cleanup function to ensure theme is reverted on component unmount
-        return () => {
-             if (userData?.theme?.name) {
-                document.documentElement.setAttribute('data-theme-name', userData.theme.name);
-            }
-        }
-    }, [isFinancialViewOpen, userData?.theme]);
-
-    // Auto switch to finance view if it's the active tab
-    useEffect(() => {
-        if (activeView === 'finance' && !isFinancialViewOpen) {
-            setIsFinancialViewOpen(true);
-        }
-    }, [activeView, isFinancialViewOpen]);
-
-    const handleAchievementSeen = () => {
-        setCurrentAchievement(null);
-        onAchievementsSeen();
-    };
-
-    const handleUpdateGoals = (updatedGoals: UserGoal[]) => {
-        onUpdateUserData({ ...userData, goals: updatedGoals });
-    };
-
-    const handlePromptClick = (prompt: string) => {
-        setAssistantState({ initialTab: 'journal', initialJournalText: `${prompt}\n\n` });
+    const handleDailyPromptClick = (prompt: string) => {
+        setAssistantState({ initialTab: 'journal', initialJournalText: prompt });
         setActiveView('assistant');
     };
 
-    const handleViewChange = (view: View) => {
-        if (view === 'assistant' && activeView !== 'assistant') {
-            setAssistantState({ initialTab: 'chat', initialJournalText: '' });
+    useEffect(() => {
+        if (newAchievements.length > 0 && !currentAchievement) {
+            setCurrentAchievement(newAchievements[0]);
         }
-        setActiveView(view);
+    }, [newAchievements, currentAchievement]);
+    
+    const handleAchievementSeen = () => {
+        const remaining = newAchievements.slice(1);
+        onAchievementsSeen(); // Clear from parent
+        setCurrentAchievement(remaining[0] || null);
     };
 
-    const MainDashboard = () => (
-         <div className="space-y-4 pb-24">
-            {aiDataError && (
-                <div className="bg-red-900/60 backdrop-blur-lg border border-red-700 rounded-[var(--radius-card)] p-4 text-center">
-                    <h3 className="font-bold text-red-300">خطای دستیار هوشمند</h3>
-                    <p className="text-sm text-red-300/90 mt-1">{aiDataError}</p>
-                </div>
-            )}
-            <MoodWeatherWidget />
-            <PredictiveAlertsWidget alert={predictiveAlert} isLoading={isPredictiveAlertLoading} onToggleMode={handleUpdateLowFrictionMode} />
-            <DailyBriefingWidget briefing={dailyBriefing} isLoading={isDailyBriefingLoading} onRefresh={() => { /* Implement refresh if needed */ }} />
-            <TodaysPrioritiesWidget priorities={priorities} isLoading={isPrioritiesLoading} />
-            <EnergyPredictionWidget userData={userData} />
-            <DailyPromptWidget prompt={dailyPrompt} isLoading={isDailyPromptLoading} onPromptClick={handlePromptClick} onRefresh={() => fetchDailyPrompt(true)} />
-            <StatsSummaryWidget userData={userData} />
-            <HabitTrackerWidget userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <GoalsWidget goals={userData.goals} />
-                {userData.gender === 'female' && <WomenHealthWidget onOpen={() => setIsWomenHealthOpen(true)} userData={userData} />}
-                <WeatherAndCalendarWidget onOpen={() => setIsCalendarViewOpen(true)} weather={weather} isLoading={isWeatherLoading} weatherError={weatherError} />
-                <FinancialWidget userData={userData} onOpen={() => setIsFinancialViewOpen(true)} />
+    useEffect(() => {
+        if (activeView === 'finance') {
+            setIsFinancialViewOpen(true);
+            // After opening the modal, we don't want to be on a blank 'finance' view.
+            // Let's return to the dashboard view so the modal appears over it.
+            setActiveView('dashboard');
+        }
+    }, [activeView]);
 
-                <div className="col-span-1 sm:col-span-2">
-                    <button onClick={() => setIsQuietZoneOpen(true)} className="w-full p-4 rounded-[var(--radius-card)] bg-blue-950/60 backdrop-blur-lg border border-blue-800 text-right hover:bg-blue-900/80 transition-colors">
-                        <h3 className="font-bold text-lg flex items-center gap-2"><MoonIcon className="w-6 h-6 text-blue-300" /> منطقه سکوت</h3>
-                        <p className="text-sm text-blue-300/80 mt-1">با تکنیک پومودورو، روی کارهای خود تمرکز کنید.</p>
-                    </button>
-                </div>
-                 <div className="col-span-1 sm:col-span-2">
-                    <button onClick={() => setIsNightRoutineOpen(true)} className="w-full p-4 rounded-[var(--radius-card)] bg-indigo-950/60 backdrop-blur-lg border border-indigo-800 text-right hover:bg-indigo-900/80 transition-colors">
-                        <h3 className="font-bold text-lg flex items-center gap-2"><MoonIcon className="w-6 h-6 text-indigo-300" /> بستن روز</h3>
-                        <p className="text-sm text-indigo-300/80 mt-1">روز خود را با یک روتین شبانه آرام به پایان برسانید.</p>
-                    </button>
-                </div>
-                <div className="col-span-1 sm:col-span-2">
-                     <button onClick={() => setIsWeeklyReviewOpen(true)} className="w-full p-4 rounded-[var(--radius-card)] bg-purple-950/60 backdrop-blur-lg border border-purple-800 text-right hover:bg-purple-900/80 transition-colors">
-                        <h3 className="font-bold text-lg flex items-center gap-2"><DocumentChartBarIcon className="w-6 h-6 text-purple-300" /> مرور هفتگی</h3>
-                        <p className="text-sm text-purple-300/80 mt-1">پیشرفت خود را با تحلیل هوشمند بررسی کنید.</p>
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+    const renderView = () => {
+        switch (activeView) {
+            case 'goals':
+                return <GoalsView userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />;
+            case 'finance':
+                 // This case is now safe, it just returns null. The side effect is handled in useEffect.
+                return null;
+            case 'settings':
+                return <SettingsView userData={userData} onUpdateUserData={onUpdateUserData} />;
+            case 'assistant':
+                return <SmartAssistantView userData={userData} onUpdateUserData={onUpdateUserData} initialTab={assistantState.initialTab} initialJournalText={assistantState.initialJournalText} />;
+            default:
+                return null;
+        }
+    };
     
     return (
-        <div className="min-h-screen bg-transparent text-slate-200 p-4">
+        <div className={`p-4 pb-24 min-h-screen relative ${isLowFrictionMode ? 'low-friction-mode' : ''}`}>
             {levelUpInfo && <LevelUpModal newLevel={levelUpInfo.newLevel} onSeen={onLevelUpSeen} />}
-            {currentAchievement && <AchievementModal achievement={ALL_ACHIEVEMENTS[currentAchievement]} onSeen={handleAchievementSeen} />}
-            {isQuietZoneOpen && <QuietZoneView goals={userData.goals} onUpdateGoals={handleUpdateGoals} onClose={() => setIsQuietZoneOpen(false)} addXp={addXp} />}
+            {currentAchievement && ALL_ACHIEVEMENTS[currentAchievement] && (
+                <AchievementModal achievement={ALL_ACHIEVEMENTS[currentAchievement]} onSeen={handleAchievementSeen} />
+            )}
+
+            {activeView !== 'dashboard' ? (
+                <div className="pb-4">{renderView()}</div>
+            ) : (
+                <>
+                    <header className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-bold">{greeting}, {userData.fullName.split(' ')[0]}</h1>
+                            <p className="text-slate-400 text-sm">{jalaliDate}</p>
+                        </div>
+                        <div className="flex gap-2">
+                             <button onClick={() => setIsWeeklyReviewOpen(true)} className="p-3 bg-slate-800/60 border border-slate-700 rounded-full hover:bg-slate-800" title="مرور هفتگی">
+                                <DocumentChartBarIcon className="w-6 h-6"/>
+                            </button>
+                             <button onClick={() => setIsQuietZoneOpen(true)} className="p-3 bg-slate-800/60 border border-slate-700 rounded-full hover:bg-slate-800" title="حالت تمرکز">
+                                <MoonIcon className="w-6 h-6"/>
+                            </button>
+                             <button onClick={() => setIsNightRoutineOpen(true)} className="p-3 bg-slate-800/60 border border-slate-700 rounded-full hover:bg-slate-800" title="روتین شبانه">
+                                <StarIcon className="w-6 h-6"/>
+                            </button>
+                        </div>
+                    </header>
+                    <BenvisWidget userData={userData} onUpdateUserData={onUpdateUserData} />
+                    
+                    {aiDataError && (
+                        <div className="mt-4 p-3 bg-red-900/50 border border-red-800 rounded-lg text-sm text-red-300 text-center">
+                            {aiDataError}
+                        </div>
+                    )}
+                    
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                        <DailyBriefingWidget briefing={dailyBriefing} isLoading={isDailyBriefingLoading} onRefresh={() => fetchDashboardData(userData, true)} />
+                        {!isLowFrictionMode && <StatsSummaryWidget userData={userData} />}
+                        {!isLowFrictionMode && <TodaysPrioritiesWidget priorities={priorities} isLoading={isPrioritiesLoading} />}
+                        {!isLowFrictionMode && <HabitTrackerWidget userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />}
+                        {!isLowFrictionMode && <GoalsWidget goals={userData.goals.filter(g => g.progress < 100)} />}
+                        {!isLowFrictionMode && <WeatherAndCalendarWidget onOpen={() => setIsCalendarViewOpen(true)} weather={weather} isLoading={isWeatherLoading} weatherError={weatherError} />}
+                        {!isLowFrictionMode && <DailyPromptWidget prompt={dailyPrompt} isLoading={isDailyPromptLoading} onRefresh={() => fetchDashboardData(userData, true)} onPromptClick={handleDailyPromptClick} />}
+                        {!isLowFrictionMode && userData.gender === 'female' && <WomenHealthWidget onOpen={() => setIsWomenHealthOpen(true)} userData={userData} />}
+                        {!isLowFrictionMode && <FinancialWidget userData={userData} onOpen={() => setIsFinancialViewOpen(true)} />}
+                        {!isLowFrictionMode && <MoodWeatherWidget />}
+                        {!isLowFrictionMode && <EnergyPredictionWidget userData={userData} />}
+                        {!isLowFrictionMode && <PredictiveAlertsWidget alert={predictiveAlert} isLoading={isPredictiveAlertLoading} onToggleMode={handleUpdateLowFrictionMode} />}
+                        {!isLowFrictionMode && <FinancialInsightsWidget userData={userData} />}
+                    </div>
+                </>
+            )}
+
+            {isQuietZoneOpen && <QuietZoneView goals={userData.goals} onUpdateGoals={(goals) => onUpdateUserData({...userData, goals})} onClose={() => setIsQuietZoneOpen(false)} addXp={addXp} />}
             {isWeeklyReviewOpen && <WeeklyReviewView userData={userData} onClose={() => setIsWeeklyReviewOpen(false)} />}
             {isWomenHealthOpen && <WomenHealthView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsWomenHealthOpen(false)} />}
             {isCalendarViewOpen && <CalendarView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsCalendarViewOpen(false)} />}
-            {isFinancialViewOpen && <FinancialView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => { setIsFinancialViewOpen(false); if (activeView === 'finance') setActiveView('dashboard'); }} />}
+            {isFinancialViewOpen && <FinancialView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsFinancialViewOpen(false)} />}
             {isNightRoutineOpen && <NightRoutineView userData={userData} onClose={() => setIsNightRoutineOpen(false)} />}
 
-            <header className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="font-bold text-3xl">سلام، {userData.fullName.split(' ')[0]}</h1>
-                    <p className="text-slate-400">امروز برای درخشیدن آماده‌ای؟</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="text-right">
-                        <span className="text-xs font-semibold text-slate-400">سطح {userData.level}</span>
-                        <div className="w-24 bg-slate-700 rounded-full h-2 mt-1">
-                            <div className="bg-violet-500 h-2 rounded-full progress-bar-fill" style={{ width: `${levelProgressPercentage}%` }}></div>
-                        </div>
-                    </div>
-                     <button className="relative" onClick={() => handleViewChange('settings')}>
-                        <UserCircleIcon className="w-10 h-10 text-slate-300" />
-                    </button>
-                </div>
-            </header>
-            
-            <BenvisWidget userData={userData} onUpdateUserData={onUpdateUserData} />
-            
-            <main className="mt-6">
-                {activeView === 'dashboard' && <MainDashboard />}
-                {activeView === 'goals' && <GoalsView goals={userData.goals} onUpdateGoals={handleUpdateGoals} availableHabits={userData.habits.map(h => h.name)} addXp={addXp} />}
-                {activeView === 'settings' && <SettingsView userData={userData} onUpdateUserData={onUpdateUserData} />}
-                {activeView === 'assistant' && <SmartAssistantView userData={userData} initialTab={assistantState.initialTab} initialJournalText={assistantState.initialJournalText} />}
-            </main>
-            
-            <BottomNav activeView={activeView} setActiveView={handleViewChange} />
+            <BottomNav activeView={activeView} setActiveView={setActiveView} />
         </div>
     );
-}
+};
 
 export default DashboardScreen;

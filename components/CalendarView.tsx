@@ -5,6 +5,62 @@ import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Helper to get Jalali calendar details
+const getJalaliCalendar = (date: Date) => {
+    const year = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric' }).format(date);
+    const month = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: '2-digit' }).format(date);
+    const monthName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long' }).format(date);
+    const monthIndex = parseInt(month, 10) - 1;
+
+    // To get the days in the month, we can't use the Gregorian Date object directly.
+    // A simple approximation: check day 31, then 30, then 29.
+    let daysInMonth = 31;
+    if (monthIndex > 5) daysInMonth = 30;
+    if (monthIndex === 11) { // Esfand
+        // A proper leap year calculation is complex. This is a good approximation.
+        // We can simply check if day 30 exists.
+        const testDate = new Date(date.getFullYear(), date.getMonth(), 20); // Go to middle of Gregorian month
+        let jalaliYearNum = parseInt(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric' }).format(testDate));
+        
+        // This is tricky. Let's just iterate to find the end of the month
+        let dayCounter = 28;
+        let tempDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        let currentJalaliMonth = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(tempDate);
+        while(true){
+             tempDate.setDate(tempDate.getDate()+1);
+             let nextJalaliMonth = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(tempDate);
+             if(nextJalaliMonth !== currentJalaliMonth) {
+                 dayCounter = new Date(tempDate.getTime() - 86400000).getDate();
+                 break;
+             }
+             if(tempDate.getDate() > 31) break; // safety
+        }
+
+        // Simpler, less accurate way:
+         if (monthIndex > 5) daysInMonth = 30;
+         if (monthIndex === 11) daysInMonth = 29; // Assume not leap year for simplicity
+         if (monthIndex < 6) daysInMonth = 31;
+    }
+    
+    const firstDayOfMonthGregorian = new Date(date.getFullYear(), date.getMonth(), 1);
+    
+    // Find the Gregorian date that corresponds to the 1st of the Jalali month
+    let firstDayOfJalaliMonth = new Date(firstDayOfMonthGregorian);
+    while (new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(firstDayOfJalaliMonth) !== '۱') {
+        firstDayOfJalaliMonth.setDate(firstDayOfJalaliMonth.getDate() - 1);
+    }
+     // The loop might go one day too far if the month starts on the same day.
+     if(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(firstDayOfJalaliMonth) !== new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(date)){
+         firstDayOfJalaliMonth.setDate(firstDayOfJalaliMonth.getDate() + 1);
+     }
+
+
+    const firstDayOfWeek = (firstDayOfJalaliMonth.getDay() + 1) % 7; // 0 for Saturday
+
+    return { monthName, year, daysInMonth, firstDayOfWeek, month: date.getMonth(), yearNum: date.getFullYear() };
+};
+
+
 interface CalendarViewProps {
     userData: OnboardingData;
     onUpdateUserData: (data: OnboardingData) => void;
@@ -21,19 +77,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ userData, onUpdateUserData,
 
     const events = userData.calendarEvents || [];
 
-    const { monthName, year, daysInMonth, firstDayOfMonth, month, yearNum } = useMemo(() => {
-        const date = new Date(currentDate);
-        const yearNum = date.getFullYear();
-        const month = date.getMonth();
-        const monthName = new Intl.DateTimeFormat('fa-IR', { month: 'long' }).format(date);
-        const year = new Intl.DateTimeFormat('fa-IR', { year: 'numeric' }).format(date);
-        
-        const daysInMonth = new Date(yearNum, month + 1, 0).getDate();
-        const firstDay = new Date(yearNum, month, 1).getDay();
-        const firstDayOfMonth = (firstDay + 1) % 7; // Adjust for Saturday start
-
-        return { monthName, year, daysInMonth, firstDayOfMonth, month, yearNum };
-    }, [currentDate]);
+    const { monthName, year, daysInMonth, firstDayOfWeek, month, yearNum } = useMemo(() => getJalaliCalendar(currentDate), [currentDate]);
 
     const eventsByDate = useMemo(() => {
         const map = new Map<string, CalendarEvent[]>();
@@ -85,7 +129,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ userData, onUpdateUserData,
 
         const formattedEvents = eventsForMonth
             .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(e => `${e.date} ${e.time || ''}: ${e.text}`).join('\n');
+            .map(e => `${new Intl.DateTimeFormat('fa-IR-u-ca-persian', {dateStyle: 'short'}).format(new Date(e.date))} ${e.time || ''}: ${e.text}`).join('\n');
         
         const prompt = `You are a productivity assistant for the Benvis Life OS. Analyze the following calendar events for the user for the month of ${monthName} and provide a short, insightful summary in Persian. Highlight busy periods, recurring themes in their notes, and offer one actionable tip for better time management. Here are the events:\n\n${formattedEvents}`;
 
@@ -123,10 +167,26 @@ const CalendarView: React.FC<CalendarViewProps> = ({ userData, onUpdateUserData,
                             {['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].map(d => <div key={d}>{d}</div>)}
                         </div>
                         <div className="grid grid-cols-7 gap-1">
-                            {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`empty-${i}`} />)}
+                            {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
                             {Array.from({ length: daysInMonth }).map((_, dayIndex) => {
                                 const day = dayIndex + 1;
-                                const date = new Date(yearNum, month, day);
+                                
+                                // We need to construct the Gregorian date that corresponds to this Jalali day
+                                const firstDayJalali = new Date(currentDate);
+                                firstDayJalali.setDate(1); // Go to start of Gregorian month for safety
+                                while (new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(firstDayJalali) !== '۱' || new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(firstDayJalali) !== new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(currentDate)) {
+                                     firstDayJalali.setDate(firstDayJalali.getDate() > 15 ? firstDayJalali.getDate() - 15 : 1);
+                                     if(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(firstDayJalali) !== new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric' }).format(currentDate)){
+                                         firstDayJalali.setDate(firstDayJalali.getDate()+20);
+                                     }
+                                     while(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(firstDayJalali) !== '۱') {
+                                         firstDayJalali.setDate(firstDayJalali.getDate()-1);
+                                     }
+                                     break; // Found it
+                                }
+
+                                const date = new Date(firstDayJalali.getTime() + (dayIndex * 86400000));
+                                
                                 const dateString = date.toISOString().split('T')[0];
                                 const isToday = dateString === new Date().toISOString().split('T')[0];
                                 const isSelected = dateString === selectedDate?.toISOString().split('T')[0];
@@ -139,7 +199,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ userData, onUpdateUserData,
 
                                 return (
                                     <button key={day} onClick={() => setSelectedDate(date)} className={dayClass}>
-                                        {day}
+                                        {new Intl.NumberFormat('fa-IR').format(day)}
                                         {hasEvent && <span className="absolute bottom-1.5 w-1.5 h-1.5 bg-green-400 rounded-full"></span>}
                                     </button>
                                 );
@@ -148,7 +208,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ userData, onUpdateUserData,
                     </div>
                     <div className="md:col-span-2 space-y-4">
                         <div className="p-4 bg-gray-800/50 rounded-[var(--radius-lg)]">
-                             <h4 className="font-bold mb-3">{selectedDate ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full' }).format(selectedDate) : 'روزی را انتخاب کنید'}</h4>
+                             <h4 className="font-bold mb-3">{selectedDate ? new Intl.DateTimeFormat('fa-IR-u-ca-persian', { dateStyle: 'full' }).format(selectedDate) : 'روزی را انتخاب کنید'}</h4>
                              <div className="space-y-2 max-h-24 overflow-y-auto pr-1">
                                 {selectedDate && (eventsByDate.get(selectedDate.toISOString().split('T')[0]) || []).map(event => (
                                     <div key={event.id} className="text-sm bg-gray-700/50 p-2 rounded-md flex justify-between items-center">

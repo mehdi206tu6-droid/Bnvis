@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, Habit } from '../types';
 import { 
@@ -132,7 +133,7 @@ const WelcomeStep = () => (
             <WavingHandIcon className="w-16 h-16 text-white" />
         </div>
         <h1 className="text-3xl font-bold mb-2">به بنویس خوش آمدید</h1>
-        <p className="text-slate-400">Life OS شما برای مدیریت هوشمند زندگی</p>
+        <p className="text-slate-400">سیستم عامل زندگی شما برای مدیریت هوشمند</p>
     </div>
 );
 
@@ -168,7 +169,7 @@ const GenderStep: React.FC<StepProps> = ({ data, setData }) => {
     ];
 
     return (
-        <StepCard title="جنسیت خود را مشخص کنید" tag="Personalization">
+        <StepCard title="جنسیت خود را مشخص کنید" tag="شخصی‌سازی">
             <p className="text-slate-400 mb-6">این به ما کمک می‌کند تا تجربه شما را شخصی‌سازی کنیم.</p>
             <div className="grid grid-cols-2 gap-4 w-full">
                 {genders.map(gender => {
@@ -204,7 +205,7 @@ const GoalsStep: React.FC<StepProps> = ({ data, setData }) => {
     };
 
     return (
-        <StepCard title="اهداف خود را انتخاب کنید" tag="Goals">
+        <StepCard title="اهداف خود را انتخاب کنید" tag="اهداف">
             <p className="text-slate-400 mb-6">چه چیزی برای شما مهم است؟</p>
             <div className="grid grid-cols-2 gap-4 w-full">
                 {goalOptions.map(goal => {
@@ -243,7 +244,7 @@ const HabitsStep: React.FC<StepProps> = ({ data, setData }) => {
     };
 
     return (
-        <StepCard title="عادت‌های مثبت بسازید" tag="Habits">
+        <StepCard title="عادت‌های مثبت بسازید" tag="عادت‌ها">
              <p className="text-slate-400 mb-6">کدام عادت‌ها را می‌خواهید دنبال کنید؟</p>
              <div className="w-full space-y-3">
                 {habitOptions.map(habit => {
@@ -288,7 +289,7 @@ const NotificationsStep: React.FC<StepProps> = ({ data, setData }) => {
     };
 
     return (
-        <StepCard title="تنظیم اعلان‌ها" tag="Notifications">
+        <StepCard title="تنظیم اعلان‌ها" tag="اعلان‌ها">
              <p className="text-slate-400 mb-6">نوع اعلان‌هایی که می‌خواهید دریافت کنید را مشخص کنید.</p>
              <div className="w-full space-y-4 text-right">
                 {/* Tasks */}

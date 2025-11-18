@@ -1,5 +1,8 @@
 
 
+
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat, Modality } from "@google/genai";
 import { 
@@ -315,7 +318,7 @@ const ImageAnalyzer: React.FC = () => {
     
     const handleAnalyze = async () => {
         if (!imageFile || !prompt) {
-            alert('لطفا یک تصویر و یک سوال وارد کنید.');
+            alert('لطفاً یک تصویر و یک سوال وارد کنید.');
             return;
         }
         setIsLoading(true);
@@ -376,7 +379,7 @@ const ImageEditor: React.FC = () => {
 
     const handleEdit = async () => {
         if (!imageFile || !prompt) {
-            alert('لطفا یک تصویر و یک دستور ویرایش وارد کنید.');
+            alert('لطفاً یک تصویر و یک دستور ویرایش وارد کنید.');
             return;
         }
         setIsLoading(true);
@@ -516,11 +519,12 @@ const Journal: React.FC<{ initialText?: string }> = ({ initialText }) => {
 
 interface SmartAssistantViewProps {
     userData: OnboardingData;
+    onUpdateUserData: (data: OnboardingData) => void;
     initialTab?: string;
     initialJournalText?: string;
 }
 
-const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, initialTab = 'chat', initialJournalText = '' }) => {
+const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpdateUserData, initialTab = 'chat', initialJournalText = '' }) => {
     const [activeTab, setActiveTab] = useState(initialTab);
     const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
 
@@ -545,7 +549,7 @@ const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, initi
 
     const renderContent = () => {
         if (activeAgent) {
-             return <AiAgentRunner agent={activeAgent} onBack={() => setActiveAgent(null)} />;
+             return <AiAgentRunner agent={activeAgent} onBack={() => setActiveAgent(null)} userData={userData} onUpdateUserData={onUpdateUserData} />;
         }
         switch (activeTab) {
             case 'agents': return <AiAgentsHub onAgentSelect={setActiveAgent} />;
