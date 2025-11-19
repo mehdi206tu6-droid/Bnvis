@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Agent, OnboardingData, Note, CalendarEvent } from '../types';
 import { GoogleGenAI } from '@google/genai';
@@ -5,7 +6,7 @@ import {
     SparklesIcon, ChevronRightIcon, CalendarIcon, PencilIcon, MoonIcon, HabitsIcon,
     ClockIcon, TargetIcon, FinanceIcon, ReceiptPercentIcon, BoltIcon, BriefcaseIcon,
     FaceSmileIcon, UserIcon, BrainIcon, DocumentTextIcon, ChartBarIcon, LockOpenIcon, LockClosedIcon, ClipboardIcon,
-    MagnifyingGlassIcon
+    MagnifyingGlassIcon, BookOpenIcon, SpeakerWaveIcon, LeafIcon, SunIcon, StarIcon
 } from './icons';
 
 interface AiAgentRunnerProps {
@@ -40,6 +41,17 @@ const fieldMetadata: Record<string, { label: string; description: string; icon: 
     blockers: { label: 'موانع', description: 'موانع و مشکلاتی که برای رسیدن به این هدف با آن‌ها روبرو هستید.', icon: DocumentTextIcon },
     primary_issue: { label: 'مسئله اصلی', description: 'مشکل یا چالشی که می‌خواهید روی آن کار کنید.', icon: BrainIcon },
     preferred_time: { label: 'زمان ترجیحی (دقیقه)', description: 'مدت زمانی که می‌خواهید برای این روتین صرف کنید.', icon: ClockIcon },
+    monthlyIncome: { label: 'درآمد ماهانه', description: 'مجموع درآمد ماهانه شما.', icon: FinanceIcon },
+    savingsGoal: { label: 'هدف پس‌انداز', description: 'مبلغی که می‌خواهید هر ماه پس‌انداز کنید.', icon: TargetIcon },
+    difficulty: { label: 'سطح دشواری', description: 'میزان سختی چالش را انتخاب کنید.', icon: ChartBarIcon },
+    type: { label: 'نوع چالش', description: 'نوع فعالیت مورد نظر خود را انتخاب کنید.', icon: TargetIcon },
+    message: { label: 'پیام ورودی', description: 'پیامی که می‌خواهید به دستور تبدیل شود.', icon: DocumentTextIcon },
+    experimentGoal: { label: 'هدف آزمایش', description: 'هدفی که می‌خواهید برای آن آزمایش طراحی کنید.', icon: TargetIcon },
+    top3Habits: { label: '۳ عادت برتر', description: 'سه عادت مهمی که می‌خواهید در خود تقویت کنید.', icon: HabitsIcon },
+    whyTheyMatter: { label: 'چرا مهم هستند', description: 'دلیل اهمیت این عادت‌ها در زندگی شما.', icon: TargetIcon },
+    journalEntriesLast30Days: { label: 'ژورنال‌های ۳۰ روز اخیر', description: 'خاطرات و یادداشت‌های ماه گذشته شما.', icon: BookOpenIcon },
+    available_minutes_morning: { label: 'زمان صبحگاهی (دقیقه)', description: 'زمانی که صبح‌ها می‌توانید اختصاص دهید.', icon: ClockIcon },
+    priority: { label: 'اولویت', description: 'تمرکز اصلی روتین (انرژی، تمرکز، آرامش).', icon: StarIcon },
 };
 
 const ResultSkeleton: React.FC = () => (
@@ -372,6 +384,307 @@ const CognitiveHabitDesignerResultDisplay: React.FC<{ result: any }> = ({ result
     );
 };
 
+const RealWorldChallengerResultDisplay: React.FC<{ result: any, userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void }> = ({ result, userData, onUpdateUserData }) => {
+    const [completed, setCompleted] = useState(false);
+
+    const handleComplete = () => {
+        // Award XP
+        const reward = Number(result.xpReward) || 50;
+        onUpdateUserData({ ...userData, xp: userData.xp + reward });
+        setCompleted(true);
+        alert(`تبریک! شما ${reward} امتیاز کسب کردید.`);
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="relative bg-gradient-to-br from-orange-600 to-red-700 rounded-xl p-6 text-white overflow-hidden shadow-lg">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                 <h3 className="text-2xl font-bold mb-2 relative z-10">{result.title}</h3>
+                 <div className="flex items-center gap-2 mb-4 relative z-10">
+                    <span className="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+                        {result.xpReward} XP
+                    </span>
+                    <span className="bg-black/30 px-3 py-1 rounded-full text-sm border border-white/20">
+                        {result.proofMethod}
+                    </span>
+                 </div>
+                 
+                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-white/10 relative z-10">
+                    <h4 className="font-bold mb-2 text-orange-100">الزامات چالش:</h4>
+                    <ul className="space-y-2">
+                        {result.requirements.map((req: string, i: number) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                                <span className="mt-1 w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0"></span>
+                                {req}
+                            </li>
+                        ))}
+                    </ul>
+                 </div>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <h4 className="font-bold text-slate-300 mb-2">اثبات انجام کار</h4>
+                <p className="text-xs text-slate-400 mb-4">لطفاً مدرک انجام چالش (عکس یا موقعیت مکانی) را در اینجا آپلود کنید تا امتیاز را دریافت کنید.</p>
+                
+                <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center hover:bg-slate-700/30 transition-colors cursor-pointer">
+                    <span className="text-slate-400 text-sm">برای آپلود عکس کلیک کنید</span>
+                </div>
+                
+                <button 
+                    onClick={handleComplete}
+                    disabled={completed}
+                    className="w-full mt-4 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                >
+                    {completed ? 'دریافت شد!' : 'ثبت و دریافت جایزه'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const QuickCommandResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(result.command);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="space-y-4">
+            <h3 className="font-bold text-lg text-violet-300">فرمان سریع ایجاد شد</h3>
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+                <p className="text-sm text-slate-400 mb-2">کد زیر را کپی کرده و در دستگاه دیگر اجرا کنید:</p>
+                <div className="flex items-center gap-2 bg-black/30 p-3 rounded-md font-mono text-green-400 break-all">
+                    {result.command}
+                </div>
+                <button 
+                    onClick={handleCopy}
+                    className="mt-3 w-full py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                    <ClipboardIcon className="w-4 h-4"/>
+                    {copied ? 'کپی شد!' : 'کپی کردن دستور'}
+                </button>
+            </div>
+            <p className="text-sm text-slate-400 italic">{result.description}</p>
+        </div>
+    );
+};
+
+const BehavioralLabResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+    return (
+        <div className="space-y-6">
+            <div className="bg-slate-800/70 border-l-4 border-violet-500 p-4 rounded-r-lg">
+                <h3 className="font-bold text-lg text-white mb-2">فرضیه آزمایش</h3>
+                <p className="text-slate-300 italic">"{result.hypothesis}"</p>
+            </div>
+
+            <div className="space-y-3">
+                <h4 className="font-bold text-slate-300 flex items-center gap-2"><CalendarIcon className="w-5 h-5"/> برنامه روزانه</h4>
+                <div className="max-h-60 overflow-y-auto pr-2 space-y-2">
+                    {result.days.map((day: any, index: number) => (
+                        <div key={index} className="bg-slate-800/50 p-3 rounded-lg flex gap-3">
+                            <span className="font-bold text-violet-400 whitespace-nowrap">روز {day.day}:</span>
+                            <span className="text-slate-200 text-sm">{day.instruction}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-4 rounded-lg">
+                <h4 className="font-bold text-slate-300 mb-3 flex items-center gap-2"><ChartBarIcon className="w-5 h-5"/> متریک‌های پیگیری</h4>
+                <ul className="space-y-2">
+                    {result.metrics.map((metric: string, index: number) => (
+                        <li key={index} className="flex items-center gap-2 text-sm text-slate-300">
+                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                            {metric}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
+
+const HabitManifestoResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+    return (
+        <div className="space-y-6">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 p-6 rounded-xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-fuchsia-500"></div>
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <SparklesIcon className="w-6 h-6 text-yellow-400" />
+                    مانیفست شخصی شما
+                </h3>
+                <p className="text-lg leading-relaxed text-slate-200 italic text-center font-serif relative z-10">
+                    "{result.manifestoText}"
+                </p>
+                <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-violet-500/10 rounded-full blur-2xl"></div>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <h4 className="font-bold text-slate-300 mb-3 flex items-center gap-2">
+                    <ClipboardIcon className="w-5 h-5 text-blue-400" />
+                    نقشه راه عملی
+                </h4>
+                <ul className="space-y-3">
+                    {result.actionPlan.map((step: string, index: number) => (
+                        <li key={index} className="flex items-start gap-3 p-3 bg-slate-900/50 rounded-lg">
+                            <span className="flex-shrink-0 w-6 h-6 bg-blue-500/20 text-blue-300 rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
+                                {index + 1}
+                            </span>
+                            <span className="text-slate-300 text-sm">{step}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
+
+const NarrativeJournalerResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+    return (
+        <div className="space-y-6">
+            <div className="bg-[#F5F5F0] text-slate-900 p-8 rounded-r-lg rounded-l-sm shadow-lg border-r-4 border-slate-300 relative font-serif overflow-hidden">
+                 <div className="absolute top-0 left-0 bottom-0 w-8 bg-gradient-to-r from-black/10 to-transparent pointer-events-none"></div>
+                 <h3 className="text-2xl font-bold mb-4 text-center border-b-2 border-slate-300 pb-2 text-slate-800">داستان ۳۰ روز گذشته من</h3>
+                 <div className="whitespace-pre-wrap text-lg leading-relaxed text-justify">
+                     {result.storyText}
+                 </div>
+                 <div className="mt-6 pt-4 border-t border-slate-300 text-center text-sm text-slate-500 italic">
+                     پایان فصل
+                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                    <h4 className="font-bold text-violet-300 mb-3 flex items-center gap-2">
+                        <SparklesIcon className="w-5 h-5"/>
+                        درس‌های کلیدی
+                    </h4>
+                    <ul className="space-y-2">
+                        {result.keyLessons.map((lesson: string, index: number) => (
+                            <li key={index} className="flex items-start gap-2 text-sm text-slate-300">
+                                <span className="text-violet-500 mt-1">•</span>
+                                {lesson}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                    <h4 className="font-bold text-blue-300 mb-3 flex items-center gap-2">
+                        <FaceSmileIcon className="w-5 h-5"/>
+                        پیشنهاد تصویرسازی
+                    </h4>
+                     <ul className="space-y-2">
+                        {result.visualsSuggested.map((visual: string, index: number) => (
+                            <li key={index} className="flex items-start gap-2 text-sm text-slate-300">
+                                <span className="text-blue-500 mt-1">•</span>
+                                {visual}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SomaticChakraResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+    return (
+        <div className="space-y-6">
+            <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl">
+                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <LeafIcon className="w-5 h-5 text-green-400" />
+                    روتین کامل چاکراها
+                </h3>
+                <div className="space-y-4">
+                    {result.fullRoutine.map((item: any, index: number) => (
+                        <div key={index} className="p-4 rounded-lg border border-slate-600/50" style={{ borderLeft: `4px solid ${item.color || '#ccc'}` }}>
+                            <h4 className="font-bold text-slate-200 mb-1">{item.chakra}</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <p className="text-slate-400"><span className="text-slate-300 font-semibold">تنفس:</span> {item.breath}</p>
+                                <p className="text-slate-400"><span className="text-slate-300 font-semibold">حرکت:</span> {item.movement}</p>
+                                <p className="text-slate-400"><span className="text-slate-300 font-semibold">مانترا:</span> {item.mantra}</p>
+                                <p className="text-slate-400"><span className="text-slate-300 font-semibold">متریک:</span> {item.metric}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl">
+                <h4 className="font-bold text-blue-300 mb-2 flex items-center gap-2">
+                    <BoltIcon className="w-5 h-5" />
+                    نسخه سریع (۷ دقیقه)
+                </h4>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{result.quickVersion}</p>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl">
+                <h4 className="font-bold text-violet-300 mb-2 flex items-center gap-2">
+                    <SpeakerWaveIcon className="w-5 h-5" />
+                    متن صوتی هدایت‌گر
+                </h4>
+                <div className="bg-black/20 p-3 rounded-lg text-sm text-slate-300 italic whitespace-pre-wrap">
+                    {result.ttsScript}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const MorningRitualResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+    return (
+        <div className="space-y-6">
+            <div className="bg-gradient-to-br from-yellow-900/40 to-orange-900/40 border border-orange-500/30 p-6 rounded-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                <h3 className="text-2xl font-bold text-white mb-4 flex items-center gap-2 relative z-10">
+                    <SunIcon className="w-8 h-8 text-yellow-400" />
+                    {result.routineName}
+                </h3>
+                
+                <div className="space-y-4 relative z-10">
+                     {result.steps.map((step: any, index: number) => (
+                         <div key={index} className="flex gap-4 items-start">
+                             <div className="flex flex-col items-center gap-1 mt-1">
+                                 <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                                 {index < result.steps.length - 1 && <div className="w-0.5 h-full bg-orange-500/30 min-h-[20px]"></div>}
+                             </div>
+                             <div className="bg-black/20 rounded-lg p-3 flex-grow">
+                                 <div className="flex justify-between items-center mb-1">
+                                     <span className="font-bold text-orange-200">{step.action}</span>
+                                     <span className="text-xs bg-orange-500/20 text-orange-300 px-2 py-1 rounded-full">{step.time}</span>
+                                 </div>
+                                 <p className="text-sm text-slate-300">{step.details}</p>
+                             </div>
+                         </div>
+                     ))}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl">
+                     <h4 className="font-bold text-blue-300 mb-2 flex items-center gap-2">
+                        <BoltIcon className="w-5 h-5" />
+                        نسخه سریع (۵ دقیقه‌ای)
+                    </h4>
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{result.quickVersion}</p>
+                </div>
+                 <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl">
+                     <h4 className="font-bold text-violet-300 mb-2 flex items-center gap-2">
+                        <SpeakerWaveIcon className="w-5 h-5" />
+                        راهنمای صوتی (متن)
+                    </h4>
+                    <div className="bg-black/20 p-3 rounded-lg text-sm text-slate-300 italic whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        {result.ttsScript}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const AiAgentRunner: React.FC<AiAgentRunnerProps> = ({ agent, onBack, userData, onUpdateUserData }) => {
     const [inputData, setInputData] = useState<Record<string, any>>({});
@@ -446,6 +759,15 @@ const AiAgentRunner: React.FC<AiAgentRunnerProps> = ({ agent, onBack, userData, 
                         dynamicValue = allNotes.slice(0, 15).map(n => ({ date: n.createdAt.split('T')[0], text: n.content, tags: [] }));
                         break;
                     }
+                    case 'journalEntriesLast30Days': {
+                        const allNotes: Note[] = getLocalStorageJSON('benvis_journal');
+                        const thirtyDaysAgo = new Date();
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                        dynamicValue = allNotes
+                            .filter(n => new Date(n.createdAt) >= thirtyDaysAgo)
+                            .map(n => ({ date: n.createdAt.split('T')[0], text: n.content }));
+                        break;
+                    }
                     case 'goals':
                         dynamicValue = userData.goals || [];
                         break;
@@ -463,6 +785,9 @@ const AiAgentRunner: React.FC<AiAgentRunnerProps> = ({ agent, onBack, userData, 
                         };
                         break;
                     }
+                    case 'dataTypes':
+                        dynamicValue = ["journals", "finance", "health", "goals"];
+                        break;
                 }
                 
                 const useDynamicValue = dynamicValue !== null && (
@@ -578,6 +903,8 @@ const AiAgentRunner: React.FC<AiAgentRunnerProps> = ({ agent, onBack, userData, 
             workload: ['low', 'medium', 'high'],
             mood: ['cloudy', 'calm', 'stormy', 'sunny'],
             timeOfDay: ['morning', 'afternoon', 'evening'],
+            type: ['fitness', 'social', 'eco', 'creative'],
+            priority: ['energy', 'focus', 'calm'],
         };
 
         const renderInput = () => {
@@ -653,6 +980,13 @@ const AiAgentRunner: React.FC<AiAgentRunnerProps> = ({ agent, onBack, userData, 
             'financial-autopilot': FinancialAutopilotResultDisplay,
             'expense-predictor': ExpensePredictorResultDisplay,
             'cognitive-habit-designer': CognitiveHabitDesignerResultDisplay,
+            'real-world-challenger': RealWorldChallengerResultDisplay,
+            'quick-commander': QuickCommandResultDisplay,
+            'behavioral-lab': BehavioralLabResultDisplay,
+            'habit-manifesto-creator': HabitManifestoResultDisplay,
+            'narrative-journaler': NarrativeJournalerResultDisplay,
+            'somatic-chakra-guide': SomaticChakraResultDisplay,
+            'morning-ritual-designer': MorningRitualResultDisplay,
         };
 
         const CustomDisplay = customDisplays[agent.id];

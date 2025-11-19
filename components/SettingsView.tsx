@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeName, Habit, TransactionCategory } from '../types';
-import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon } from './icons';
+import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon, ShieldCheckIcon, LockClosedIcon } from './icons';
+import PrivacyVaultView from './PrivacyVaultView';
 
 interface SettingsViewProps {
     userData: OnboardingData;
@@ -121,10 +122,13 @@ const themes: { id: ThemeName; name: string }[] = [
     { id: 'pastel_dream', name: 'رویای پاستلی' },
 ];
 
+const PREMIUM_THEMES = ['oceanic_deep', 'forest_whisper', 'cyberpunk_neon', 'royal_gold'];
+
 const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData }) => {
     const [habitModal, setHabitModal] = useState<{ isOpen: boolean, habitToEdit?: Habit }>({ isOpen: false });
     const [transactionCategories, setTransactionCategories] = useState<TransactionCategory[]>(userData.transactionCategories || []);
     const [newCategory, setNewCategory] = useState('');
+    const [isPrivacyVaultOpen, setIsPrivacyVaultOpen] = useState(false);
     const audioContextRef = useRef<AudioContext | null>(null);
 
     useEffect(() => {
@@ -237,9 +241,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         onUpdateUserData({ ...userData, theme: { name: 'custom', customColor: e.target.value, animations: userData.theme.animations } });
     };
 
+    const isThemeOwned = (themeId: string) => {
+        if (!PREMIUM_THEMES.includes(themeId)) return true;
+        // Owned if it's the current theme (legacy support or onboarding choice) OR in inventory
+        if (userData.theme.name === themeId) return true;
+        return userData.shopInventory?.some(item => item.type === 'theme' && item.value === themeId && item.purchased);
+    };
+
     return (
      <div className="pb-24 space-y-6">
         {habitModal.isOpen && <HabitModal habitToEdit={habitModal.habitToEdit} currentHabits={userData.habits} onSave={handleSaveHabit} onClose={() => setHabitModal({isOpen: false})} />}
+        {isPrivacyVaultOpen && <PrivacyVaultView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsPrivacyVaultOpen(false)} />}
+        
         <div>
             <h3 className="text-lg font-semibold text-gray-400 mb-2">حساب کاربری</h3>
             <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 flex justify-between items-center">
@@ -252,6 +265,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                 </div>
                 <button className="text-sm text-[var(--color-primary-400)] font-semibold">ویرایش</button>
             </div>
+        </div>
+
+        <div>
+            <h3 className="text-lg font-semibold text-gray-400 mb-2">امنیت و حریم خصوصی</h3>
+            <button onClick={() => setIsPrivacyVaultOpen(true)} className="w-full bg-gradient-to-r from-emerald-900/40 to-slate-800 border border-emerald-800/50 rounded-[var(--radius-md)] p-4 flex items-center justify-between group transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                <div className="flex items-center gap-4">
+                     <div className="p-3 bg-emerald-900/30 rounded-lg text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                        <ShieldCheckIcon className="w-8 h-8"/>
+                     </div>
+                    <div className="text-right">
+                        <h4 className="font-bold text-lg text-emerald-100">صندوق امن حریم خصوصی</h4>
+                        <p className="text-sm text-emerald-200/60">پشتیبان‌گیری رمزنگاری شده و مدیریت داده‌ها</p>
+                    </div>
+                </div>
+                <span className="text-emerald-400 font-semibold text-sm group-hover:translate-x-[-4px] transition-transform">باز کردن &larr;</span>
+            </button>
         </div>
         
          <div>
@@ -322,11 +351,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {themes.map(theme => {
                         const isSelected = userData.theme.name === theme.id;
+                        const locked = !isThemeOwned(theme.id);
+                        
                         return (
-                            <div key={theme.id} className="text-center">
+                            <div key={theme.id} className="text-center relative group">
                                 <button
-                                    onClick={() => handleThemeChange(theme.id)}
-                                    className={`w-full rounded-lg p-1 border-2 transition-colors ${isSelected ? 'border-[var(--color-primary-500)] scale-105' : 'border-transparent hover:scale-105'} transform duration-200`}
+                                    onClick={() => !locked && handleThemeChange(theme.id)}
+                                    disabled={locked}
+                                    className={`w-full rounded-lg p-1 border-2 transition-all duration-200 ${isSelected ? 'border-[var(--color-primary-500)] scale-105' : 'border-transparent hover:scale-105'} ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 >
                                     <div 
                                         data-theme-name={theme.id} 
@@ -336,13 +368,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                                             backgroundImage: 'var(--bg-image)',
                                         }}
                                     >
+                                        {/* Abstract representation of theme content */}
                                         <div className="absolute bottom-0 left-0 right-0 p-2 space-y-1.5 opacity-80">
                                             <div className="w-3/4 h-2 bg-[var(--color-primary-500)] rounded-full"></div>
                                             <div className="w-1/2 h-2 bg-[var(--color-primary-400)] rounded-full"></div>
                                         </div>
+
                                         {isSelected && (
-                                            <div className="absolute top-2 right-2 bg-[var(--color-primary-500)] text-white rounded-full p-0.5 shadow-sm">
+                                            <div className="absolute top-2 right-2 bg-[var(--color-primary-500)] text-white rounded-full p-0.5 shadow-sm z-10">
                                                 <CheckCircleIcon className="w-4 h-4" />
+                                            </div>
+                                        )}
+                                        
+                                        {locked && (
+                                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white/80 z-10 backdrop-blur-[2px]">
+                                                <LockClosedIcon className="w-6 h-6 mb-1" />
+                                                <span className="text-[10px] font-bold">در فروشگاه</span>
                                             </div>
                                         )}
                                     </div>
@@ -350,6 +391,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                                 <p className={`mt-2 text-sm font-semibold transition-colors ${isSelected ? 'text-[var(--color-primary-300)]' : 'text-gray-400'}`}>
                                     {theme.name}
                                 </p>
+                                 {PREMIUM_THEMES.includes(theme.id) && !locked && (
+                                    <span className="absolute top-[-5px] right-[-5px] bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                                        PREMIUM
+                                    </span>
+                                )}
                             </div>
                         );
                     })}
@@ -378,7 +424,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                 </div>
 
                 {userData.theme.name === 'custom' && (
-                    <div className="mt-4 p-4 bg-gray-700/30 rounded-lg flex items-center justify-between animate-bounce-in">
+                    <div className="mt-4 p-4 bg-gray-700/30 rounded-lg flex items-center justify-between animate-bounce-in border border-gray-600">
                         <span className="text-sm font-semibold text-gray-300">رنگ اصلی تم خود را انتخاب کنید:</span>
                         <div className="flex items-center gap-3">
                              <div className="w-8 h-8 rounded-full shadow-sm border border-gray-500" style={{ backgroundColor: userData.theme.customColor || '#7c3aed' }}></div>
@@ -396,13 +442,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                     <div className="flex justify-between items-center">
                         <div>
                             <h4 className="font-semibold">انیمیشن پس‌زمینه</h4>
-                            <p className="text-sm text-gray-400">ممکن است بر روی عملکرد تاثیر بگذارد.</p>
+                            <p className="text-sm text-gray-400">فعال کردن افکت‌های حرکتی در پس‌زمینه</p>
                         </div>
                         <button 
                             onClick={() => onUpdateUserData({ ...userData, theme: { ...userData.theme, name: userData.theme.name, animations: { enabled: !(userData.theme.animations?.enabled ?? true) } } })}
                             className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${(userData.theme.animations?.enabled ?? true) ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}
                         >
-                            <div className="w-5 h-5 bg-white rounded-full"></div>
+                            <div className="w-5 h-5 bg-white rounded-full shadow-sm"></div>
                         </button>
                     </div>
                 </div>
@@ -533,27 +579,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                 </div>
             </div>
         </div>
-
-        <div>
-            <h3 className="text-lg font-semibold text-gray-400 mb-2">برنامه</h3>
-            <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] divide-y divide-gray-700">
-                <div className="p-4 flex justify-between items-center">
-                    <h4 className="font-semibold">نسخه</h4>
-                    <p className="text-sm text-gray-400">1.6.0</p>
-                </div>
-            </div>
-        </div>
-
-        <div>
-             <h3 className="text-lg font-semibold text-gray-400 mb-2">مدیریت داده‌ها</h3>
-             <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)]">
-                <button onClick={handleDeleteAllData} className="w-full text-left p-4 flex items-center gap-3 text-red-400 font-semibold hover:bg-red-500/10">
-                    <TrashIcon className="w-5 h-5"/>
-                    <span>پاک کردن تمام اطلاعات</span>
-                </button>
-             </div>
-        </div>
-
     </div>
     );
 };

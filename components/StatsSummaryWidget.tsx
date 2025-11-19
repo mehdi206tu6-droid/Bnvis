@@ -21,10 +21,13 @@ const CircularProgress: React.FC<{ percentage: number, level: number }> = ({ per
     const stroke = 8;
     const normalizedRadius = radius - stroke * 2;
     const circumference = normalizedRadius * 2 * Math.PI;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+    
+    // Safely handle NaN or Infinite percentage
+    const safePercentage = (isNaN(percentage) || !isFinite(percentage)) ? 0 : Math.min(100, Math.max(0, percentage));
+    const strokeDashoffset = circumference - (safePercentage / 100) * circumference;
 
     return (
-        <div className="relative w-32 h-32">
+        <div className="relative w-32 h-32 flex-shrink-0">
             <svg
                 height="100%"
                 width="100%"
@@ -46,7 +49,7 @@ const CircularProgress: React.FC<{ percentage: number, level: number }> = ({ per
                     fill="transparent"
                     strokeWidth={stroke}
                     strokeDasharray={circumference + ' ' + circumference}
-                    style={{ strokeDashoffset, strokeLinecap: 'round' }}
+                    style={{ strokeDashoffset, strokeLinecap: 'round', transition: 'stroke-dashoffset 0.5s ease' }}
                     r={normalizedRadius}
                     cx={radius}
                     cy={radius}
@@ -64,6 +67,8 @@ const StatsSummaryWidget: React.FC<{ userData: OnboardingData }> = ({ userData }
     const [weeklyHabitsCount, setWeeklyHabitsCount] = useState(0);
 
     useEffect(() => {
+        if (!userData || !userData.habits) return;
+
         let count = 0;
         for (let i = 0; i < 7; i++) {
             const d = new Date();
@@ -79,27 +84,49 @@ const StatsSummaryWidget: React.FC<{ userData: OnboardingData }> = ({ userData }
             } catch (e) { /* ignore */ }
         }
         setWeeklyHabitsCount(count);
-    }, [userData.habits]); // Recalculate if habits change
+    }, [userData?.habits]);
 
-    const totalGoals = userData.goals.length;
-    let totalXpForPreviousLevels = 0;
-    for (let i = 1; i < userData.level; i++) {
-        totalXpForPreviousLevels += i * 100;
+    if (!userData) return null;
+
+    const totalGoals = userData.goals ? userData.goals.length : 0;
+    const currentLevel = userData.level || 1;
+    const currentXp = userData.xp || 0;
+
+    const xpForNextLevel = currentLevel * 100;
+    const xpForCurrentLevel = Math.max(0, (currentLevel - 1) * 100);
+    
+    let xpProgress = 0;
+    if (xpForNextLevel > xpForCurrentLevel) {
+         xpProgress = ((currentXp - xpForCurrentLevel) / (xpForNextLevel - xpForCurrentLevel)) * 100;
     }
-    const xpInCurrentLevel = userData.xp - totalXpForPreviousLevels;
-    const xpRequiredForCurrentLevel = userData.level * 100;
-    const progressPercentage = xpRequiredForCurrentLevel > 0 ? Math.min(100, (xpInCurrentLevel / xpRequiredForCurrentLevel) * 100) : 0;
-
+    
     return (
-        <div className="bg-slate-800/50 backdrop-blur-lg border border-slate-700 rounded-[var(--radius-card)] p-4 col-span-2 flex flex-col sm:flex-row items-center gap-4">
-            <div className="flex-shrink-0">
-                <CircularProgress percentage={progressPercentage} level={userData.level} />
-            </div>
-            <div className="flex-grow w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <StatCard icon={TargetIcon} value={totalGoals} label="اهداف فعال" color="text-violet-400" />
-                <StatCard icon={HabitsIcon} value={weeklyHabitsCount} label="عادت‌های این هفته" color="text-green-400" />
-                <StatCard icon={StarIcon} value={userData.xp} label="کل امتیاز (XP)" color="text-yellow-400" />
-            </div>
+        <div className="bg-slate-800/50 backdrop-blur-lg border border-slate-700 rounded-[var(--radius-card)] p-6 col-span-2 flex flex-col sm:flex-row items-center justify-between gap-6">
+             <div className="flex items-center gap-6">
+                <CircularProgress percentage={xpProgress} level={currentLevel} />
+                <div className="space-y-1">
+                     <h3 className="font-bold text-xl text-white">وضعیت کلی</h3>
+                     <p className="text-sm text-slate-400">{currentXp} / {xpForNextLevel} XP</p>
+                     <div className="h-1.5 w-32 bg-slate-700 rounded-full overflow-hidden mt-1">
+                         <div className="h-full bg-violet-500" style={{ width: `${Math.min(100, Math.max(0, xpProgress))}%` }}></div>
+                     </div>
+                </div>
+             </div>
+             
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
+                <StatCard 
+                    icon={TargetIcon} 
+                    value={totalGoals} 
+                    label="اهداف فعال" 
+                    color="text-blue-400"
+                />
+                <StatCard 
+                    icon={HabitsIcon} 
+                    value={weeklyHabitsCount} 
+                    label="عادت‌های هفته" 
+                    color="text-green-400"
+                />
+             </div>
         </div>
     );
 };

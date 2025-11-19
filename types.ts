@@ -130,7 +130,6 @@ export interface StandaloneTask {
     urgent: boolean;
     important: boolean;
     completed: boolean;
-    dueDate?: string;
 }
 
 export interface TimeBlock {
@@ -164,6 +163,27 @@ export interface ShopItem {
     value?: string; // e.g., theme name
 }
 
+// --- Micro-Courses Types ---
+export interface MicroCourseDay {
+    day: number;
+    focus: string;
+    lesson: string;
+    challenge: string;
+    reflection: string;
+    completed: boolean;
+    userReflection?: string;
+}
+
+export interface MicroCourse {
+    id: string;
+    title: string;
+    goal: string;
+    days: MicroCourseDay[];
+    progress: number; // 0-100
+    status: 'active' | 'completed';
+    createdAt: string;
+}
+
 // --- Women's Health Types ---
 export interface CycleLog {
     date: string;
@@ -186,6 +206,60 @@ export interface WomenHealthData {
     partner: PartnerSettings;
 }
 
+// --- Social Accountability Types ---
+export interface CircleSummaryData {
+    groupProgress: string;
+    memberHighlights: {
+        name: string;
+        wins: string[];
+        growthOpportunities: string[];
+    }[];
+    nextWeekChallenge: string;
+    motivationMessage: string;
+}
+
+export interface CircleMember {
+    id: string;
+    name: string;
+    score: number;
+    lastUpdateText?: string; // Temporary holding for generating summary
+}
+
+export interface SocialCircle {
+    id: string;
+    name: string;
+    members: CircleMember[];
+    summaries: { date: string; data: CircleSummaryData }[];
+}
+
+export interface SmartNotification {
+    message: string;
+    reason: string;
+    bestTimeToSend: string;
+}
+
+export interface RescheduleSuggestion {
+    recommendedTime: string;
+    reason: string;
+    alternatives: string[];
+}
+
+export interface VoiceActionResponse {
+    intent: string;
+    parsedData: {
+        text: string;
+        metadata: any;
+    }
+}
+
+// --- Privacy & Encryption Types ---
+export interface EncryptedBackup {
+    data: string; // Ciphertext
+    iv: string;
+    salt: string;
+    version: number;
+}
+
 export interface OnboardingData {
   fullName: string;
   age: string;
@@ -206,6 +280,8 @@ export interface OnboardingData {
   lifeWheel?: LifeWheelAssessment;
   shopInventory?: ShopItem[];
   womenHealth?: WomenHealthData;
+  socialCircles?: SocialCircle[];
+  microCourses?: MicroCourse[];
   xp: number;
   level: number;
   achievements: AchievementID[];
@@ -224,6 +300,7 @@ export type NotificationTiming = '1h' | '6h' | '1d' | 'none';
 export interface NotificationSetting {
   enabled: boolean;
   timing: NotificationTiming;
+  time?: string; // HH:mm specific time
   sound?: string;
 }
 
@@ -339,6 +416,7 @@ export interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
+  onstart: (() => void) | null;
   onend: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;

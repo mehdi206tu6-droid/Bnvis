@@ -6,7 +6,8 @@ import {
     MoonIcon, CalendarIcon, BoltIcon,
     MagnifyingGlassIcon, ScaleIcon, RouteIcon, BrainIcon, ShareIcon,
     StarIcon, FaceSmileIcon, LeafIcon, LockClosedIcon,
-    BriefcaseIcon, PencilIcon, ClockIcon, CloudIcon, UserIcon, FlagIcon, ReceiptPercentIcon
+    BriefcaseIcon, PencilIcon, ClockIcon, CloudIcon, UserIcon, FlagIcon, ReceiptPercentIcon,
+    ChartBarIcon, DocumentTextIcon, BookOpenIcon, SunIcon
 } from '../components/icons';
 
 export const agents: Agent[] = [
@@ -61,7 +62,7 @@ export const agents: Agent[] = [
 - Provide brief rationale string (<=30 words).
 - Output JSON.`,
         inputSchema: {
-            "date": "2025-11-20",
+            "date": "2025-11-21",
             "activeGoals": [{ "id": "g1", "title": "یادگیری زبان جدید", "progress": 0.2 }],
             "energyEstimate": "medium",
             "freeSlots": [{ "start": "10:00", "end": "12:00" }, { "start": "15:00", "end": "17:30" }]
@@ -184,6 +185,7 @@ export const agents: Agent[] = [
 [rules]
 - حفظ بازه‌های آزاد، اولویت‌بندی بر اساس priorityTasks.
 - پیشنهاد 2 تمرین کوتاه رفلکشن (<=5min).
+- پیشنهاد یک task کوچک برای شروع روز.
 - خروجی JSON با حداکثر 12 بلاک.`,
         inputSchema: {
             "date": "2025-11-21",
@@ -206,44 +208,6 @@ export const agents: Agent[] = [
                     }
                 }},
                 summary: { type: Type.STRING },
-                confidence: { type: Type.NUMBER }
-            }
-        }
-    },
-    {
-        id: 'life-xp-engine',
-        title: 'موتور امتیاز تجربه (XP)',
-        description: 'برای فعالیت‌های شما XP محاسبه و قوانین تقویتی تولید می‌کند.',
-        icon: BoltIcon,
-        model: 'gemini-2.5-flash',
-        systemPrompt: `[ROLE=system]
-تو یک موتور تنظیم XP هستی. ورودی: taskHistory (هفته اخیر)، stressLevels, streaks. وظیفه: برای هر فعالیت XP محاسبه کن و قوانین تقویتی (boost rules) تولید کن. خروجی: xpAssignments array و rationale rules.
-[input]
-{userInput}
-[rules]
-- هر task خروجی: {taskId,xpAssigned,baseXP,boostReason|null}
-- اگر stressAvg بالا باشد، apply small boost برای انگیزه.
-- Provide a short policy (3 rules) for XP awarding.`,
-        inputSchema: {
-            "period": "2025-11-15_to_2025-11-21",
-            "tasks": [
-                { "id": "t1", "title": "تکمیل فصل ۱ کتاب", "completed": true, "effort": "medium" },
-                { "id": "t2", "title": "ورزش صبحگاهی", "completed": true, "effort": "low" }
-            ],
-            "stressAvg": 7,
-            "streaks": [{ "habitId": "h1", "length": 5 }]
-        },
-        responseSchema: {
-            type: Type.OBJECT, properties: {
-                xpAssignments: { type: Type.ARRAY, items: {
-                    type: Type.OBJECT, properties: {
-                        taskId: { type: Type.STRING },
-                        xpAssigned: { type: Type.NUMBER },
-                        baseXP: { type: Type.NUMBER },
-                        boostReason: { type: Type.STRING, nullable: true }
-                    }
-                }},
-                policy: { type: Type.ARRAY, items: { type: Type.STRING } },
                 confidence: { type: Type.NUMBER }
             }
         }
@@ -318,40 +282,6 @@ export const agents: Agent[] = [
                     type: Type.OBJECT, properties: {
                         change: { type: Type.STRING },
                         expectedBenefit: { type: Type.STRING }
-                    }
-                }},
-                confidence: { type: Type.NUMBER }
-            }
-        }
-    },
-    {
-        id: 'mini-rituals',
-        title: 'سازنده آیین‌های کوچک',
-        description: 'بر اساس مود و هدف، آیین‌های ۱-۳ دقیقه‌ای پیشنهاد می‌دهد.',
-        icon: SparklesIcon,
-        model: 'gemini-2.5-flash',
-        systemPrompt: `[ROLE=system]
-تو یک سازندهٔ Ritual هستی که بر اساس mood, goals, timeOfDay آیین‌های 1-3 دقیقه‌ای پیشنهاد می‌دهد. خروجی: 3 rituals با نام، دستورالعمل 1-2 خطی، trigger event، expectedEffect.
-[input]
-{userInput}
-[rules]
-- هر ritual ≤ 45 words.
-- provide quick metric to track (e.g., breathe 6x, drink 1 glass water).
-- JSON output.`,
-        inputSchema: {
-            "timeOfDay": "morning",
-            "mood": "cloudy",
-            "goalFocus": "focus"
-        },
-        responseSchema: {
-            type: Type.OBJECT, properties: {
-                rituals: { type: Type.ARRAY, items: {
-                    type: Type.OBJECT, properties: {
-                        name: { type: Type.STRING },
-                        instructions: { type: Type.STRING },
-                        trigger: { type: Type.STRING },
-                        effect: { type: Type.STRING },
-                        trackMetric: { type: Type.STRING }
                     }
                 }},
                 confidence: { type: Type.NUMBER }
@@ -898,6 +828,210 @@ export const agents: Agent[] = [
                         }
                     }
                 }
+            }
+        }
+    },
+    {
+        id: 'real-world-challenger',
+        title: 'چالش‌های دنیای واقعی',
+        description: 'چالش‌های جذاب برای فعالیت در دنیای واقعی و کسب امتیاز.',
+        icon: FlagIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You generate real-world challenges that are safe, actionable, and rewarding.
+        Generate a physical or social challenge based on user input.
+        The response must be in Persian and a valid JSON object.
+
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "difficulty": "easy",
+            "type": "fitness"
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                title: { type: Type.STRING },
+                requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                xpReward: { type: Type.NUMBER },
+                proofMethod: { type: Type.STRING }
+            }
+        }
+    },
+    {
+        id: 'quick-commander',
+        title: 'فرمان سریع',
+        description: 'تبدیل متن شما به یک دستور کوتاه برای اشتراک‌گذاری بین دستگاه‌ها.',
+        icon: BoltIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You create compact “quick commands”.
+        Convert user message into 1 short command.
+        The response must be in Persian and a valid JSON object.
+
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "message": "ثبت تراکنش ۵۰ هزار تومان برای ناهار"
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                command: { type: Type.STRING },
+                description: { type: Type.STRING }
+            }
+        }
+    },
+    {
+        id: 'behavioral-lab',
+        title: 'آزمایشگاه رفتار',
+        description: 'طراحی آزمایش‌های رفتاری ۷ تا ۱۴ روزه برای تغییر عادات.',
+        icon: ChartBarIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You design 7–14 day behavioral experiments.
+        Generate a hypothesis, daily instructions, and tracking metrics.
+        The response must be in Persian and a valid JSON object.
+
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "experimentGoal": "حذف قند به مدت ۷ روز"
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                hypothesis: { type: Type.STRING },
+                days: {
+                    type: Type.ARRAY, items: {
+                        type: Type.OBJECT, properties: {
+                            day: { type: Type.NUMBER },
+                            instruction: { type: Type.STRING }
+                        }
+                    }
+                },
+                metrics: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+        }
+    },
+    {
+        id: 'habit-manifesto-creator',
+        title: 'سازنده مانیفست عادت',
+        description: 'برای عادت‌های مهم خود یک متن الهام‌بخش و نقشه راه بسازید.',
+        icon: DocumentTextIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `[ROLE=system]
+You help user write a “habit manifesto”. Input: {top3Habits, whyTheyMatter}. Output: {manifestoText (≤150 words), actionPlan}.
+The manifesto should be inspiring, personal, and written in Persian.
+The action plan should be concrete steps to live by this manifesto.`,
+        inputSchema: {
+            "top3Habits": ["ورزش صبحگاهی", "مطالعه", "مدیتیشن"],
+            "whyTheyMatter": "می‌خواهم سالم‌تر و آرام‌تر باشم."
+        },
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                manifestoText: { type: Type.STRING },
+                actionPlan: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+        }
+    },
+    {
+        id: 'narrative-journaler',
+        title: 'ژورنال‌نویس داستان‌ساز',
+        description: 'ژورنال‌های پراکنده شما را به یک داستان جذاب ۳۰ روزه تبدیل می‌کند.',
+        icon: BookOpenIcon,
+        model: 'gemini-2.5-pro',
+        systemPrompt: `[ROLE=system]
+You transform journal entries into a narrative story. Input: {journalEntriesLast30Days}. Output: {storyText, keyLessons, visualsSuggested}.
+The story should be emotional, engaging, and written in Persian. It should weave the fragmented entries into a cohesive narrative arc reflecting the user's journey over the last month.
+Focus on the internal change and growth of the user.`,
+        inputSchema: {
+            "journalEntriesLast30Days": [
+                { "date": "2025-11-01", "text": "Started a new project today. Feeling excited but nervous." },
+                { "date": "2025-11-15", "text": "Hit a major roadblock. Doubt is creeping in." },
+                { "date": "2025-11-30", "text": "Finally solved the issue! Learned so much." }
+            ]
+        },
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                storyText: { type: Type.STRING },
+                keyLessons: { type: Type.ARRAY, items: { type: Type.STRING } },
+                visualsSuggested: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+        }
+    },
+    {
+        id: 'somatic-chakra-guide',
+        title: 'راهنمای چاکرای سوماتیک',
+        description: 'تمرینات تنفسی و فیزیکی متصل به چاکراها برای تعادل و تمرکز.',
+        icon: LeafIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You are a modern somatic guide combining chakra theory and practical exercises.
+        Input: {primary_issue e.g. 'عدم تمرکز', preferred_time 10–30 min}.
+        Task: Create a daily routine (15-30 min) targeting each of the 7 chakras.
+        For each chakra, provide: a breathing exercise, a simple physical movement, a mantra, and a measurable daily item.
+        Also provide an alternative 7-minute quick version summary.
+        Safety: Avoid medical claims. Be soothing and practical.
+        Language: Persian.
+        
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "primary_issue": "عدم تمرکز و اضطراب",
+            "preferred_time": 20
+        },
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                fullRoutine: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            chakra: { type: Type.STRING },
+                            color: { type: Type.STRING },
+                            breath: { type: Type.STRING },
+                            movement: { type: Type.STRING },
+                            mantra: { type: Type.STRING },
+                            metric: { type: Type.STRING }
+                        }
+                    }
+                },
+                quickVersion: { type: Type.STRING },
+                ttsScript: { type: Type.STRING }
+            }
+        }
+    },
+    {
+        id: 'morning-ritual-designer',
+        title: 'طراح روتین صبحگاهی',
+        description: 'یک روتین صبحگاهی کوتاه و موثر برای شروع پرانرژی روز.',
+        icon: SunIcon,
+        model: 'gemini-2.5-flash',
+        systemPrompt: `You are a short-form ritual designer. Input: {available_minutes_morning ≤ 30, priority: energy/focus/calm}. 
+        Task: create a 12–20 minute morning priming routine mixing breathing, light movement, short visualization (chakra) and a prioritized micro-task.
+        Provide spoken-script (for TTS) and alternative 5-minute version.
+        Language: Persian.
+        
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "available_minutes_morning": 20,
+            "priority": "energy"
+        },
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                routineName: { type: Type.STRING },
+                steps: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            time: { type: Type.STRING },
+                            action: { type: Type.STRING },
+                            details: { type: Type.STRING }
+                        }
+                    }
+                },
+                ttsScript: { type: Type.STRING },
+                quickVersion: { type: Type.STRING }
             }
         }
     }

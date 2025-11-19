@@ -1,9 +1,7 @@
 
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserGoal, FocusSession } from '../types';
-import { PlayIcon, PauseIcon, ArrowPathIcon, MoonIcon, SparklesIcon, CheckCircleIcon, SpeakerWaveIcon, ChartBarIcon } from './icons';
+import { PlayIcon, PauseIcon, ArrowPathIcon, MoonIcon, SparklesIcon, CheckCircleIcon, SpeakerWaveIcon, ChartBarIcon, BoltIcon, BrainIcon, BriefcaseIcon } from './icons';
 import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -38,19 +36,36 @@ const SmartPomodoroModal: React.FC<{
     const handleGenerate = async () => {
         setIsLoading(true);
         setResult(null);
-        const prompt = `You are an AI that optimizes Pomodoro session length based on energy, task difficulty, and stress.
-        Inputs:
-        - Energy: ${energy}
+        
+        const systemPrompt = `You optimize Pomodoro session length based on energy, task difficulty, and stress.`;
+        
+        const userPrompt = `
+        TASK:
+        Generate:
+        - work duration
+        - break duration
+        - coaching tip
+
+        CONTEXT:
+        - User Energy: ${energy}
         - Task Difficulty: ${difficulty}
         - Stress Level: ${stress}
-        Generate the ideal work duration, break duration, and a coaching tip.
-        Respond ONLY with a valid JSON object. All text must be in Persian where applicable.`;
+
+        SCHEMA:
+        {
+          "workMinutes": "number",
+          "breakMinutes": "number",
+          "tip": "string"
+        }
+        Output valid JSON only. Language: Persian.
+        `;
 
         try {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: prompt,
+                contents: userPrompt,
                 config: {
+                    systemInstruction: systemPrompt,
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.OBJECT,
@@ -70,53 +85,113 @@ const SmartPomodoroModal: React.FC<{
         }
     };
 
-    const RadioGroup: React.FC<{ label: string; value: string; onChange: (val: string) => void; options: {value: string; label: string}[] }> = ({ label, value, onChange, options }) => (
-        <div>
-            <label className="font-semibold block mb-2 text-sm">{label}</label>
-            <div className="flex gap-2 bg-slate-700/50 p-1 rounded-full">
+    const SelectionCard: React.FC<{ 
+        label: string; 
+        icon: React.FC<{className?: string}>; 
+        value: string; 
+        onChange: (val: string) => void; 
+        options: {value: string, label: string, color: string}[] 
+    }> = ({ label, icon: Icon, value, onChange, options }) => (
+        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-3">
+                <Icon className="w-5 h-5 text-slate-400"/>
+                <span className="font-bold text-sm text-slate-200">{label}</span>
+            </div>
+            <div className="flex gap-2">
                 {options.map(opt => (
-                    <button key={opt.value} onClick={() => onChange(opt.value)} className={`flex-1 text-xs font-semibold py-1.5 rounded-full ${value === opt.value ? 'bg-violet-500 text-white' : ''}`}>{opt.label}</button>
+                    <button 
+                        key={opt.value} 
+                        onClick={() => onChange(opt.value)} 
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${value === opt.value ? `${opt.color} text-white shadow-lg scale-105` : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                    >
+                        {opt.label}
+                    </button>
                 ))}
             </div>
         </div>
     );
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
-            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-md modal-panel" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><SparklesIcon className="w-6 h-6 text-violet-400" /> تنظیم هوشمند جلسه</h3>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
+            <div className="bg-slate-900 border border-violet-500/30 rounded-2xl p-6 w-full max-w-md modal-panel relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* Background Glow */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-blue-500"></div>
+                
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
+                    <SparklesIcon className="w-6 h-6 text-fuchsia-400" /> 
+                    کالیبراسیون هوشمند
+                </h3>
+
                 {!result ? (
                     <div className="space-y-4">
-                        <p className="text-sm text-slate-400">به چند سوال کوتاه پاسخ دهید تا بهترین زمان‌بندی برای شما پیشنهاد شود.</p>
-                        <RadioGroup label="سطح انرژی فعلی شما" value={energy} onChange={setEnergy} options={[{value: 'low', label: 'کم'}, {value: 'medium', label: 'متوسط'}, {value: 'high', label: 'زیاد'}]} />
-                        <RadioGroup label="سختی کار پیش رو" value={difficulty} onChange={setDifficulty} options={[{value: 'easy', label: 'آسان'}, {value: 'medium', label: 'متوسط'}, {value: 'hard', label: 'سخت'}]} />
-                        <RadioGroup label="سطح استرس شما" value={stress} onChange={setStress} options={[{value: 'low', label: 'کم'}, {value: 'medium', label: 'متوسط'}, {value: 'high', label: 'زیاد'}]} />
-                        <button onClick={handleGenerate} disabled={isLoading} className="w-full mt-4 py-2 bg-violet-700 rounded-md font-semibold disabled:bg-slate-500">
-                            {isLoading ? 'در حال محاسبه...' : 'دریافت پیشنهاد'}
+                        <SelectionCard 
+                            label="سطح انرژی شما" 
+                            icon={BoltIcon} 
+                            value={energy} 
+                            onChange={setEnergy} 
+                            options={[
+                                {value: 'low', label: 'کم', color: 'bg-red-500'}, 
+                                {value: 'medium', label: 'متوسط', color: 'bg-yellow-500'}, 
+                                {value: 'high', label: 'زیاد', color: 'bg-green-500'}
+                            ]} 
+                        />
+                        <SelectionCard 
+                            label="سختی کار" 
+                            icon={BriefcaseIcon} 
+                            value={difficulty} 
+                            onChange={setDifficulty} 
+                            options={[
+                                {value: 'easy', label: 'آسان', color: 'bg-blue-500'}, 
+                                {value: 'medium', label: 'متوسط', color: 'bg-indigo-500'}, 
+                                {value: 'hard', label: 'سخت', color: 'bg-purple-500'}
+                            ]} 
+                        />
+                        <SelectionCard 
+                            label="سطح استرس" 
+                            icon={BrainIcon} 
+                            value={stress} 
+                            onChange={setStress} 
+                            options={[
+                                {value: 'low', label: 'آرام', color: 'bg-emerald-500'}, 
+                                {value: 'medium', label: 'نرمال', color: 'bg-orange-500'}, 
+                                {value: 'high', label: 'پرتنش', color: 'bg-rose-500'}
+                            ]} 
+                        />
+                        
+                        <button onClick={handleGenerate} disabled={isLoading} className="w-full mt-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-xl font-bold text-white shadow-lg shadow-violet-900/40 hover:scale-[1.02] transition-transform disabled:opacity-70 disabled:scale-100">
+                            {isLoading ? 'در حال محاسبه بهترین ریتم...' : 'محاسبه برنامه بهینه'}
                         </button>
                     </div>
                 ) : (
-                    <div className="space-y-4 text-center">
-                        <p className="text-sm text-slate-400">بر اساس وضعیت شما، این برنامه پیشنهاد می‌شود:</p>
-                        <div className="flex justify-around items-center bg-slate-800 p-4 rounded-lg">
-                            <div>
-                                <p className="text-sm font-semibold">زمان تمرکز</p>
-                                <p className="text-3xl font-bold text-blue-400">{result.workMinutes}</p>
-                                <p className="text-xs">دقیقه</p>
-                            </div>
-                            <div>
-                                <p className="text-sm font-semibold">زمان استراحت</p>
-                                <p className="text-3xl font-bold text-green-400">{result.breakMinutes}</p>
-                                <p className="text-xs">دقیقه</p>
+                    <div className="space-y-6 text-center animate-fadeIn">
+                        <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-green-500/10"></div>
+                            <div className="flex justify-around items-center relative z-10">
+                                <div>
+                                    <p className="text-xs font-bold text-blue-300 uppercase tracking-wider mb-1">تمرکز (Work)</p>
+                                    <p className="text-4xl font-black text-white">{result.workMinutes}<span className="text-lg font-medium text-slate-400 ml-1">دقیقه</span></p>
+                                </div>
+                                <div className="h-10 w-[1px] bg-slate-600"></div>
+                                <div>
+                                    <p className="text-xs font-bold text-green-300 uppercase tracking-wider mb-1">استراحت (Break)</p>
+                                    <p className="text-4xl font-black text-white">{result.breakMinutes}<span className="text-lg font-medium text-slate-400 ml-1">دقیقه</span></p>
+                                </div>
                             </div>
                         </div>
-                        <div className="p-3 bg-slate-800/50 rounded-lg">
-                            <p className="font-semibold text-violet-300 text-sm">نکته مربی:</p>
-                            <p className="text-sm text-slate-300 italic">"{result.tip}"</p>
+
+                        <div className="bg-fuchsia-900/20 border border-fuchsia-500/30 p-4 rounded-xl text-right">
+                            <div className="flex items-center gap-2 mb-2 text-fuchsia-300 font-bold text-sm">
+                                <SparklesIcon className="w-4 h-4"/>
+                                <span>توصیه هوشمند:</span>
+                            </div>
+                            <p className="text-slate-200 text-sm leading-relaxed">{result.tip}</p>
                         </div>
-                        <div className="flex gap-4 mt-4">
-                            <button onClick={onClose} className="flex-1 py-2 bg-slate-600 rounded-md">لغو</button>
-                            <button onClick={() => onApply({ work: result.workMinutes, break: result.breakMinutes })} className="flex-1 py-2 bg-violet-700 rounded-md">اعمال</button>
+
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setResult(null)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-slate-300 hover:bg-slate-700 transition-colors">تلاش مجدد</button>
+                            <button onClick={() => onApply({ work: result.workMinutes, break: result.breakMinutes })} className="flex-[2] py-3 bg-white text-violet-900 rounded-xl font-bold hover:bg-gray-100 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                                شروع با این برنامه
+                            </button>
                         </div>
                     </div>
                 )}
@@ -383,7 +458,7 @@ const QuietZoneView: React.FC<QuietZoneViewProps> = ({ goals, onUpdateGoals, onC
                                     <option value="">یک هدف برای تمرکز انتخاب کنید</option>
                                     {goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
                                 </select>
-                                <button onClick={() => setShowSmartPomodoro(true)} className="p-3 bg-slate-800 border border-slate-700 rounded-[var(--radius-md)] text-violet-400 hover:bg-slate-700 transition-colors" title="تنظیم هوشمند">
+                                <button onClick={() => setShowSmartPomodoro(true)} className="p-3 bg-gradient-to-br from-violet-600 to-fuchsia-600 border border-violet-500 rounded-[var(--radius-md)] text-white hover:shadow-lg transition-all shadow-violet-900/20" title="تنظیم هوشمند">
                                     <SparklesIcon className="w-6 h-6"/>
                                 </button>
                             </div>

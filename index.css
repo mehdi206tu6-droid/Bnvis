@@ -3,260 +3,66 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- KEYFRAMES FOR ANIMATED THEMES --- */
-@keyframes move-stars {
-  from { background-position: 0 0; }
-  to { background-position: -10000px 5000px; }
-}
-
-@keyframes move-gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-@keyframes move-ocean {
-  0% { background-position: 0% 80%; }
-  50% { background-position: 100% 20%; }
-  100% { background-position: 0% 80%; }
-}
-
-@keyframes bounce-in {
-  0% { transform: scale(0.9); opacity: 0; }
-  70% { transform: scale(1.02); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes celebrate {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); box-shadow: 0 0 30px var(--color-primary-500); }
-  100% { transform: scale(1); }
-}
-
-@keyframes placeholder-fade {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-@keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 15px var(--color-primary-500), inset 0 0 10px var(--color-primary-500); }
-    50% { box-shadow: 0 0 25px var(--color-primary-400), inset 0 0 15px var(--color-primary-400); }
-}
-
-/* --- THEME DEFINITIONS --- */
-
-/* 1. Benvis Classic (Deep Neon Glass) - REVISED */
-:root, [data-theme-name="benvis_classic"] {
-    --color-primary-200: #e9d5ff;
-    --color-primary-300: #d8b4fe;
-    --color-primary-400: #c084fc;
-    --color-primary-500: #a855f7; /* Neon Purple */
-    --color-primary-600: #9333ea;
-    --color-primary-700: #7e22ce;
-    --color-primary-800: #6b21a8;
-    
-    --radius-card: 1.75rem; /* 28px for that organic look */
-    --radius-lg: 1rem;
-    --radius-md: 0.75rem;
-    --radius-sm: 0.5rem;
+:root {
+    --font-primary: 'Vazirmatn', sans-serif;
+    --color-bg-deep: #000000;
+    --color-glass-border: rgba(255, 255, 255, 0.1);
+    --color-glass-bg: rgba(28, 28, 30, 0.7);
+    --radius-card: 1.5rem;
+    --radius-md: 1rem;
     --radius-full: 9999px;
-
-    --bg-color: #020005; /* Deepest Black/Purple */
-    --bg-image: 
-        radial-gradient(circle at 50% 0%, rgba(126, 34, 206, 0.25) 0%, transparent 50%),
-        radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
-        radial-gradient(circle at 0% 100%, rgba(236, 72, 153, 0.15) 0%, transparent 40%);
 }
 
-/* Other themes remain... */
-[data-theme-name="oceanic_deep"] {
-    --color-primary-200: #93c5fd;
-    --color-primary-300: #60a5fa;
-    --color-primary-400: #3b82f6;
-    --color-primary-500: #2563eb;
-    --color-primary-600: #1d4ed8;
-    --color-primary-700: #1e40af;
-    --color-primary-800: #1e3a8a;
-    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
-    --bg-color: #0c1427;
-    --bg-image: linear-gradient(170deg, rgba(29, 78, 216, 0.3), rgba(30, 64, 175, 0) 50%),
-                linear-gradient(330deg, rgba(30, 58, 138, 0.4), rgba(30, 58, 138, 0) 50%);
-}
-body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; }
-
-[data-theme-name="forest_whisper"] {
-    --color-primary-200: #86efac;
-    --color-primary-300: #4ade80;
-    --color-primary-400: #22c55e;
-    --color-primary-500: #16a34a;
-    --color-primary-600: #15803d;
-    --color-primary-700: #166534;
-    --color-primary-800: #14532d;
-    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
-    --bg-color: #0f1c14;
-    --bg-image: radial-gradient(at 10% 90%, hsla(140, 60%, 20%, 0.4) 0px, transparent 50%),
-                radial-gradient(at 80% 20%, hsla(130, 50%, 25%, 0.3) 0px, transparent 50%);
-}
-
-[data-theme-name="sunset_bliss"] {
-    --color-primary-200: #fda4af;
-    --color-primary-300: #fb7185;
-    --color-primary-400: #f43f5e;
-    --color-primary-500: #e11d48;
-    --color-primary-600: #be123c;
-    --color-primary-700: #9f1239;
-    --color-primary-800: #881337;
-    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
-    --bg-color: #2c0b2d;
-    --bg-image: linear-gradient(45deg, #ff8c00, #f43f5e, #8b5cf6, #e11d48);
-}
-body[data-theme-name="sunset_bliss"] { background-size: 400% 400%; animation: move-gradient 15s ease infinite; }
-
-[data-theme-name="galaxy_dream"] {
-    --color-primary-200: #c4b5fd;
-    --color-primary-300: #a78bfa;
-    --color-primary-400: #8b5cf6;
-    --color-primary-500: #7c3aed;
-    --color-primary-600: #6d28d9;
-    --color-primary-700: #5b21b6;
-    --color-primary-800: #4c1d95;
-    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
-    --bg-color: #0c0a18;
-    --bg-image: radial-gradient(1px 1px at 20% 30%, white, rgba(255,255,255,0)),
-                radial-gradient(1px 1px at 70% 80%, white, rgba(255,255,255,0)),
-                radial-gradient(2px 2px at 40% 60%, #ccc, rgba(255,255,255,0)),
-                radial-gradient(2px 2px at 90% 10%, #fff, rgba(255,255,255,0)),
-                radial-gradient(1px 1px at 50% 50%, white, rgba(255,255,255,0));
-}
-body[data-theme-name="galaxy_dream"] { background-size: 100% 100%, 2000px 2000px; animation: move-stars 200s linear infinite; }
-
-[data-theme-name="cyberpunk_neon"] {
-    --color-primary-200: #f9a8d4;
-    --color-primary-300: #f472b6;
-    --color-primary-400: #ec4899;
-    --color-primary-500: #db2777;
-    --color-primary-600: #be185d;
-    --color-primary-700: #9d174d;
-    --color-primary-800: #831843;
-    --radius-card: 0.5rem; --radius-lg: 0.25rem; --radius-md: 0.125rem; --radius-sm: 0px; --radius-full: 0.25rem;
-    --bg-color: #030712;
-    --bg-image: linear-gradient(rgba(236, 72, 153, 0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(236, 72, 153, 0.1) 1px, transparent 1px);
-}
-body[data-theme-name="cyberpunk_neon"] { background-size: 20px 20px; }
-
-[data-theme-name="royal_gold"] {
-    --color-primary-200: #fde68a;
-    --color-primary-300: #fcd34d;
-    --color-primary-400: #fbbf24;
-    --color-primary-500: #f59e0b;
-    --color-primary-600: #d97706;
-    --color-primary-700: #b45309;
-    --color-primary-800: #92400e;
-    --radius-card: 0.5rem; --radius-lg: 0.25rem; --radius-md: 0.125rem; --radius-sm: 0px; --radius-full: 0.25rem;
-    --bg-color: #111111;
-    --bg-image: none;
-}
-
-[data-theme-name="zen_garden"] {
-    --color-primary-200: #a3a3a3;
-    --color-primary-300: #737373;
-    --color-primary-400: #525252;
-    --color-primary-500: #404040;
-    --color-primary-600: #262626;
-    --color-primary-700: #171717;
-    --color-primary-800: #0a0a0a;
-    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
-    --bg-color: #f5f5f5;
-    --bg-image: none;
-}
-body[data-theme-name="zen_garden"] { color: #262626; }
-[data-theme-name="zen_garden"] .bg-slate-950 { background-color: #e5e5e5 !important; }
-[data-theme-name="zen_garden"] .text-slate-200 { color: #262626 !important; }
-[data-theme-name="zen_garden"] .text-slate-400 { color: #737373 !important; }
-[data-theme-name="zen_garden"] .glass-card { background-color: rgba(255,255,255,0.7) !important; border-color: rgba(0,0,0,0.1) !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-[data-theme-name="zen_garden"] .neon-text { text-shadow: none !important; }
-
-[data-theme-name="crimson_night"] {
-    --color-primary-200: #fca5a5;
-    --color-primary-300: #f87171;
-    --color-primary-400: #ef4444;
-    --color-primary-500: #dc2626;
-    --color-primary-600: #b91c1c;
-    --color-primary-700: #991b1b;
-    --color-primary-800: #7f1d1d;
-    --radius-card: 0.5rem; --radius-lg: 0.25rem; --radius-md: 0.125rem; --radius-sm: 0px; --radius-full: 0.25rem;
-    --bg-color: #100a0b;
-    --bg-image: radial-gradient(at 90% 90%, hsla(0, 50%, 20%, 0.3) 0px, transparent 50%);
-}
-
-[data-theme-name="pastel_dream"] {
-    --color-primary-200: #bae6fd;
-    --color-primary-300: #7dd3fc;
-    --color-primary-400: #38bdf8;
-    --color-primary-500: #0ea5e9;
-    --color-primary-600: #0284c7;
-    --color-primary-700: #0369a1;
-    --color-primary-800: #075985;
-    --radius-card: 1.25rem; --radius-lg: 0.75rem; --radius-md: 0.5rem; --radius-sm: 0.25rem; --radius-full: 9999px;
-    --bg-color: #f0f9ff;
-    --bg-image: linear-gradient(120deg, #a1c4fd, #c2e9fb);
-}
-body[data-theme-name="pastel_dream"] { color: #075985; }
-[data-theme-name="pastel_dream"] .glass-card { background-color: rgba(255,255,255,0.6) !important; border-color: #bae6fd !important; }
-
-
-/* --- BASE STYLES & THEME APPLY --- */
 body {
-    background-color: var(--bg-color);
-    background-image: var(--bg-image);
-    transition: background-color 0.5s ease;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: var(--font-primary);
+    background-color: var(--color-bg-deep);
+    background-image: 
+        radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.15), transparent 50%),
+        radial-gradient(circle at 0% 100%, rgba(74, 144, 226, 0.1), transparent 50%);
+    background-attachment: fixed;
+    color: #f5f5f7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
 }
 
-/* --- UI UTILITIES --- */
-.modal-backdrop { animation: fadeIn 0.3s ease-out; }
-.modal-panel { animation: slideInUp 0.4s ease-out; }
-.progress-bar-fill { transition: width 0.5s ease-out; }
-.animate-bounce-in { animation: bounce-in 0.5s ease-out; }
-.animate-celebrate { animation: celebrate 0.6s ease-in-out; }
-.animate-placeholder { animation: placeholder-fade 3s infinite; }
-
-/* GLASSMORPHISM & NEON UTILITIES */
-.glass-card {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+.glass-panel {
+    background: var(--color-glass-bg);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid var(--color-glass-border);
     border-radius: var(--radius-card);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
 }
 
-.glass-card-hover {
-    transition: all 0.3s ease;
-}
-.glass-card-hover:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.15); /* Subtle purple glow */
-    transform: translateY(-2px);
+.animate-bounce-in {
+    animation: bounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.neon-text {
-    text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+@keyframes bounceIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
-.neon-border {
-    border-color: var(--color-primary-500);
-    box-shadow: 0 0 10px var(--color-primary-500);
+.animate-fadeIn {
+    animation: fadeIn 0.6s ease-out forwards;
 }
 
-.glow-ring {
-    filter: drop-shadow(0 0 8px var(--color-primary-500));
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes badgePop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.4); }
+    100% { transform: scale(1); opacity: 1; }
+}
 
-::-webkit-scrollbar { width: 0px; background: transparent; }
+.animate-badge-pop {
+    animation: badgePop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+[data-theme-name="oceanic_deep"] { --color-primary-glow: rgba(59, 130, 246, 0.5); }

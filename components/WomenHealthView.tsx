@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
-import { OnboardingData, WomenHealthData } from '../types';
+import React, { useState, useEffect } from 'react';
+import { OnboardingData, WomenHealthData, CycleLog } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { 
     HealthIcon, ShareIcon, SparklesIcon, FaceSmileIcon, FaceFrownIcon, BoltIcon,
-    FaceMehIcon
+    FaceMehIcon, ChevronLeftIcon, ChevronRightIcon, WaterDropIcon,
+    PencilIcon, TrashIcon, CalendarIcon
 } from './icons';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -16,26 +17,182 @@ interface WomenHealthViewProps {
 }
 
 const SYMPTOMS_LIST = [
-    'Cramps', 'Headache', 'Bloating', 'Backache', 'Acne', 'Fatigue', 'Cravings', 'Insomnia'
+    { id: 'Cramps', label: 'گرفتگی', icon: '⚡' },
+    { id: 'Headache', label: 'سردرد', icon: '🤕' },
+    { id: 'Bloating', label: 'نفخ', icon: '🎈' },
+    { id: 'Backache', label: 'کمردرد', icon: '🦴' },
+    { id: 'Acne', label: 'آکنه', icon: '🔴' },
+    { id: 'Fatigue', label: 'خستگی', icon: '🔋' },
+    { id: 'Cravings', label: 'هوس', icon: '🍫' },
+    { id: 'Insomnia', label: 'بی‌خوابی', icon: '💤' }
 ];
 
-const SYMPTOMS_TRANSLATION: Record<string, string> = {
-    'Cramps': 'گرفتگی عضلات',
-    'Headache': 'سردرد',
-    'Bloating': 'نفخ',
-    'Backache': 'کمردرد',
-    'Acne': 'آکنه',
-    'Fatigue': 'خستگی شدید',
-    'Cravings': 'هوس غذایی',
-    'Insomnia': 'بی‌خوابی'
+const MOODS = [
+    { id: 'happy', label: 'شاد', icon: <FaceSmileIcon className="w-6 h-6"/>, color: 'text-green-400' },
+    { id: 'energetic', label: 'پرانرژی', icon: <BoltIcon className="w-6 h-6"/>, color: 'text-yellow-400' },
+    { id: 'sensitive', label: 'حساس', icon: <span className="text-xl">🥺</span>, color: 'text-pink-300' },
+    { id: 'tired', label: 'خسته', icon: <FaceMehIcon className="w-6 h-6"/>, color: 'text-slate-400' },
+    { id: 'anxious', label: 'مضطرب', icon: <span className="text-xl">😰</span>, color: 'text-violet-400' },
+    { id: 'irritable', label: 'عصبی', icon: <span className="text-xl">😡</span>, color: 'text-red-400' }
+];
+
+const FLOWS = [
+    { id: 'spotting', label: 'لکه‌بینی', color: 'bg-pink-300' },
+    { id: 'light', label: 'سبک', color: 'bg-pink-400' },
+    { id: 'medium', label: 'متوسط', color: 'bg-pink-500' },
+    { id: 'heavy', label: 'سنگین', color: 'bg-pink-700' },
+];
+
+const PHASE_INFO = {
+    'Menstrual': { label: 'قاعدگی', description: 'زمان استراحت و بازیابی انرژی.', color: '#f43f5e', advice: 'گرم بمانید و آهن مصرف کنید.' },
+    'Follicular': { label: 'فولیکولار', description: 'انرژی در حال افزایش است.', color: '#3b82f6', advice: 'زمان خوبی برای یادگیری و خلاقیت.' },
+    'Ovulation': { label: 'تخمک‌گذاری', description: 'اوج انرژی و اعتماد به نفس.', color: '#10b981', advice: 'عالی برای جلسات مهم و ورزش.' },
+    'Luteal': { label: 'لوتئال', description: 'انرژی کاهش می‌یابد، آرام باشید.', color: '#8b5cf6', advice: 'مراقب نوسانات خلقی باشید.' },
+    'Unknown': { label: 'نامشخص', description: 'اطلاعات کافی نیست.', color: '#64748b', advice: 'چرخه خود را ثبت کنید.' }
+};
+
+// --- SVG Math Helpers ---
+const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+    const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+    return {
+        x: centerX + (radius * Math.cos(angleInRadians)),
+        y: centerY + (radius * Math.sin(angleInRadians))
+    };
+};
+
+const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
+    const start = polarToCartesian(x, y, radius, endAngle);
+    const end = polarToCartesian(x, y, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+    return [
+        "M", start.x, start.y,
+        "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+    ].join(" ");
+};
+
+const CycleWheel: React.FC<{
+    currentDay: number;
+    cycleLength: number;
+    selectedDay: number;
+    onSelectDay: (day: number) => void;
+    phase: string;
+}> = ({ currentDay, cycleLength = 28, selectedDay, onSelectDay, phase }) => {
+    const radius = 130;
+    const strokeWidth = 20;
+    const size = (radius + strokeWidth) * 2;
+    const center = size / 2;
+    
+    // Phase Definitions (Days)
+    const phases = [
+        { id: 'Menstrual', start: 1, end: 5, color: '#f43f5e' }, 
+        { id: 'Follicular', start: 6, end: 11, color: '#3b82f6' }, 
+        { id: 'Ovulation', start: 12, end: 16, color: '#10b981' }, 
+        { id: 'Luteal', start: 17, end: cycleLength, color: '#8b5cf6' }
+    ];
+
+    const days = Array.from({ length: cycleLength }, (_, i) => i + 1);
+    const anglePerDay = 360 / cycleLength;
+
+    // Get active phase color for glow effect
+    const activePhaseColor = PHASE_INFO[phase as keyof typeof PHASE_INFO]?.color || '#64748b';
+
+    return (
+        <div className="relative flex justify-center items-center my-6 drop-shadow-2xl">
+            {/* Glowing Backdrop */}
+            <div 
+                className="absolute inset-0 rounded-full opacity-20 blur-[60px] transition-colors duration-1000"
+                style={{ backgroundColor: activePhaseColor }}
+            ></div>
+
+            <svg width={size} height={size} className="transform -rotate-90 z-10 overflow-visible">
+                {/* Track Background */}
+                <circle cx={center} cy={center} r={radius} fill="none" stroke="#1e293b" strokeWidth={strokeWidth} />
+
+                {/* Day Segments */}
+                {days.map(day => {
+                    const startAngle = (day - 1) * anglePerDay;
+                    const endAngle = day * anglePerDay;
+                    const gap = 1.5; // Gap between segments
+                    
+                    // Identify Phase Color
+                    let color = '#334155'; 
+                    const p = phases.find(ph => day >= ph.start && day <= ph.end);
+                    if (p) color = p.color;
+                    
+                    const isSelected = day === selectedDay;
+                    const isToday = day === currentDay;
+                    
+                    // Interactive Styles
+                    const segmentStrokeWidth = isSelected ? strokeWidth + 10 : (isToday ? strokeWidth + 4 : strokeWidth);
+                    const segmentOpacity = isSelected ? 1 : (selectedDay ? 0.5 : 0.8);
+
+                    return (
+                        <g key={day} onClick={() => onSelectDay(day)} className="cursor-pointer transition-all duration-300 group">
+                            <path
+                                d={describeArc(center, center, radius, startAngle + gap, endAngle - gap)}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth={segmentStrokeWidth}
+                                strokeLinecap="round"
+                                style={{ opacity: segmentOpacity, transition: 'all 0.3s ease' }}
+                                className="hover:opacity-100"
+                            />
+                            
+                            {/* Day Numbers for Key Days */}
+                            {(isToday || isSelected || day === 1 || day % 5 === 0) && (
+                                <text
+                                    x={polarToCartesian(center, center, radius - 30, (startAngle + endAngle)/2).x}
+                                    y={polarToCartesian(center, center, radius - 30, (startAngle + endAngle)/2).y}
+                                    textAnchor="middle"
+                                    dominantBaseline="middle"
+                                    fill={isToday ? '#fff' : '#94a3b8'}
+                                    fontSize={isToday || isSelected ? "14" : "10"}
+                                    fontWeight="bold"
+                                    transform={`rotate(90, ${polarToCartesian(center, center, radius - 30, (startAngle + endAngle)/2).x}, ${polarToCartesian(center, center, radius - 30, (startAngle + endAngle)/2).y})`}
+                                    className="pointer-events-none transition-all"
+                                >
+                                    {day}
+                                </text>
+                            )}
+                            
+                            {/* Today Indicator Dot */}
+                            {isToday && (
+                                <circle
+                                    cx={polarToCartesian(center, center, radius + 25, (startAngle + endAngle)/2).x}
+                                    cy={polarToCartesian(center, center, radius + 25, (startAngle + endAngle)/2).y}
+                                    r="4"
+                                    fill="#fff"
+                                    className="animate-pulse"
+                                />
+                            )}
+                        </g>
+                    );
+                })}
+            </svg>
+            
+            {/* Central Info Hub */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+                <div className="text-center">
+                    <p className="text-slate-400 text-xs uppercase tracking-widest font-bold mb-1">روز چرخه</p>
+                    <h2 
+                        className="text-6xl font-black text-white drop-shadow-lg"
+                        style={{ textShadow: `0 0 20px ${activePhaseColor}80` }}
+                    >
+                        {selectedDay}
+                    </h2>
+                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: activePhaseColor }}></div>
+                        <span className="text-sm font-bold text-slate-200">
+                            {PHASE_INFO[phase as keyof typeof PHASE_INFO]?.label || phase}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const WomenHealthView: React.FC<WomenHealthViewProps> = ({ userData, onUpdateUserData, onClose }) => {
-    const [activeTab, setActiveTab] = useState<'calendar' | 'log' | 'partner'>('calendar');
-    const [partnerTip, setPartnerTip] = useState<string | null>(null);
-    const [isGeneratingTip, setIsGeneratingTip] = useState(false);
-    
-    // Init data if missing
     const healthData: WomenHealthData = userData.womenHealth || {
         cycleLogs: [],
         periodStarts: [],
@@ -43,288 +200,210 @@ const WomenHealthView: React.FC<WomenHealthViewProps> = ({ userData, onUpdateUse
         partner: { enabled: false, name: '' }
     };
 
-    // --- Helpers ---
-    const getLatestPeriodStart = () => {
-        if (!healthData.periodStarts.length) return null;
-        return healthData.periodStarts.sort().reverse()[0];
-    };
+    // Determine current state
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // Find the start of the current cycle
+    const sortedStarts = [...healthData.periodStarts].sort().reverse();
+    const currentCycleStart = sortedStarts.find(d => new Date(d) <= today) || todayStr;
+    
+    // Calculate cycle days
+    const getDayDiff = (d1: string, d2: string) => Math.floor((new Date(d1).getTime() - new Date(d2).getTime()) / (1000 * 3600 * 24));
+    const currentCycleDay = getDayDiff(todayStr, currentCycleStart) + 1;
+    
+    // Interaction State
+    const [selectedCycleDay, setSelectedCycleDay] = useState(currentCycleDay);
+    const [partnerTip, setPartnerTip] = useState<string | null>(null);
+    const [isGeneratingTip, setIsGeneratingTip] = useState(false);
+    const [viewMode, setViewMode] = useState<'wheel' | 'calendar'>('wheel');
 
-    const calculateCycleDay = () => {
-        const lastStart = getLatestPeriodStart();
-        if (!lastStart) return null;
-        const start = new Date(lastStart);
-        const today = new Date();
-        const diffTime = Math.abs(today.getTime() - start.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays; // Day 1 is the start date
-    };
+    // Derived date from selected cycle day
+    const selectedDateObj = new Date(currentCycleStart);
+    selectedDateObj.setDate(selectedDateObj.getDate() + (selectedCycleDay - 1));
+    const selectedDateStr = selectedDateObj.toISOString().split('T')[0];
+    const selectedLog = healthData.cycleLogs.find(l => l.date === selectedDateStr);
 
+    // Determine Phase
     const getPhase = (day: number) => {
-        if (day <= 5) return 'قاعدگی (Menstrual)';
-        if (day <= 13) return 'فولیکولار (Follicular)';
-        if (day === 14) return 'تخمک‌گذاری (Ovulation)';
-        return 'لوتئال (Luteal)';
+        if (day <= 5) return 'Menstrual';
+        if (day <= 11) return 'Follicular';
+        if (day <= 16) return 'Ovulation';
+        return 'Luteal';
     };
+    const currentPhase = getPhase(selectedCycleDay);
+    const phaseInfo = PHASE_INFO[currentPhase as keyof typeof PHASE_INFO];
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const cycleDay = calculateCycleDay();
-    const currentPhase = cycleDay ? getPhase(cycleDay) : 'نامشخص';
-
-    // --- Handlers ---
-    const handleLogPeriodStart = () => {
-        const confirm = window.confirm(`آیا امروز (${new Date().toLocaleDateString('fa-IR')}) شروع دوره قاعدگی شماست؟`);
-        if (confirm) {
-            const updatedStarts = [...healthData.periodStarts, todayStr];
-            // Filter duplicates
-            const uniqueStarts = Array.from(new Set(updatedStarts));
-            const newData = { ...healthData, periodStarts: uniqueStarts };
-            onUpdateUserData({ ...userData, womenHealth: newData });
-        }
-    };
-
-    const handleLogSymptom = (symptom: string) => {
-        const currentLog = healthData.cycleLogs.find(l => l.date === todayStr) || { date: todayStr, symptoms: [] };
-        const exists = currentLog.symptoms.includes(symptom);
-        let newSymptoms;
-        if (exists) {
-            newSymptoms = currentLog.symptoms.filter(s => s !== symptom);
+    // Handlers
+    const updateLog = (updates: Partial<CycleLog>) => {
+        let newLogs = [...healthData.cycleLogs];
+        const index = newLogs.findIndex(l => l.date === selectedDateStr);
+        
+        if (index >= 0) {
+            newLogs[index] = { ...newLogs[index], ...updates };
         } else {
-            newSymptoms = [...currentLog.symptoms, symptom];
+            newLogs.push({ date: selectedDateStr, symptoms: [], ...updates });
         }
-        
-        const updatedLogs = [
-            ...healthData.cycleLogs.filter(l => l.date !== todayStr),
-            { ...currentLog, symptoms: newSymptoms }
-        ];
-        
-        onUpdateUserData({ ...userData, womenHealth: { ...healthData, cycleLogs: updatedLogs } });
+        onUpdateUserData({ ...userData, womenHealth: { ...healthData, cycleLogs: newLogs } });
     };
 
-    const handleLogMood = (mood: any) => {
-         const currentLog = healthData.cycleLogs.find(l => l.date === todayStr) || { date: todayStr, symptoms: [] };
-         const updatedLogs = [
-            ...healthData.cycleLogs.filter(l => l.date !== todayStr),
-            { ...currentLog, mood }
-        ];
-        onUpdateUserData({ ...userData, womenHealth: { ...healthData, cycleLogs: updatedLogs } });
+    const toggleSymptom = (symptomId: string) => {
+        const current = selectedLog?.symptoms || [];
+        const newSymptoms = current.includes(symptomId) 
+            ? current.filter(s => s !== symptomId) 
+            : [...current, symptomId];
+        updateLog({ symptoms: newSymptoms });
     };
 
-    const handlePartnerConfig = (enabled: boolean, name: string) => {
-         onUpdateUserData({ 
-             ...userData, 
-             womenHealth: { ...healthData, partner: { enabled, name } } 
-        });
+    const handlePeriodStartToggle = () => {
+        const starts = healthData.periodStarts.includes(selectedDateStr)
+            ? healthData.periodStarts.filter(d => d !== selectedDateStr)
+            : [...healthData.periodStarts, selectedDateStr];
+        onUpdateUserData({ ...userData, womenHealth: { ...healthData, periodStarts: starts } });
     };
 
     const generatePartnerTip = async () => {
-        if (!cycleDay) {
-            setPartnerTip("لطفا ابتدا تاریخ شروع دوره را ثبت کنید.");
-            return;
-        }
         setIsGeneratingTip(true);
-        
-        const todaysLog = healthData.cycleLogs.find(l => l.date === todayStr);
-        const symptoms = todaysLog?.symptoms.map(s => SYMPTOMS_TRANSLATION[s]).join(', ') || 'هیچ';
-        const mood = todaysLog?.mood || 'معمولی';
-        
-        const prompt = `
-            Act as an empathetic relationship coach. The user's partner (Name: ${healthData.partner.name || 'Partner'}) wants to know how to support her today.
-            Context:
-            - Cycle Phase: ${currentPhase} (Day ${cycleDay})
-            - Reported Symptoms: ${symptoms}
-            - Mood: ${mood}
-            
-            Write a short, actionable, and kind message addressed to the partner in Persian. Suggest 2 specific things they can do (e.g., bring tea, offer a massage, give space).
-            Keep it under 50 words.
-        `;
-
         try {
-            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-            setPartnerTip(response.text.trim());
-        } catch (e) {
-            setPartnerTip("خطا در تولید نکته هوشمند.");
+            const prompt = `Advice for partner. User is in ${currentPhase} phase (Day ${selectedCycleDay}). Symptoms: ${selectedLog?.symptoms.join(',') || 'None'}. Mood: ${selectedLog?.mood || 'Neutral'}. Provide a short, caring tip in Persian (max 20 words).`;
+            const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+            setPartnerTip(res.text.trim());
+        } catch {
+            setPartnerTip("امروز فقط کنارش باش و بهش محبت کن ❤️");
         } finally {
             setIsGeneratingTip(false);
         }
     };
 
-    const handleShare = async () => {
-        if (!partnerTip) return;
-        const text = `سلام ${healthData.partner.name} ❤️\nوضعیت امروز من: ${currentPhase}\n\nپیشنهاد هوشمند بنویس:\n${partnerTip}`;
-        if (navigator.share) {
-            await navigator.share({ text });
-        } else {
-            await navigator.clipboard.writeText(text);
-            alert("پیام در کلیپ‌بورد کپی شد.");
-        }
-    };
-
     return (
-        <div className="fixed inset-0 bg-slate-950/95 z-50 flex flex-col overflow-hidden animate-fadeIn">
-             {/* Header */}
-            <div className="p-4 flex justify-between items-center border-b border-slate-800 bg-slate-900/50 backdrop-blur-md">
-                <h2 className="text-xl font-bold text-pink-400 flex items-center gap-2">
-                    <HealthIcon className="w-6 h-6"/>
-                    سلامت زنان
-                </h2>
-                <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+        <div className="fixed inset-0 bg-[#0f172a] z-50 overflow-y-auto flex flex-col animate-fadeIn">
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 z-20 relative">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-pink-500/20 rounded-full">
+                        <HealthIcon className="w-6 h-6 text-pink-400"/>
+                    </div>
+                    <span className="font-bold text-lg text-white">سلامت زنان</span>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => setViewMode(viewMode === 'wheel' ? 'calendar' : 'wheel')} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+                        {viewMode === 'wheel' ? <CalendarIcon className="w-5 h-5"/> : <span className="text-xs font-bold">O</span>}
+                    </button>
+                    <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+                        &times;
+                    </button>
+                </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex justify-around p-2 bg-slate-900 border-b border-slate-800">
-                <button onClick={() => setActiveTab('calendar')} className={`py-2 px-4 rounded-lg transition-colors ${activeTab === 'calendar' ? 'bg-pink-600 text-white' : 'text-slate-400'}`}>تقویم و چرخه</button>
-                <button onClick={() => setActiveTab('log')} className={`py-2 px-4 rounded-lg transition-colors ${activeTab === 'log' ? 'bg-pink-600 text-white' : 'text-slate-400'}`}>ثبت علائم</button>
-                <button onClick={() => setActiveTab('partner')} className={`py-2 px-4 rounded-lg transition-colors ${activeTab === 'partner' ? 'bg-pink-600 text-white' : 'text-slate-400'}`}>همراه (Partner)</button>
-            </div>
+            {viewMode === 'wheel' ? (
+                <div className="flex-grow flex flex-col items-center relative pb-24">
+                    {/* Cycle Wheel */}
+                    <div className="mt-4 mb-8 scale-90 sm:scale-100 transition-transform">
+                        <CycleWheel 
+                            currentDay={currentCycleDay} 
+                            cycleLength={healthData.avgCycleLength} 
+                            selectedDay={selectedCycleDay}
+                            onSelectDay={setSelectedCycleDay}
+                            phase={currentPhase}
+                        />
+                    </div>
 
-            <div className="flex-grow overflow-y-auto p-4">
-                {activeTab === 'calendar' && (
-                    <div className="space-y-6 text-center pt-10">
-                        <div className="relative w-64 h-64 mx-auto">
-                            <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
-                            <div className="absolute inset-0 rounded-full border-4 border-pink-500 border-t-transparent rotate-45"></div>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                {cycleDay ? (
-                                    <>
-                                        <span className="text-sm text-slate-400">روز چرخه</span>
-                                        <span className="text-6xl font-bold text-white">{cycleDay}</span>
-                                        <span className="text-pink-400 font-semibold mt-2">{currentPhase}</span>
-                                    </>
-                                ) : (
-                                    <span className="text-slate-400 px-4">هنوز اطلاعاتی ثبت نشده</span>
+                    {/* Phase Info Card */}
+                    <div className="w-full max-w-md px-6 z-10 -mt-6">
+                        <div className="glass-card bg-slate-800/40 border border-slate-700/50 p-5 rounded-3xl backdrop-blur-xl shadow-xl">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <p className="text-slate-400 text-xs mb-1">{new Date(selectedDateStr).toLocaleDateString('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                                    <h3 className="text-xl font-bold text-white">{phaseInfo.label}</h3>
+                                </div>
+                                <button 
+                                    onClick={handlePeriodStartToggle}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${healthData.periodStarts.includes(selectedDateStr) ? 'bg-pink-500 border-pink-500 text-white' : 'border-pink-500/50 text-pink-400 hover:bg-pink-500/10'}`}
+                                >
+                                    {healthData.periodStarts.includes(selectedDateStr) ? 'شروع پریود' : 'ثبت شروع'}
+                                </button>
+                            </div>
+                            <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-slate-600 pl-3 mb-4">
+                                {phaseInfo.advice}
+                            </p>
+
+                            {/* Quick Log Actions */}
+                            <div className="space-y-4">
+                                {/* Moods */}
+                                <div>
+                                    <p className="text-xs text-slate-500 font-bold mb-2">حس و حال امروز</p>
+                                    <div className="flex justify-between bg-slate-900/50 p-2 rounded-2xl">
+                                        {MOODS.map(m => (
+                                            <button 
+                                                key={m.id}
+                                                onClick={() => updateLog({ mood: selectedLog?.mood === m.id ? undefined : m.id as any })}
+                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${selectedLog?.mood === m.id ? 'bg-slate-700 scale-110 shadow-lg ring-1 ring-white/20' : 'opacity-50 hover:opacity-100'}`}
+                                            >
+                                                {m.icon}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Flow (Only show if period or spotting) */}
+                                {(currentPhase === 'Menstrual' || selectedLog?.flow) && (
+                                    <div className="animate-fadeIn">
+                                        <p className="text-xs text-slate-500 font-bold mb-2">شدت خونریزی</p>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {FLOWS.map(f => (
+                                                <button 
+                                                    key={f.id}
+                                                    onClick={() => updateLog({ flow: selectedLog?.flow === f.id ? undefined : f.id as any })}
+                                                    className={`py-2 rounded-xl text-xs font-bold transition-all ${selectedLog?.flow === f.id ? `${f.color} text-white shadow-lg scale-105` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                                >
+                                                    {f.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
-                        </div>
-                        
-                        <button 
-                            onClick={handleLogPeriodStart}
-                            className="w-full py-4 bg-pink-600 rounded-xl font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.4)] hover:bg-pink-500 transition-all"
-                        >
-                            شروع قاعدگی امروز
-                        </button>
-                        
-                        {cycleDay && (
-                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 text-sm text-slate-300">
-                                <p>پیش‌بینی قاعدگی بعدی: حدود {new Date(new Date(getLatestPeriodStart()!).getTime() + (healthData.avgCycleLength * 24 * 60 * 60 * 1000)).toLocaleDateString('fa-IR')}</p>
-                            </div>
-                        )}
-                    </div>
-                )}
 
-                {activeTab === 'log' && (
-                    <div className="space-y-6">
-                        <div>
-                            <h3 className="text-lg font-bold mb-4 text-slate-200">حس و حال امروز</h3>
-                            <div className="flex justify-between bg-slate-800 p-4 rounded-xl">
-                                {['happy', 'energetic', 'tired', 'anxious', 'irritable'].map(m => {
-                                     const isSelected = healthData.cycleLogs.find(l => l.date === todayStr)?.mood === m;
-                                     return (
-                                         <button key={m} onClick={() => handleLogMood(m)} className={`flex flex-col items-center gap-2 transition-transform ${isSelected ? 'scale-125 text-pink-400' : 'text-slate-500 grayscale hover:grayscale-0'}`}>
-                                             {m === 'happy' && <FaceSmileIcon className="w-8 h-8"/>}
-                                             {m === 'energetic' && <BoltIcon className="w-8 h-8"/>}
-                                             {m === 'tired' && <FaceFrownIcon className="w-8 h-8"/>}
-                                             {m === 'anxious' && <span className="text-2xl">😰</span>}
-                                             {m === 'irritable' && <span className="text-2xl">😡</span>}
+                                {/* Symptoms */}
+                                <div>
+                                    <p className="text-xs text-slate-500 font-bold mb-2">علائم فیزیکی</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {SYMPTOMS_LIST.map(s => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => toggleSymptom(s.id)}
+                                                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${selectedLog?.symptoms.includes(s.id) ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-500'}`}
+                                            >
+                                                <span>{s.icon}</span> {s.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Partner Tip */}
+                                <div className="pt-4 border-t border-slate-700/50">
+                                     {partnerTip ? (
+                                         <div className="bg-gradient-to-r from-pink-500/10 to-violet-500/10 p-3 rounded-xl border border-pink-500/20 text-sm text-slate-200 text-center italic">
+                                             "{partnerTip}"
+                                         </div>
+                                     ) : (
+                                         <button onClick={generatePartnerTip} disabled={isGeneratingTip} className="w-full py-2 flex items-center justify-center gap-2 text-xs font-bold text-pink-400 hover:text-pink-300 transition-colors">
+                                             <SparklesIcon className={`w-4 h-4 ${isGeneratingTip ? 'animate-spin' : ''}`}/>
+                                             دریافت پیام هوشمند برای پارتنر
                                          </button>
-                                     )
-                                })}
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 className="text-lg font-bold mb-4 text-slate-200">علائم فیزیکی</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                {SYMPTOMS_LIST.map(sym => {
-                                    const isSelected = healthData.cycleLogs.find(l => l.date === todayStr)?.symptoms.includes(sym);
-                                    return (
-                                        <button 
-                                            key={sym}
-                                            onClick={() => handleLogSymptom(sym)}
-                                            className={`p-3 rounded-lg border text-sm font-semibold transition-all ${isSelected ? 'bg-pink-600 border-pink-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
-                                        >
-                                            {SYMPTOMS_TRANSLATION[sym]}
-                                        </button>
-                                    )
-                                })}
+                                     )}
+                                </div>
                             </div>
                         </div>
                     </div>
-                )}
-
-                {activeTab === 'partner' && (
-                    <div className="space-y-6">
-                        {!healthData.partner.enabled ? (
-                            <div className="text-center py-10 space-y-4">
-                                <div className="w-20 h-20 bg-pink-900/30 rounded-full flex items-center justify-center mx-auto text-pink-400">
-                                    <ShareIcon className="w-10 h-10"/>
-                                </div>
-                                <h3 className="text-xl font-bold">حالت همراه (Companion Mode)</h3>
-                                <p className="text-slate-400">با فعال‌سازی این بخش، می‌توانید وضعیت و نکات مفید را با همسر یا پارتنر خود به اشتراک بگذارید.</p>
-                                <div className="max-w-xs mx-auto space-y-3">
-                                    <input 
-                                        type="text" 
-                                        placeholder="نام پارتنر شما" 
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-center"
-                                        onChange={(e) => handlePartnerConfig(false, e.target.value)} // Just update name in local state logic if needed, but here simplifying
-                                        onBlur={(e) => handlePartnerConfig(false, e.target.value)}
-                                    />
-                                    <button 
-                                        onClick={() => handlePartnerConfig(true, healthData.partner.name || 'همسر')}
-                                        className="w-full py-3 bg-pink-600 rounded-lg font-bold text-white"
-                                    >
-                                        فعال‌سازی
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="bg-gradient-to-br from-pink-900/40 to-slate-900 border border-pink-800/50 p-6 rounded-2xl text-center">
-                                    <h3 className="text-lg font-bold text-pink-200 mb-1">همراه: {healthData.partner.name}</h3>
-                                    <p className="text-slate-400 text-sm mb-4">وضعیت امروز برای اشتراک‌گذاری</p>
-                                    
-                                    <div className="bg-slate-950/50 p-4 rounded-xl mb-4 text-right">
-                                        <p className="text-slate-300 text-sm leading-relaxed">
-                                            {partnerTip || "برای دریافت نکته هوشمند روی دکمه زیر کلیک کنید..."}
-                                        </p>
-                                    </div>
-
-                                    <div className="flex gap-3">
-                                        <button 
-                                            onClick={generatePartnerTip} 
-                                            disabled={isGeneratingTip}
-                                            className="flex-1 py-3 bg-slate-800 rounded-xl font-semibold text-pink-400 hover:bg-slate-700 flex items-center justify-center gap-2"
-                                        >
-                                            <SparklesIcon className={`w-5 h-5 ${isGeneratingTip ? 'animate-spin' : ''}`}/>
-                                            {isGeneratingTip ? '...' : 'تولید نکته'}
-                                        </button>
-                                        <button 
-                                            onClick={handleShare}
-                                            disabled={!partnerTip}
-                                            className="flex-1 py-3 bg-pink-600 rounded-xl font-semibold text-white hover:bg-pink-500 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <ShareIcon className="w-5 h-5"/>
-                                            ارسال
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div className="p-4 bg-slate-800/50 rounded-xl">
-                                    <h4 className="font-bold text-slate-300 mb-2">تنظیمات</h4>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-slate-400">وضعیت فعال</span>
-                                        <button 
-                                            onClick={() => handlePartnerConfig(false, healthData.partner.name)}
-                                            className="text-red-400 text-sm font-semibold hover:underline"
-                                        >
-                                            غیرفعال‌سازی
-                                        </button>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
+                </div>
+            ) : (
+                // Calendar Placeholder (Simpler view if user prefers)
+                <div className="p-6 flex flex-col items-center justify-center h-full text-slate-500">
+                    <CalendarIcon className="w-16 h-16 mb-4 opacity-20"/>
+                    <p>نمای تقویم به زودی کامل می‌شود.</p>
+                    <button onClick={() => setViewMode('wheel')} className="mt-4 text-pink-400 hover:text-pink-300 font-bold">بازگشت به چرخه</button>
+                </div>
+            )}
         </div>
     );
 };

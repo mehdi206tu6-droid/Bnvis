@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { agents } from '../lib/agents';
 import { Agent } from '../types';
@@ -8,9 +9,9 @@ interface AiAgentsHubProps {
 }
 
 const agentCategories: Record<string, string[]> = {
-  'بهره‌وری و برنامه‌ریزی': ['life-gps', 'smart-day-composer', 'time-sensei', 'ai-decision-helper', 'reflection-coach', 'ai-challenge-maker', 'skill-builder', 'accountability-partner', 'privacy-advisor', 'personal-dev-coach', 'cognitive-habit-designer', 'pomodoro-manager', 'eisenhower-matrix', 'smart-goal-generator'],
-  'سلامت و تندرستی': ['mood-weather', 'habit-doctor', 'health-score-360', 'ai-sleep-partner', 'mind-detox', 'calm-sos', 'meal-planner', 'habit-stacking-architect', 'digital-minimalism-coach'],
-  'خودشناسی': ['identity-builder', 'happiness-archive', 'life-map', 'life-pattern-detector', 'ai-emotion-classifier', 'life-strategy-ai'],
+  'بهره‌وری و برنامه‌ریزی': ['life-gps', 'smart-day-composer', 'time-sensei', 'ai-decision-helper', 'reflection-coach', 'ai-challenge-maker', 'skill-builder', 'accountability-partner', 'privacy-advisor', 'personal-dev-coach', 'cognitive-habit-designer', 'pomodoro-manager', 'eisenhower-matrix', 'smart-goal-generator', 'behavioral-lab', 'quick-commander'],
+  'سلامت و تندرستی': ['mood-weather', 'habit-doctor', 'health-score-360', 'ai-sleep-partner', 'mind-detox', 'calm-sos', 'meal-planner', 'habit-stacking-architect', 'digital-minimalism-coach', 'real-world-challenger', 'somatic-chakra-guide', 'morning-ritual-designer'],
+  'خودشناسی': ['identity-builder', 'happiness-archive', 'life-map', 'life-pattern-detector', 'ai-emotion-classifier', 'life-strategy-ai', 'habit-manifesto-creator', 'narrative-journaler'],
   'مالی': ['ai-money-guard', 'financial-autopilot', 'expense-predictor', 'financial-health-score', 'smart-budget-engine', 'debt-management-advisor', 'investment-advisor'],
 };
 

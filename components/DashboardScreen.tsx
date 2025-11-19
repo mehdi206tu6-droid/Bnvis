@@ -1,39 +1,45 @@
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { OnboardingData, UserGoal, Achievement, AchievementID, Habit, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent, GratitudeEntry, Note, CalendarEvent, FocusSession, Transaction, TransactionType } from '../types';
+import React, { useState, useEffect } from 'react';
+import { OnboardingData, AchievementID, UserGoal, CalendarEvent, Transaction, StandaloneTask } from '../types';
+import { GoogleGenAI } from "@google/genai";
 import { 
-    TargetIcon, HabitsIcon, CogIcon, FinanceIcon, SparklesIcon,
-    HealthIcon, EducationIcon, WaterDropIcon, ReadingIcon, 
-    WalkingIcon, MeditationIcon, UserCircleIcon, DocumentChartBarIcon, 
-    MoonIcon, StarIcon, TrophyIcon, LevelUpIcon, SunIcon, CloudIcon, MinusCircleIcon, FlameIcon, LeafIcon,
-    customHabitIcons, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon,
-    CloudRainIcon, JourneyIcon, BriefcaseIcon, MoneyIcon, FlagIcon, BoltIcon,
-    goalIcons, MicrophoneIcon, StopIcon, BenvisLogoIcon, ArrowUturnLeftIcon, DocumentTextIcon, ClipboardIcon, LightBulbIcon, Squares2X2Icon, QueueListIcon, ChartPieIcon, ShoppingBagIcon
+    TargetIcon, MoonIcon, CalendarIcon, FinanceIcon, 
+    SparklesIcon, CogIcon, TrophyIcon,
+    ArrowLeftIcon, goalIcons, QueueListIcon,
+    Squares2X2Icon, ChartPieIcon, UserCircleIcon, ArrowUpIcon,
+    LevelUpIcon, HealthIcon, AcademicCapIcon, MicrophoneIcon,
+    MagnifyingGlassIcon, CheckCircleIcon, PlusIcon, SunIcon, BenvisLogoIcon
 } from './icons';
-import { GoogleGenAI, Type } from "@google/genai";
+
+// Import Views
 import GoalsView from './GoalsView';
-import SmartAssistantView from './SmartAssistantView';
-import WeeklyReviewView from './WeeklyReviewView';
 import QuietZoneView from './QuietZoneView';
-import StatsSummaryWidget from './StatsSummaryWidget';
-import SettingsView from './SettingsView';
-import FinancialWidget from './FinancialWidget';
-import WomenHealthView from './WomenHealthView';
 import CalendarView from './CalendarView';
 import { FinancialView } from './FinancialView';
-import DailyPromptWidget from './DailyPromptWidget';
+import SmartAssistantView from './SmartAssistantView';
+import SettingsView from './SettingsView';
+import WomenHealthView from './WomenHealthView';
+import SocialCirclesView from './SocialCirclesView';
+import MicroCourseView from './MicroCourseView';
+import XpShopView from './XpShopView';
+import WeeklyReviewView from './WeeklyReviewView';
 import { NightRoutineView } from './NightRoutineView';
-import PredictiveAlertsWidget from './PredictiveAlertsWidget';
-import EnergyPredictionWidget from './EnergyPredictionWidget';
-import DailyBriefingWidget from './DailyBriefingWidget';
-import MoodWeatherWidget from './MoodWeatherWidget';
-import FinancialInsightsWidget from './FinancialInsightsWidget';
 import EisenhowerMatrixView from './EisenhowerMatrixView';
 import TimeBlockingView from './TimeBlockingView';
 import LifeWheelView from './LifeWheelView';
-import XpShopView from './XpShopView';
 
-type View = 'dashboard' | 'goals' | 'finance' | 'settings' | 'assistant';
+// Import Widgets
+import StatsSummaryWidget from './StatsSummaryWidget';
+import MoodWeatherWidget from './MoodWeatherWidget';
+import EnergyPredictionWidget from './EnergyPredictionWidget';
+import DailyBriefingWidget from './DailyBriefingWidget';
+import DailyPromptWidget from './DailyPromptWidget';
+import FinancialWidget from './FinancialWidget';
+import SmartNotificationWidget from './SmartNotificationWidget';
+import PredictiveAlertsWidget from './PredictiveAlertsWidget';
+import HabitReschedulerWidget from './HabitReschedulerWidget';
+
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface DashboardScreenProps {
     userData: OnboardingData;
@@ -45,698 +51,441 @@ interface DashboardScreenProps {
     onAchievementsSeen: () => void;
 }
 
-const ALL_ACHIEVEMENTS: Record<AchievementID, Achievement> = {
-    'first_goal_completed': { id: 'first_goal_completed', title: "اولین قدم", description: "اولین هدف خود را کامل کردید!", icon: TrophyIcon },
-    'level_5': { id: 'level_5', title: "استاد سطح ۵", description: "به سطح ۵ رسیدید!", icon: LevelUpIcon },
-    '10_day_streak': { id: '10_day_streak', title: "استریک آتشین", description: "یک عادت را ۱۰ روز متوالی انجام دادید!", icon: StarIcon }
-};
+type ViewState = 
+    'dashboard' | 'goals' | 'focus' | 'calendar' | 'finance' | 
+    'assistant' | 'settings' | 'womenHealth' | 'social' | 
+    'shop' | 'microCourse' | 'review' | 'nightRoutine' | 
+    'eisenhower' | 'timeBlocking' | 'lifeWheel';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
+    userData, onUpdateUserData, addXp, levelUpInfo, onLevelUpSeen, newAchievements, onAchievementsSeen 
+}) => {
+    const [activeView, setActiveView] = useState<ViewState>('dashboard');
+    const [commandInput, setCommandInput] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [briefing, setBriefing] = useState<string | null>(null);
+    const [isBriefingLoading, setIsBriefingLoading] = useState(false);
+    const [dailyPrompt, setDailyPrompt] = useState<string | null>(null);
+    const [isPromptLoading, setIsPromptLoading] = useState(false);
+    const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
 
-const goalStyleMap: { [key: string]: { color: string } } = {
-    'Finance': { color: 'text-yellow-400' },
-    'Health': { color: 'text-red-400' },
-    'Education': { color: 'text-blue-400' },
-    'Habits': { color: 'text-green-400' },
-    'Trophy': { color: 'text-yellow-400'},
-    'Flag': { color: 'text-indigo-400'},
-    'Briefcase': { color: 'text-amber-400'},
-    'Money': { color: 'text-lime-400'},
-    'Walking': { color: 'text-sky-400'},
-    'Journey': { color: 'text-purple-400'},
-    'Target': { color: 'text-gray-300'},
-};
-
-
-const habitOptionsMap: { [key: string]: React.FC<{className?: string}> } = {
-    "نوشیدن آب": WaterDropIcon,
-    "مطالعه": ReadingIcon,
-    "ورزش": WalkingIcon,
-    "مدیتیشن": MeditationIcon,
-};
-
-// Redesigned to look like the search bar in the image
-const BenvisWidget: React.FC<{
-    userData: OnboardingData;
-    onUpdateUserData: (data: OnboardingData) => void;
-}> = ({ userData, onUpdateUserData }) => {
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [confirmation, setConfirmation] = useState<{ message: string; type: 'success' | 'error'; onUndo?: () => void } | null>(null);
-    const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const prevUserDataRef = useRef<OnboardingData | null>(null);
-    const confirmationTimeoutRef = useRef<number | null>(null);
-
-    // Using the placeholders from the image inspiration
-    const placeholders = [
-        "جستجو کنید...",
-        "بنویس تا اتفاق بیفتد...",
-        "قرار فردا ساعت ۵...",
-    ];
-    const [placeholder, setPlaceholder] = useState(placeholders[0]);
-    
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setPlaceholder(prev => {
-                const currentIndex = placeholders.indexOf(prev);
-                return placeholders[(currentIndex + 1) % placeholders.length];
-            });
-        }, 3000);
-        return () => clearInterval(interval);
-    }, []);
-
-
-    useEffect(() => {
-        const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognitionAPI) {
-            const recognition = new SpeechRecognitionAPI();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = 'fa-IR';
-
-            recognition.onresult = (event: SpeechRecognitionEvent) => {
-                const transcript = event.results[0][0].transcript;
-                setInput(prev => prev ? `${prev} ${transcript}` : transcript);
-                setIsRecording(false);
-            };
-            recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-                console.error('Speech recognition error:', event.error);
-                 // Visual feedback for error could be added here
-                setIsRecording(false);
-            };
-            recognition.onend = () => {
-                setIsRecording(false);
-            };
-            recognitionRef.current = recognition;
-        }
-    }, []);
-
-    const toggleRecording = () => {
-        if (!recognitionRef.current) return;
-        if (isRecording) {
-            recognitionRef.current.stop();
-        } else {
-            try {
-                recognitionRef.current.start();
-                setIsRecording(true);
-            } catch (e) {
-                console.error("Start recording error", e);
-            }
-        }
-    };
-
-    const showConfirmation = (message: string, type: 'success' | 'error' = 'success', onUndo?: () => void) => {
-        if (confirmationTimeoutRef.current) clearTimeout(confirmationTimeoutRef.current);
-        setConfirmation({ message, type, onUndo });
-        confirmationTimeoutRef.current = window.setTimeout(() => {
-            setConfirmation(null);
-            prevUserDataRef.current = null;
-        }, 5000);
-    };
-    
-    const handleUndo = () => {
-        if (prevUserDataRef.current) {
-            onUpdateUserData(prevUserDataRef.current);
-        }
-        setConfirmation(null);
-        prevUserDataRef.current = null;
-        if (confirmationTimeoutRef.current) clearTimeout(confirmationTimeoutRef.current);
-    };
-
-
-    const handleSave = async () => {
-        if (!input.trim()) return;
-        setIsLoading(true);
-        setConfirmation(null);
-        
-        const { transactionCategories = [] } = userData;
-        const expenseCategories = transactionCategories.filter(c => c.type === 'expense').map(c => c.name).join(', ');
-        const incomeCategories = transactionCategories.filter(c => c.type === 'income').map(c => c.name).join(', ');
-        const todayDate = new Date().toISOString().split('T')[0];
-        
-        const processUpdate = (updatedData: OnboardingData, successMessage: string) => {
-            prevUserDataRef.current = userData;
-            onUpdateUserData(updatedData);
-            showConfirmation(successMessage, 'success', handleUndo);
-        };
-
-        const prompt = `
-            You are an intelligent input router for a life management app called "Benvis". Your task is to analyze the user's Persian text and classify it.
-            Categories: 'gratitude', 'note', 'goal', 'habit', 'calendar_event', 'financial_transaction'.
-            
-            User input: "${input}"
-            Today: ${todayDate}
-            Expense Cats: [${expenseCategories}]
-            Income Cats: [${incomeCategories}]
-
-            Respond ONLY with a valid JSON object matching the schema: { category, content, details: { date, time, icon, amount, type, category } }.
-        `;
-        const responseSchema = {
-            type: Type.OBJECT,
-            properties: {
-                category: { type: Type.STRING },
-                content: { type: Type.STRING },
-                details: {
-                    type: Type.OBJECT,
-                    properties: {
-                        date: { type: Type.STRING, nullable: true },
-                        time: { type: Type.STRING, nullable: true },
-                        icon: { type: Type.STRING, nullable: true },
-                        amount: { type: Type.INTEGER, nullable: true },
-                        type: { type: Type.STRING, nullable: true },
-                        category: { type: Type.STRING, nullable: true }
-                    },
-                    nullable: true,
-                }
-            }
-        };
-
+    // Helper to load briefing manually to save quota
+    const loadBriefing = async () => {
+        setIsBriefingLoading(true);
         try {
+            const now = new Date();
+            const hour = now.getHours();
+            let timeContext = "Morning";
+            if (hour >= 12 && hour < 17) timeContext = "Afternoon";
+            if (hour >= 17) timeContext = "Evening";
+
+            const pendingTasks = (userData.tasks || []).filter(t => !t.completed).map(t => t.title).join(', ');
+            const todayEvents = (userData.calendarEvents || []).filter(e => e.date === now.toISOString().split('T')[0]).map(e => `${e.time || ''} ${e.text}`).join(', ');
+            const activeGoals = (userData.goals || []).filter(g => g.progress < 100).slice(0, 3).map(g => g.title).join(', ');
+
+            const prompt = `
+                Generate a very short, encouraging ${timeContext} briefing in Persian.
+                Context: Tasks: ${pendingTasks || "None"}, Events: ${todayEvents || "None"}, Goals: ${activeGoals}.
+                Max 40 words.
+            `;
+            
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+            setBriefing(response.text.trim());
+        } catch (e) {
+            console.error("Briefing error", e);
+            // Fallback briefing on error
+            setBriefing("امروز فرصتی عالی برای پیشرفت است. روی اهداف اصلی خود تمرکز کنید."); 
+        } finally {
+            setIsBriefingLoading(false);
+        }
+    };
+
+    const loadPrompt = async () => {
+        setIsPromptLoading(true);
+        try {
+            const response = await ai.models.generateContent({ 
+                model: 'gemini-2.5-flash', 
+                contents: "Generate one short, unique journaling prompt in Persian for self-reflection." 
+            });
+            setDailyPrompt(response.text.trim());
+        } catch(e) {
+            console.error(e);
+            setDailyPrompt("امروز چه چیزی به تو انرژی داد؟"); // Fallback
+        } finally {
+            setIsPromptLoading(false);
+        }
+    };
+
+    // Initial load - Use timeout to not block render, and maybe skip to save quota if needed
+    useEffect(() => {
+        // Optional: Uncomment to auto-load, or leave for user to click refresh
+        // setTimeout(() => { loadBriefing(); loadPrompt(); }, 1000); 
+    }, []); 
+
+    const handleVoiceInput = () => {
+        if (!('webkitSpeechRecognition' in window)) {
+            alert("مرورگر شما از قابلیت تبدیل گفتار به نوشتار پشتیبانی نمی‌کند.");
+            return;
+        }
+
+        const recognition = new window.webkitSpeechRecognition();
+        recognition.lang = 'fa-IR';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = (event: any) => {
+            console.error("Speech error", event.error);
+            setIsListening(false);
+        };
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setCommandInput(prev => prev ? `${prev} ${transcript}` : transcript);
+        };
+
+        recognition.start();
+    };
+
+    // Fallback parser when AI fails
+    const fallbackParse = (text: string) => {
+        const lower = text.toLowerCase();
+        if (lower.includes('هدف') || lower.includes('goal')) return { intent: 'create_goal', data: { title: text.replace(/هدف/g, '').trim() } };
+        if (lower.includes('بخر') || lower.includes('خرید') || lower.includes('هزینه') || lower.includes('تومان') || lower.includes('خرج')) return { intent: 'add_transaction', data: { title: text, amount: 0, type: 'expense' } };
+        if (lower.includes('جلسه') || lower.includes('قرار') || lower.includes('رویداد') || lower.includes('فردا') || lower.includes('امروز')) return { intent: 'add_event', data: { title: text } };
+        if (lower.includes('چت') || lower.includes('سوال') || lower.includes('کمک')) return { intent: 'chat', data: {} };
+        return { intent: 'add_task', data: { title: text } };
+    };
+
+    const handleCommandSubmit = async () => {
+        if (!commandInput.trim()) return;
+        setIsProcessing(true);
+        setSuccessFeedback(null);
+        
+        let result;
+        
+        try {
+            const prompt = `
+                Parse Persian input: "${commandInput}" to JSON.
+                Intents: "create_goal", "add_task", "add_transaction", "add_event", "chat".
+                JSON Schema: { "intent": string, "data": { "title": string, "amount"?: number, "type"?: "income"|"expense", "date"?: "YYYY-MM-DD", "time"?: "HH:mm" } }
+            `;
+
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
-                config: { responseMimeType: "application/json", responseSchema }
+                config: { responseMimeType: "application/json" }
             });
+            result = JSON.parse(response.text.trim());
+        } catch (error) {
+            console.warn("AI parsing failed, using fallback", error);
+            result = fallbackParse(commandInput);
+        }
 
-            const result = JSON.parse(response.text.trim());
-
-             switch (result.category) {
-                case 'gratitude': {
-                    const storageKey = 'benvis_gratitude_journal';
-                    const stored = localStorage.getItem(storageKey);
-                    const items: GratitudeEntry[] = stored ? JSON.parse(stored) : [];
-                    const newItem: GratitudeEntry = { id: new Date().toISOString(), content: result.content, createdAt: new Date().toISOString() };
-                    localStorage.setItem(storageKey, JSON.stringify([newItem, ...items]));
-                    showConfirmation('شکرگزاری ثبت شد');
-                    break;
-                }
-                case 'note': {
-                    const storageKey = 'benvis_journal';
-                    const stored = localStorage.getItem(storageKey);
-                    const items: Note[] = stored ? JSON.parse(stored) : [];
-                    const newItem: Note = { id: new Date().toISOString(), content: result.content, createdAt: new Date().toISOString() };
-                    localStorage.setItem(storageKey, JSON.stringify([newItem, ...items]));
-                    showConfirmation('یادداشت ذخیره شد');
-                    break;
-                }
-                case 'goal': {
+        try {
+            switch(result.intent) {
+                case 'create_goal': {
                     const newGoal: UserGoal = {
                         id: `goal-${Date.now()}`,
+                        title: result.data.title || commandInput,
                         type: 'simple',
-                        title: result.content,
-                        icon: result.details?.icon && goalIcons[result.details.icon] ? result.details.icon : 'Target',
+                        icon: 'Target',
                         progress: 0,
-                        linkedHabits: [],
+                        progressHistory: [{ date: new Date().toISOString().split('T')[0], progress: 0 }]
                     };
-                    processUpdate({ ...userData, goals: [...userData.goals, newGoal] }, 'هدف جدید ساخته شد');
+                    onUpdateUserData({ ...userData, goals: [...(userData.goals || []), newGoal] });
+                    setSuccessFeedback('هدف جدید ساخته شد');
                     break;
                 }
-                case 'habit': {
-                    const newHabit: Habit = { name: result.content, type: 'good' };
-                    processUpdate({ ...userData, habits: [...userData.habits, newHabit] }, 'عادت جدید اضافه شد');
-                    break;
-                }
-                case 'calendar_event': {
-                    const newEvent: CalendarEvent = {
-                        id: new Date().toISOString(),
-                        date: result.details?.date || todayDate,
-                        time: result.details?.time,
-                        text: result.content
+                case 'add_task': {
+                    const newTask: StandaloneTask = {
+                        id: `task-${Date.now()}`,
+                        title: result.data.title || commandInput,
+                        urgent: false,
+                        important: false,
+                        completed: false
                     };
-                    processUpdate({ ...userData, calendarEvents: [...(userData.calendarEvents || []), newEvent] }, 'رویداد به تقویم اضافه شد');
+                    onUpdateUserData({ ...userData, tasks: [...(userData.tasks || []), newTask] });
+                    setSuccessFeedback('تسک اضافه شد');
                     break;
                 }
-                case 'financial_transaction': {
-                    const { amount, type, category: categoryName } = result.details || {};
-                    if (typeof amount !== 'number' || !type) {
-                        showConfirmation('اطلاعات مالی ناقص است', 'error');
-                        break;
-                    }
-                    const category = userData.transactionCategories?.find(c => c.name === categoryName && c.type === type);
-                    const fallbackCategory = userData.transactionCategories?.find(c => c.type === type);
-                    const defaultCashAccountId = 'default-cash';
-
-                    const newTransaction: Transaction = {
+                case 'add_transaction': {
+                    const newTx: Transaction = {
                         id: `tx-${Date.now()}`,
-                        type: type as TransactionType,
-                        amount: amount,
-                        description: result.content,
-                        date: todayDate,
-                        categoryId: category ? category.id : (fallbackCategory ? fallbackCategory.id : ''),
-                        accountId: defaultCashAccountId,
+                        type: result.data.type || 'expense',
+                        amount: result.data.amount || 0,
+                        description: result.data.title || commandInput,
+                        date: result.data.date || new Date().toISOString().split('T')[0],
+                        categoryId: userData.transactionCategories?.[0]?.id || 'default',
+                        accountId: userData.financialAccounts?.[0]?.id || 'default'
                     };
-                    
-                    const updatedAccounts = userData.financialAccounts?.map(acc => {
-                        if (acc.id === newTransaction.accountId) {
-                            const newBalance = type === 'income' ? Number(acc.balance) + amount : Number(acc.balance) - amount;
-                            return { ...acc, balance: newBalance };
-                        }
-                        return acc;
-                    });
-
-                    processUpdate({ 
-                        ...userData, 
-                        transactions: [...(userData.transactions || []), newTransaction],
-                        financialAccounts: updatedAccounts,
-                    }, 'تراکنش ثبت شد');
+                    onUpdateUserData({ ...userData, transactions: [...(userData.transactions || []), newTx] });
+                    setSuccessFeedback('تراکنش ثبت شد');
                     break;
                 }
-                default:
-                    showConfirmation('متوجه نشدم', 'error');
+                case 'add_event': {
+                     const newEvent: CalendarEvent = {
+                        id: `evt-${Date.now()}`,
+                        date: result.data.date || new Date().toISOString().split('T')[0],
+                        time: result.data.time,
+                        text: result.data.title || commandInput
+                    };
+                    onUpdateUserData({ ...userData, calendarEvents: [...(userData.calendarEvents || []), newEvent] });
+                    setSuccessFeedback('رویداد ثبت شد');
+                    break;
+                }
+                case 'chat':
+                    setActiveView('assistant');
+                    break;
+                default: {
+                    // Default to task if intent is weird
+                     const defaultTask: StandaloneTask = {
+                        id: `task-${Date.now()}`,
+                        title: commandInput,
+                        urgent: false, important: false, completed: false
+                    };
+                    onUpdateUserData({ ...userData, tasks: [...(userData.tasks || []), defaultTask] });
+                    setSuccessFeedback('تسک اضافه شد');
+                }
             }
-            setInput('');
-        } catch (error: any) {
-            console.error("Error:", error);
-            showConfirmation('خطا در پردازش', 'error');
+            setCommandInput('');
+            setTimeout(() => setSuccessFeedback(null), 3000);
+        } catch (e) {
+            console.error("Error applying command", e);
+            alert("خطا در ذخیره اطلاعات.");
         } finally {
-            setIsLoading(false);
+            setIsProcessing(false);
         }
     };
 
-    return (
-        <div className="relative w-full z-20">
-            <div className={`flex items-center bg-white/5 border border-white/10 backdrop-blur-md rounded-full px-4 py-2.5 transition-all duration-300 ${isRecording ? 'ring-2 ring-red-500/50' : 'focus-within:ring-2 focus-within:ring-[var(--color-primary-500)]/50'}`}>
-                 <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
-                 <input 
-                    type="text" 
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                    placeholder={placeholder}
-                    className="bg-transparent border-none outline-none text-white placeholder-gray-500 w-full ml-3 text-right"
-                    disabled={isLoading}
-                />
-                 <button onClick={toggleRecording} className={`p-1.5 rounded-full transition-colors ml-2 ${isRecording ? 'text-red-400 animate-pulse' : 'text-gray-400 hover:text-white'}`}>
-                    {isRecording ? <StopIcon className="w-5 h-5"/> : <MicrophoneIcon className="w-5 h-5"/>}
-                </button>
-            </div>
-             {/* Floating Action Button for Send if there is input */}
-             {input.trim() && !isLoading && (
-                <button onClick={handleSave} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-[var(--color-primary-600)] rounded-full text-white shadow-lg animate-bounce-in hover:bg-[var(--color-primary-500)]">
-                    <ArrowUturnLeftIcon className="w-4 h-4 transform rotate-180" />
-                </button>
-            )}
-             {confirmation && (
-                <div className={`absolute top-full mt-2 right-0 left-0 mx-auto w-max px-4 py-2 rounded-full text-xs font-bold shadow-lg animate-bounce-in flex items-center gap-2 z-50 ${confirmation.type === 'success' ? 'bg-green-500/20 text-green-300 backdrop-blur-md border border-green-500/30' : 'bg-red-500/20 text-red-300 backdrop-blur-md border border-red-500/30'}`}>
-                    <span>{confirmation.message}</span>
-                    {confirmation.onUndo && <button onClick={handleUndo} className="underline opacity-80 hover:opacity-100">بازگشت</button>}
-                </div>
-            )}
-        </div>
-    );
-};
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 5) return "شب بخیر";
+        if (hour < 12) return "صبح بخیر";
+        if (hour < 18) return "ظهر بخیر";
+        return "عصر بخیر";
+    };
 
-// Central Circular Hub Widget
-const CentralHubWidget: React.FC<{ 
-    onOpen: () => void;
-    weather: { temp: number; condition: string } | null;
-    level: number;
-    xp: number;
-}> = ({ onOpen, weather, level, xp }) => {
-    const [jalaliDate, setJalaliDate] = useState<{day: string, month: string, year: string}>({day: '', month: '', year: ''});
+    const renderDashboard = () => {
+        const activeGoalsCount = (userData.goals || []).filter(g => g.progress < 100).length;
+        const pendingTasksCount = (userData.tasks || []).filter(t => !t.completed).length;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayEventsCount = (userData.calendarEvents || []).filter(e => e.date === todayStr).length;
+        const todayTransactionsCount = (userData.transactions || []).filter(t => t.date === todayStr).length;
 
-    useEffect(() => {
-        const d = new Date();
-        const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long', year: 'numeric' });
-        const parts = formatter.formatToParts(d);
-        setJalaliDate({
-            day: parts.find(p => p.type === 'day')?.value || '',
-            month: parts.find(p => p.type === 'month')?.value || '',
-            year: parts.find(p => p.type === 'year')?.value || ''
-        });
-    }, []);
+        // iOS Style Tiles
+        const tiles = [
+            { id: 'goals', label: 'اهداف', icon: TargetIcon, color: 'text-blue-400', bg: 'bg-blue-500/10', count: activeGoalsCount },
+            { id: 'focus', label: 'تمرکز', icon: MoonIcon, color: 'text-indigo-400', bg: 'bg-indigo-500/10', count: pendingTasksCount },
+            { id: 'calendar', label: 'تقویم', icon: CalendarIcon, color: 'text-red-400', bg: 'bg-red-500/10', count: todayEventsCount }, // Apple Calendar red
+            { id: 'finance', label: 'مالی', icon: FinanceIcon, color: 'text-green-400', bg: 'bg-green-500/10', count: todayTransactionsCount },
+            { id: 'assistant', label: 'دستیار', icon: SparklesIcon, color: 'text-purple-400', bg: 'bg-purple-500/10', count: 0 },
+            { id: 'eisenhower', label: 'اولویت', icon: Squares2X2Icon, color: 'text-orange-400', bg: 'bg-orange-500/10', count: pendingTasksCount },
+            { id: 'timeBlocking', label: 'زمان', icon: QueueListIcon, color: 'text-cyan-400', bg: 'bg-cyan-500/10', count: 0 },
+            { id: 'lifeWheel', label: 'چرخ', icon: ChartPieIcon, color: 'text-pink-400', bg: 'bg-pink-500/10', count: 0 },
+        ];
 
-    // Calculate progress to next level for ring
-    let totalXpForPreviousLevels = 0;
-    for (let i = 1; i < level; i++) totalXpForPreviousLevels += i * 100;
-    const xpInCurrentLevel = xp - totalXpForPreviousLevels;
-    const xpRequired = level * 100;
-    const percent = Math.min(100, (xpInCurrentLevel / xpRequired) * 100);
-    const strokeDashoffset = 440 - (440 * percent) / 100; // 2 * PI * 70 roughly 440
+        if (userData.gender === 'female') {
+            tiles.push({ id: 'womenHealth', label: 'چرخه', icon: HealthIcon, color: 'text-rose-400', bg: 'bg-rose-500/10', count: 0 });
+        }
+        tiles.push({ id: 'social', label: 'حلقه‌ها', icon: UserCircleIcon, color: 'text-yellow-400', bg: 'bg-yellow-500/10', count: 0 });
+        tiles.push({ id: 'microCourse', label: 'دوره', icon: AcademicCapIcon, color: 'text-teal-400', bg: 'bg-teal-500/10', count: 0 });
+        tiles.push({ id: 'shop', label: 'جایزه', icon: TrophyIcon, color: 'text-amber-400', bg: 'bg-amber-500/10', count: 0 });
 
-    return (
-        <div onClick={onOpen} className="cursor-pointer relative flex flex-col items-center justify-center w-full aspect-square max-h-[300px] mx-auto group">
-            {/* Glowing Backdrop */}
-            <div className="absolute inset-0 bg-[var(--color-primary-500)] opacity-10 blur-[50px] rounded-full group-hover:opacity-20 transition-opacity duration-500"></div>
-            
-            {/* SVG Ring */}
-            <div className="relative w-64 h-64 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]">
-                    <circle cx="50%" cy="50%" r="70" stroke="rgba(255,255,255,0.05)" strokeWidth="12" fill="none" />
-                    <circle 
-                        cx="50%" 
-                        cy="50%" 
-                        r="70" 
-                        stroke="url(#gradient)" 
-                        strokeWidth="12" 
-                        fill="none" 
-                        strokeDasharray="440" 
-                        strokeDashoffset={strokeDashoffset}
-                        strokeLinecap="round"
-                        className="transition-all duration-1000 ease-out"
-                    />
-                    <defs>
-                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#a855f7" />
-                            <stop offset="100%" stopColor="#d8b4fe" />
-                        </linearGradient>
-                    </defs>
-                </svg>
-                
-                {/* Inner Content */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
-                    <span className="text-gray-400 text-sm tracking-widest uppercase mb-1">{jalaliDate.month} {jalaliDate.year}</span>
-                    <h2 className="text-6xl font-bold text-white drop-shadow-md">{jalaliDate.day}</h2>
-                    {weather && (
-                         <div className="flex items-center gap-1 mt-2 text-sm text-gray-300 bg-white/5 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/5">
-                            <SunIcon className="w-4 h-4 text-yellow-300" />
-                            <span>{weather.temp}°</span>
-                         </div>
+        const today = new Date();
+        const dayNum = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(today);
+        const monthName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long' }).format(today);
+        const dayName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long' }).format(today);
+
+        const TileButton: React.FC<{ item: any }> = ({ item }) => (
+            <button 
+                onClick={() => setActiveView(item.id as ViewState)}
+                className={`group relative flex flex-col items-center justify-center p-2 rounded-2xl backdrop-blur-md border border-white/5 transition-all duration-300 aspect-square ${item.bg} hover:bg-white/10 active:scale-95`}
+            >
+                <div className="relative">
+                    <item.icon className={`w-8 h-8 mb-2 transition-transform group-hover:scale-110 ${item.color}`} />
+                    {item.count > 0 && (
+                        <span className="absolute -top-2 -right-3 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full shadow-sm border border-[#020617] animate-badge-pop z-10">
+                            {item.count}
+                        </span>
                     )}
                 </div>
-            </div>
-            
-            <div className="mt-4 text-center">
-                 <p className="text-[var(--color-primary-300)] font-bold text-sm tracking-wide">سطح {level}</p>
-            </div>
-        </div>
-    );
-};
+                <span className="text-xs font-medium text-slate-300 group-hover:text-white">{item.label}</span>
+            </button>
+        );
 
-const GlassCard: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void; title?: React.ReactNode }> = ({ children, className = "", onClick, title }) => (
-    <div onClick={onClick} className={`glass-card p-5 relative overflow-hidden ${onClick ? 'glass-card-hover cursor-pointer' : ''} ${className}`}>
-        {title && <div className="mb-3 font-bold text-gray-200">{title}</div>}
-        {children}
-    </div>
-);
+        const hour = new Date().getHours();
+        const isNight = hour < 6 || hour > 18;
 
-
-// Minimal Habit Tracker for dashboard
-const QuickHabitTracker: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void, addXp: (amount: number) => void }> = ({ userData, onUpdateUserData, addXp }) => {
-    const [completedHabits, setCompletedHabits] = useState<Record<string, boolean>>({});
-    const today = new Date().toISOString().split('T')[0];
-    
-    useEffect(() => {
-        const stored = localStorage.getItem(`benvis_habits_${today}`);
-        if (stored) setCompletedHabits(JSON.parse(stored));
-    }, [today]);
-
-    const toggleHabit = (habit: Habit) => {
-        const newState = !completedHabits[habit.name];
-        const newCompletions = { ...completedHabits, [habit.name]: newState };
-        setCompletedHabits(newCompletions);
-        localStorage.setItem(`benvis_habits_${today}`, JSON.stringify(newCompletions));
-        
-        if(habit.type === 'good') addXp(newState ? 10 : -10);
-    };
-
-    return (
-        <div className="space-y-3">
-            {userData.habits.slice(0, 3).map(habit => {
-                const isDone = !!completedHabits[habit.name];
-                return (
-                    <div key={habit.name} onClick={() => toggleHabit(habit)} className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group">
-                        <div className="flex items-center gap-3">
-                            <div className={`w-2 h-8 rounded-full transition-colors ${isDone ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-gray-700 group-hover:bg-gray-600'}`}></div>
-                            <span className={`text-sm font-medium ${isDone ? 'text-gray-400 line-through' : 'text-gray-200'}`}>{habit.name}</span>
+        return (
+            <div className="space-y-6 animate-fadeIn pb-24">
+                {/* Apple-Style Dynamic Header */}
+                <div className="pt-2 px-1">
+                     {/* Top Row: Settings & Logo */}
+                     <div className="flex justify-between items-center mb-4 px-2">
+                        <button onClick={() => setActiveView('settings')} className="p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 backdrop-blur-xl transition-colors shadow-lg">
+                            <CogIcon className="w-6 h-6 text-slate-200" />
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xl font-bold tracking-tight text-white">Benvis</span>
+                            <BenvisLogoIcon className="w-8 h-8" />
                         </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'bg-green-500 border-green-500' : 'border-gray-600'}`}>
-                             {isDone && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                     </div>
+
+                     {/* Hero Cards: Date & Weather - Apple Style Glow */}
+                     <div className="grid grid-cols-2 gap-4 mb-6">
+                        {/* Date Card */}
+                        <div className="bg-[#1c1c1e]/90 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] aspect-square flex flex-col items-center justify-center text-center shadow-[0_0_40px_-10px_rgba(255,255,255,0.1)] relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
+                             {/* Glass Shine Effect */}
+                             <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                             <div className="relative z-10 flex flex-col items-center">
+                                 <span className="text-sm font-bold text-[#ff3b30] uppercase tracking-widest mb-0.5 drop-shadow-sm">{dayName}</span>
+                                 <span className="text-[5.5rem] font-medium text-white tracking-tighter leading-none drop-shadow-2xl">{dayNum}</span>
+                                 <span className="text-lg text-slate-400 mt-1 font-medium">{monthName}</span>
+                             </div>
                         </div>
+
+                        {/* Greeting/Weather Card */}
+                        <div className={`backdrop-blur-3xl border border-white/10 rounded-[2.5rem] aspect-square flex flex-col items-center justify-center text-center relative overflow-hidden group hover:scale-[1.02] transition-all duration-500
+                             ${isNight 
+                                ? 'bg-gradient-to-b from-[#2e1065] to-[#0f172a] shadow-[0_0_40px_-5px_rgba(99,102,241,0.4)] border-indigo-500/20' 
+                                : 'bg-gradient-to-b from-[#fbbf24] to-[#ea580c] shadow-[0_0_40px_-5px_rgba(251,146,60,0.5)] border-orange-400/30'
+                             }`}>
+                             
+                             {/* Ambient Glow Orb */}
+                             <div className={`absolute top-[-50%] left-[-50%] w-[200%] h-[200%] rounded-full blur-3xl opacity-40 animate-pulse ${isNight ? 'bg-indigo-500' : 'bg-yellow-300'}`}></div>
+
+                             <div className="relative z-10 flex flex-col items-center">
+                                 {isNight ? (
+                                    <MoonIcon className="w-16 h-16 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] mb-3" />
+                                 ) : (
+                                    <SunIcon className="w-16 h-16 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.8)] mb-3" />
+                                 )}
+                                 <span className="text-xl font-bold text-white drop-shadow-md whitespace-nowrap">{getGreeting()}</span>
+                                 <span className="text-xs text-white/80 mt-1 font-medium bg-white/10 px-3 py-1 rounded-full backdrop-blur-md border border-white/10 max-w-[120px] truncate">
+                                     {userData.fullName}
+                                 </span>
+                             </div>
+                        </div>
+                     </div>
+
+                     {/* Spotlight Search Input */}
+                     <div className="relative z-20 group mx-1">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-600/30 via-blue-600/30 to-cyan-600/30 rounded-2xl blur opacity-30 group-focus-within:opacity-70 transition duration-500"></div>
+                        <div className="relative flex items-center bg-[#1c1c1e]/90 backdrop-blur-xl rounded-2xl border border-white/10 px-4 py-4 shadow-2xl transition-all">
+                            <MagnifyingGlassIcon className="w-6 h-6 text-slate-400 ml-3" />
+                            <input 
+                                type="text" 
+                                value={commandInput}
+                                onChange={(e) => setCommandInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCommandSubmit()}
+                                placeholder={successFeedback ? "" : "از بنویس بخواهید (مثلا: جلسه فردا)"}
+                                className="flex-grow bg-transparent text-white placeholder-slate-500 outline-none text-lg font-normal"
+                                disabled={isProcessing}
+                            />
+                            {successFeedback && (
+                                <div className="absolute left-0 right-0 top-0 bottom-0 flex items-center justify-center pointer-events-none backdrop-blur-md rounded-2xl bg-black/40">
+                                    <div className="flex items-center gap-2 text-green-400 text-sm font-bold animate-bounce-in">
+                                        <CheckCircleIcon className="w-5 h-5"/>
+                                        {successFeedback}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-3 border-r border-white/10 pr-3 mr-1">
+                                <button 
+                                    onClick={handleVoiceInput}
+                                    className={`transition-all ${isListening ? 'text-red-500 animate-pulse scale-110' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    <MicrophoneIcon className="w-6 h-6" />
+                                </button>
+                                {commandInput.trim() && (
+                                    <button 
+                                        onClick={handleCommandSubmit}
+                                        disabled={isProcessing}
+                                        className="bg-blue-600 text-white p-1.5 rounded-full animate-fadeIn"
+                                    >
+                                        <ArrowUpIcon className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                     </div>
+                </div>
+
+                {/* App Grid */}
+                <div className="grid grid-cols-4 gap-4 px-2 mt-6">
+                    {tiles.map(item => <TileButton key={item.id} item={item} />)}
+                </div>
+
+                {/* Widgets - Lazy Loaded to prevent 429 */}
+                <div className="space-y-4 px-1 mt-4">
+                     {/* Summary Row */}
+                     <StatsSummaryWidget userData={userData} />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <DailyBriefingWidget briefing={briefing} isLoading={isBriefingLoading} onRefresh={loadBriefing} />
+                        <MoodWeatherWidget />
+                        <EnergyPredictionWidget userData={userData} />
+                        <FinancialWidget userData={userData} onOpen={() => setActiveView('finance')} />
+                        <DailyPromptWidget prompt={dailyPrompt} isLoading={isPromptLoading} onRefresh={loadPrompt} onPromptClick={() => setActiveView('assistant')} />
+                        <SmartNotificationWidget userData={userData} />
+                        <HabitReschedulerWidget userData={userData} onUpdateUserData={onUpdateUserData} />
                     </div>
-                )
-            })}
-        </div>
-    )
-}
-
-
-const BottomNav: React.FC<{ activeView: View; setActiveView: (view: View) => void }> = ({ activeView, setActiveView }) => {
-    const navItems: { view: View; icon: React.FC<{ className?: string }>; label: string }[] = [
-        { view: 'settings', icon: CogIcon, label: 'تنظیمات' },
-        { view: 'goals', icon: TargetIcon, label: 'اهداف' },
-        { view: 'dashboard', icon: BenvisLogoIcon, label: 'خانه' },
-        { view: 'finance', icon: FinanceIcon, label: 'مالی' },
-        { view: 'assistant', icon: SparklesIcon, label: 'دستیار' },
-    ];
-
-    return (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
-            <div className="glass-card px-2 py-2 flex items-center gap-1 rounded-full shadow-2xl border-white/10 bg-[#0F0B1A]/80 backdrop-blur-xl">
-                {navItems.map(item => (
-                    <button
-                        key={item.view}
-                        onClick={() => setActiveView(item.view)}
-                        className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${
-                            activeView === item.view 
-                                ? 'bg-[var(--color-primary-600)] text-white shadow-[0_0_15px_rgba(168,85,247,0.5)] transform -translate-y-2' 
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                        }`}
-                    >
-                        <item.icon className={`w-6 h-6 ${activeView === item.view ? 'animate-pulse' : ''}`} />
-                        {activeView === item.view && <span className="absolute -bottom-8 text-[10px] font-bold text-[var(--color-primary-300)] whitespace-nowrap opacity-0 animate-fadeIn">{item.label}</span>}
-                    </button>
-                ))}
+                </div>
             </div>
-        </div>
-    );
-};
-
-const LevelUpModal: React.FC<{ newLevel: number, onSeen: () => void }> = ({ newLevel, onSeen }) => (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 modal-backdrop" onClick={onSeen}>
-        <div className="glass-card p-8 text-center flex flex-col items-center animate-bounce-in max-w-xs w-full border-[var(--color-primary-500)] neon-border">
-            <LevelUpIcon className="w-20 h-20 text-[var(--color-primary-400)] mb-4 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]" />
-            <h2 className="text-3xl font-bold text-white">تبریک!</h2>
-            <p className="text-lg text-gray-300 mt-2">شما به سطح <span className="text-[var(--color-primary-400)] font-bold text-xl">{newLevel}</span> رسیدید!</p>
-            <button onClick={onSeen} className="mt-6 w-full py-2 bg-[var(--color-primary-600)] rounded-full font-bold text-white hover:bg-[var(--color-primary-500)] transition-colors shadow-lg">ادامه</button>
-        </div>
-    </div>
-);
-
-const AchievementModal: React.FC<{ achievement: Achievement, onSeen: () => void }> = ({ achievement, onSeen }) => {
-    const Icon = achievement.icon;
-    return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 modal-backdrop" onClick={onSeen}>
-             <div className="glass-card p-8 text-center flex flex-col items-center animate-bounce-in max-w-xs w-full border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]">
-                <Icon className="w-20 h-20 text-yellow-400 mb-4 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)]" />
-                <h2 className="text-2xl font-bold text-yellow-300">دست‌آورد جدید!</h2>
-                <p className="text-lg font-bold mt-2 text-white">{achievement.title}</p>
-                <p className="text-sm text-gray-300 mt-1">{achievement.description}</p>
-                <button onClick={onSeen} className="mt-6 w-full py-2 bg-yellow-600 rounded-full font-bold text-white hover:bg-yellow-500 transition-colors shadow-lg">عالیه!</button>
-            </div>
-        </div>
-    );
-};
-
-// Main Dashboard Screen
-const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
-    userData, onUpdateUserData, addXp, levelUpInfo, onLevelUpSeen, newAchievements, onAchievementsSeen,
-}) => {
-    const [activeView, setActiveView] = useState<View>('dashboard');
-    const [isQuietZoneOpen, setIsQuietZoneOpen] = useState(false);
-    const [isWeeklyReviewOpen, setIsWeeklyReviewOpen] = useState(false);
-    const [isCalendarViewOpen, setIsCalendarViewOpen] = useState(false);
-    const [isFinancialViewOpen, setIsFinancialViewOpen] = useState(false);
-    const [isNightRoutineOpen, setIsNightRoutineOpen] = useState(false);
-    const [isEisenhowerOpen, setIsEisenhowerOpen] = useState(false);
-    const [isTimeBlockingOpen, setIsTimeBlockingOpen] = useState(false);
-    const [isLifeWheelOpen, setIsLifeWheelOpen] = useState(false);
-    const [isXpShopOpen, setIsXpShopOpen] = useState(false);
-    const [isWomenHealthOpen, setIsWomenHealthOpen] = useState(false);
-    
-    const [currentAchievement, setCurrentAchievement] = useState<AchievementID | null>(null);
-    const [assistantState, setAssistantState] = useState<{ initialTab: string, initialJournalText: string }>({ initialTab: 'chat', initialJournalText: '' });
-    
-    // Data states
-    const [weather, setWeather] = useState<{ temp: number; condition: string } | null>(null);
-    const [dailyBriefing, setDailyBriefing] = useState<string | null>(null);
-    const [predictiveAlert, setPredictiveAlert] = useState<{title: string, message: string} | null>(null);
-
-    const fetchDashboardData = useCallback(async () => {
-        try {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const cacheKey = `benvis_dash_v2_${todayStr}`;
-            const cached = localStorage.getItem(cacheKey);
-            if(cached) {
-                const data = JSON.parse(cached);
-                setWeather(data.weather);
-                setDailyBriefing(data.dailyBriefing);
-                return;
-            }
-
-             // Mock data for visual
-            setWeather({ temp: 24, condition: 'Clear' });
-            
-        } catch (e) { console.error(e) }
-    }, []);
-
-    useEffect(() => { 
-        fetchDashboardData(); 
-        // Simple predictive alert logic based on user data
-        if (userData.goals.filter(g => g.progress < 20).length > 3) {
-            setPredictiveAlert({
-                title: 'ترافیک اهداف',
-                message: 'تعداد اهداف فعال با پیشرفت کم زیاد است. پیشنهاد می‌کنیم روی ۳ هدف اصلی تمرکز کنید.'
-            });
-        }
-    }, [fetchDashboardData, userData.goals]);
-    
-    useEffect(() => { if (newAchievements.length > 0 && !currentAchievement) setCurrentAchievement(newAchievements[0]); }, [newAchievements, currentAchievement]);
-
-    const handleAchievementSeen = () => {
-        const remaining = newAchievements.slice(1);
-        onAchievementsSeen();
-        setCurrentAchievement(remaining[0] || null);
+        );
     };
-    
-    const renderView = () => {
-        switch (activeView) {
-            case 'goals': return <GoalsView userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />;
-            case 'finance': return null; // Handled via modal effect
-            case 'settings': return <SettingsView userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'assistant': return <SmartAssistantView userData={userData} onUpdateUserData={onUpdateUserData} initialTab={assistantState.initialTab} initialJournalText={assistantState.initialJournalText} />;
-            default: return null;
-        }
-    };
-    
-    useEffect(() => {
-        if (activeView === 'finance') {
-            setIsFinancialViewOpen(true);
-            setActiveView('dashboard');
-        }
-    }, [activeView]);
 
     return (
-        <div className="min-h-screen bg-[#020005] text-gray-100 pb-24 relative overflow-x-hidden font-sans">
-             {/* Background Ambient Glows */}
-             <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-                <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[var(--color-primary-900)] rounded-full blur-[100px] opacity-40"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-900 rounded-full blur-[100px] opacity-30"></div>
-             </div>
+        <div className="min-h-screen bg-[#000000] text-slate-200 p-4 md:p-6 max-w-4xl mx-auto relative font-[Vazirmatn]">
+             {levelUpInfo && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl animate-fadeIn" onClick={onLevelUpSeen}>
+                    <div className="text-center animate-bounce-in bg-[#1c1c1e] p-10 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
+                         <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/20 to-transparent pointer-events-none"></div>
+                         <LevelUpIcon className="w-32 h-32 text-yellow-400 mx-auto mb-6 filter drop-shadow-[0_0_30px_rgba(250,204,21,0.6)]" />
+                         <h2 className="text-5xl font-black text-white mb-2 tracking-tight">تبریک!</h2>
+                         <p className="text-2xl text-yellow-300 font-medium">سطح {levelUpInfo.newLevel}</p>
+                         <p className="text-slate-400 mt-8 text-sm opacity-80">برای ادامه ضربه بزنید</p>
+                    </div>
+                </div>
+            )}
 
-            {levelUpInfo && <LevelUpModal newLevel={levelUpInfo.newLevel} onSeen={onLevelUpSeen} />}
-            {currentAchievement && ALL_ACHIEVEMENTS[currentAchievement] && <AchievementModal achievement={ALL_ACHIEVEMENTS[currentAchievement]} onSeen={handleAchievementSeen} />}
-
-            <div className="relative z-10 p-6 flex flex-col gap-6 max-w-md mx-auto">
-                
-                {activeView !== 'dashboard' ? (
-                     <div className="pb-4">{renderView()}</div>
-                ) : (
-                    <>
-                        {/* Header / Command Center */}
-                        <header className="flex flex-col gap-4">
-                            <div className="flex justify-between items-center px-2">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[var(--color-primary-600)] to-blue-500 p-0.5 cursor-pointer" onClick={() => setIsXpShopOpen(true)}>
-                                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                                            <UserCircleIcon className="w-8 h-8 text-gray-300" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h1 className="font-bold text-lg">سلام، {userData.fullName.split(' ')[0]}</h1>
-                                        <button onClick={() => setIsXpShopOpen(true)} className="text-xs text-yellow-400 flex items-center gap-1">
-                                             <StarIcon className="w-3 h-3" />
-                                             {userData.xp} XP
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                     {userData.gender === 'female' && (
-                                         <button onClick={() => setIsWomenHealthOpen(true)} className="p-2 rounded-full bg-pink-500/20 hover:bg-pink-500/30 transition-colors" title="سلامت زنان">
-                                            <HealthIcon className="w-6 h-6 text-pink-400" />
-                                         </button>
-                                     )}
-                                     <button onClick={() => setIsLifeWheelOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="چرخ زندگی">
-                                        <ChartPieIcon className="w-6 h-6 text-pink-300" />
-                                    </button>
-                                    <button onClick={() => setIsEisenhowerOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="اولویت‌بندی (آیزنهاور)">
-                                        <Squares2X2Icon className="w-6 h-6 text-violet-300" />
-                                    </button>
-                                    <button onClick={() => setIsTimeBlockingOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="برنامه‌ریزی روزانه">
-                                        <QueueListIcon className="w-6 h-6 text-blue-300" />
-                                    </button>
-                                    <button onClick={() => setIsWeeklyReviewOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="مرور هفتگی">
-                                        <ClipboardIcon className="w-6 h-6 text-green-300" />
-                                    </button>
-                                    <button onClick={() => setIsNightRoutineOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="روتین شبانه">
-                                        <MoonIcon className="w-6 h-6 text-[var(--color-primary-300)]" />
-                                    </button>
-                                </div>
-                            </div>
-                            <BenvisWidget userData={userData} onUpdateUserData={onUpdateUserData} />
-                        </header>
-
-                        {/* Central Hub */}
-                        <div className="my-4">
-                            <CentralHubWidget onOpen={() => setIsCalendarViewOpen(true)} weather={weather} level={userData.level} xp={userData.xp} />
-                        </div>
-
-                        {/* Dashboard Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Daily Stats / Tasks */}
-                            <GlassCard className="col-span-1 min-h-[140px]" title={<div className="flex items-center gap-2"><TargetIcon className="w-4 h-4 text-blue-400"/> اهداف</div>}>
-                                <div className="text-3xl font-bold text-white">{userData.goals.filter(g => g.progress < 100).length}</div>
-                                <p className="text-xs text-gray-400 mt-1">فعال</p>
-                                <div className="mt-3 w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-500 w-2/3 rounded-full"></div>
-                                </div>
-                            </GlassCard>
-
-                             {/* Habits - Quick View */}
-                             <GlassCard className="col-span-1 min-h-[140px]" title={<div className="flex items-center gap-2"><HabitsIcon className="w-4 h-4 text-green-400"/> عادت‌ها</div>}>
-                                 <QuickHabitTracker userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />
-                             </GlassCard>
-
-                            {/* Financial - Mini */}
-                            <GlassCard onClick={() => setIsFinancialViewOpen(true)} className="col-span-2 sm:col-span-1 flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs text-gray-400">موجودی کل</p>
-                                    <p className="text-lg font-bold text-white mt-1">
-                                        {new Intl.NumberFormat('fa-IR').format((userData.financialAccounts || []).reduce((sum, a) => sum + Number(a.balance), 0))}
-                                    </p>
-                                </div>
-                                <div className="p-2 rounded-full bg-green-500/20 text-green-400">
-                                    <FinanceIcon className="w-6 h-6" />
-                                </div>
-                            </GlassCard>
-
-                             {/* Focus Mode CTA */}
-                            <GlassCard onClick={() => setIsQuietZoneOpen(true)} className="col-span-2 sm:col-span-1 bg-gradient-to-br from-[var(--color-primary-900)]/50 to-blue-900/20 border-blue-500/30 group">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-bold text-blue-200">شروع تمرکز</span>
-                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-[0_0_10px_rgba(59,130,246,0.5)] group-hover:scale-110 transition-transform">
-                                        <MoonIcon className="w-4 h-4 text-white" />
-                                    </div>
-                                </div>
-                            </GlassCard>
-                            
-                            {/* AI Insights Area */}
-                            <div className="col-span-2 space-y-4">
-                                <PredictiveAlertsWidget alert={predictiveAlert} isLoading={false} onToggleMode={(isOn) => onUpdateUserData({...userData, isLowFrictionMode: isOn})} />
-                                {dailyBriefing && <DailyBriefingWidget briefing={dailyBriefing} isLoading={false} onRefresh={fetchDashboardData} />}
-                                <MoodWeatherWidget />
-                                <FinancialInsightsWidget userData={userData} />
-                            </div>
-
-                        </div>
-                    </>
-                )}
-            </div>
-
-            <BottomNav activeView={activeView} setActiveView={setActiveView} />
-
-            {/* Modals */}
-            {isQuietZoneOpen && <QuietZoneView goals={userData.goals} onUpdateGoals={(goals) => onUpdateUserData({...userData, goals})} onClose={() => setIsQuietZoneOpen(false)} addXp={addXp} />}
-            {isWeeklyReviewOpen && <WeeklyReviewView userData={userData} onClose={() => setIsWeeklyReviewOpen(false)} />}
-            {isCalendarViewOpen && <CalendarView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsCalendarViewOpen(false)} />}
-            {isFinancialViewOpen && <FinancialView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsFinancialViewOpen(false)} />}
-            {isNightRoutineOpen && <NightRoutineView userData={userData} onClose={() => setIsNightRoutineOpen(false)} />}
-            {isEisenhowerOpen && <EisenhowerMatrixView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsEisenhowerOpen(false)} />}
-            {isTimeBlockingOpen && <TimeBlockingView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsTimeBlockingOpen(false)} />}
-            {isLifeWheelOpen && <LifeWheelView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsLifeWheelOpen(false)} />}
-            {isXpShopOpen && <XpShopView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsXpShopOpen(false)} />}
-            {isWomenHealthOpen && <WomenHealthView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsWomenHealthOpen(false)} />}
+            {activeView === 'dashboard' && renderDashboard()}
+            {activeView === 'goals' && <GoalsView userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />}
+            {activeView === 'focus' && <QuietZoneView goals={userData.goals || []} onUpdateGoals={(g) => onUpdateUserData({...userData, goals: g})} onClose={() => setActiveView('dashboard')} addXp={addXp} />}
+            {activeView === 'calendar' && <CalendarView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'finance' && <FinancialView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'assistant' && (
+                <div className="h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                         <button onClick={() => setActiveView('dashboard')} className="flex items-center text-slate-400 hover:text-white transition-colors">
+                            <ArrowLeftIcon className="w-6 h-6 mr-2" /> بازگشت
+                        </button>
+                        <h2 className="font-bold text-lg">دستیار هوشمند</h2>
+                    </div>
+                    <SmartAssistantView userData={userData} onUpdateUserData={onUpdateUserData} />
+                </div>
+            )}
+            {activeView === 'settings' && (
+                 <div className="pb-20">
+                    <div className="flex justify-between items-center mb-6">
+                        <button onClick={() => setActiveView('dashboard')} className="text-slate-400 hover:text-white transition-colors"><ArrowLeftIcon className="w-6 h-6" /></button>
+                        <h2 className="text-xl font-bold">تنظیمات</h2>
+                    </div>
+                    <SettingsView userData={userData} onUpdateUserData={onUpdateUserData} />
+                 </div>
+            )}
+            {activeView === 'womenHealth' && <WomenHealthView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'social' && <SocialCirclesView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'microCourse' && <MicroCourseView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'shop' && <XpShopView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'review' && <WeeklyReviewView userData={userData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'nightRoutine' && <NightRoutineView userData={userData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'eisenhower' && <EisenhowerMatrixView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'timeBlocking' && <TimeBlockingView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'lifeWheel' && <LifeWheelView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
         </div>
     );
 };
