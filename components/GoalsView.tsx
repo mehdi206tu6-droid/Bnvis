@@ -1,5 +1,7 @@
+
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { OnboardingData, UserGoal, JourneyMilestone, Habit } from '../types';
+import { OnboardingData, UserGoal, JourneyMilestone, Habit, KeyResult, SmartCriteria } from '../types';
 import { goalIcons, PlusIcon, PencilIcon, TrashIcon, ShareIcon, SparklesIcon, JourneyIcon, CheckCircleIcon, TargetIcon, CalendarIcon, ClockIcon, ChartBarIcon, ArrowUpIcon, ArrowDownIcon, FlagIcon, HabitsIcon } from './icons';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -104,6 +106,10 @@ const GoalFormModal: React.FC<{
     const [error, setError] = useState('');
     const [targetDate, setTargetDate] = useState(goal?.targetDate || '');
     const [pomodorosToComplete, setPomodorosToComplete] = useState(goal?.pomodorosToComplete || 0);
+    
+    // OKR State
+    const [isOKR, setIsOKR] = useState(goal?.type === 'okr');
+    const [keyResults, setKeyResults] = useState<KeyResult[]>(goal?.keyResults || [{ id: 'kr-1', title: '', baseline: 0, current: 0, target: 100, unit: '%' }]);
 
     const toggleLinkedHabit = (habitName: string) => {
         setLinkedHabits(prev =>
@@ -135,8 +141,84 @@ const GoalFormModal: React.FC<{
         }
     };
 
-    const handleSaveSimple = () => {
+    const handleMakeSmart = async () => {
+        if (!title.trim()) {
+             setError("لطفا ابتدا یک عنوان وارد کنید.");
+             return;
+        }
+        setIsGenerating(true);
+        const prompt = `Transform the goal "${title}" into a structured SMART goal. 
+        Provide Specific, Measurable, Achievable, Relevant, Time-bound details. 
+        Also provide a list of up to 6 small actionable steps and an effort estimation (Low, Medium, High).
+        Respond ONLY with a valid JSON object matching the schema. Persian text.`;
+        
+        const responseSchema = {
+            type: Type.OBJECT,
+            properties: {
+                specific: { type: Type.STRING },
+                measurable: { type: Type.STRING },
+                achievable: { type: Type.STRING },
+                relevant: { type: Type.STRING },
+                timeBound: { type: Type.STRING },
+                effort: { type: Type.STRING },
+                actionSteps: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+        };
+        
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: { responseMimeType: "application/json", responseSchema }
+            });
+            const result: SmartCriteria = JSON.parse(response.text.trim());
+            
+            onSave({
+                 id: goal?.id || `goal-${Date.now()}`,
+                 type: 'smart',
+                 title: title.trim(),
+                 icon: icon,
+                 progress: goal?.progress || 0,
+                 progressHistory: goal?.progressHistory || [{ date: new Date().toISOString().split('T')[0], progress: 0 }],
+                 smartCriteria: result,
+                 targetDate: targetDate
+            });
+        } catch (e) {
+            console.error(e);
+            setError("خطا در تبدیل به SMART");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleSaveSimpleOrOKR = () => {
         if (!title.trim() || !icon) return;
+        
+        if (isOKR) {
+            const validKRs = keyResults.filter(kr => kr.title.trim() !== '');
+            if (validKRs.length === 0) {
+                setError("لطفا حداقل یک نتیجه کلیدی (KR) وارد کنید.");
+                return;
+            }
+            // Calculate OKR progress average
+            const totalProgress = validKRs.reduce((sum, kr) => {
+                const krProgress = Math.min(100, Math.max(0, ((kr.current - kr.baseline) / (kr.target - kr.baseline)) * 100));
+                return sum + krProgress;
+            }, 0) / validKRs.length;
+
+            onSave({
+                id: goal?.id || `goal-${Date.now()}`,
+                type: 'okr',
+                title: title.trim(),
+                icon: icon,
+                progress: Math.round(totalProgress),
+                progressHistory: goal?.progressHistory || [{ date: new Date().toISOString().split('T')[0], progress: Math.round(totalProgress) }],
+                keyResults: validKRs,
+                targetDate: targetDate || undefined,
+            });
+            return;
+        }
+
         onSave({
             id: goal?.id || `goal-${Date.now()}`,
             type: 'simple',
@@ -151,6 +233,20 @@ const GoalFormModal: React.FC<{
         });
     };
 
+    const updateKR = (index: number, field: keyof KeyResult, value: any) => {
+        const newKRs = [...keyResults];
+        newKRs[index] = { ...newKRs[index], [field]: value };
+        setKeyResults(newKRs);
+    };
+    
+    const addKR = () => {
+        setKeyResults([...keyResults, { id: `kr-${Date.now()}`, title: '', baseline: 0, current: 0, target: 100, unit: '%' }]);
+    };
+
+    const removeKR = (index: number) => {
+        setKeyResults(keyResults.filter((_, i) => i !== index));
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
             <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700 rounded-[var(--radius-card)] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto modal-panel" onClick={e => e.stopPropagation()}>
@@ -163,39 +259,107 @@ const GoalFormModal: React.FC<{
                         placeholder="عنوان هدف یا رویای شما..."
                         className="w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"
                     />
-                     <button onClick={handleGenerate} disabled={isGenerating || !title.trim()} className="w-full flex items-center justify-center gap-2 py-3 bg-violet-800 rounded-[var(--radius-md)] font-semibold hover:bg-violet-700 transition-colors disabled:bg-slate-600">
-                        <SparklesIcon className="w-5 h-5"/>
-                        {isGenerating ? 'در حال ساختن نقشه راه...' : 'ساختن سفر با هوش مصنوعی'}
-                    </button>
+                    
+                     {/* AI Generation Options */}
+                    <div className="flex gap-2">
+                        <button onClick={handleGenerate} disabled={isGenerating || !title.trim()} className="flex-1 flex items-center justify-center gap-2 py-2 bg-violet-800/50 border border-violet-600 rounded-[var(--radius-md)] text-sm hover:bg-violet-700 transition-colors disabled:bg-slate-800 disabled:border-slate-700">
+                            <SparklesIcon className="w-4 h-4"/>
+                            {isGenerating ? '...' : 'ساخت سفر (Journey)'}
+                        </button>
+                         <button onClick={handleMakeSmart} disabled={isGenerating || !title.trim()} className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-800/50 border border-blue-600 rounded-[var(--radius-md)] text-sm hover:bg-blue-700 transition-colors disabled:bg-slate-800 disabled:border-slate-700">
+                            <SparklesIcon className="w-4 h-4"/>
+                            {isGenerating ? '...' : 'تبدیل به SMART'}
+                        </button>
+                    </div>
+                    
                     {error && <p className="text-sm text-red-400 text-center">{error}</p>}
+                    
                     <div className="relative flex py-2 items-center">
                         <div className="flex-grow border-t border-slate-600"></div>
-                        <span className="flex-shrink mx-4 text-slate-400 text-sm">یا</span>
+                        <span className="flex-shrink mx-4 text-slate-400 text-sm">یا تنظیم دستی</span>
                         <div className="flex-grow border-t border-slate-600"></div>
                     </div>
-                    <h3 className="text-center font-semibold text-slate-300">یک هدف ساده بسازید</h3>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-sm text-slate-400 block mb-1 text-right">تاریخ هدف (اختیاری)</label>
-                            <input
-                                type="date"
-                                value={targetDate}
-                                onChange={(e) => setTargetDate(e.target.value)}
-                                className="w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-sm text-slate-400 block mb-1 text-right">پومودورو برای تکمیل</label>
-                            <input
-                                type="number"
-                                value={pomodorosToComplete || ''}
-                                onChange={(e) => setPomodorosToComplete(Number(e.target.value))}
-                                min="0"
-                                placeholder="مثلا: ۱۰"
-                                className="w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"
-                            />
-                        </div>
+                    
+                    <div className="flex gap-2 bg-slate-800 p-1 rounded-lg mb-2">
+                        <button onClick={() => setIsOKR(false)} className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${!isOKR ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>ساده</button>
+                        <button onClick={() => setIsOKR(true)} className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${isOKR ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>OKR</button>
                     </div>
+                    
+                    {isOKR ? (
+                         <div className="space-y-3">
+                            <p className="text-xs text-slate-400">نتایج کلیدی (Key Results) قابل اندازه‌گیری تعریف کنید.</p>
+                            {keyResults.map((kr, index) => (
+                                <div key={index} className="bg-slate-800/50 p-3 rounded-md space-y-2 border border-slate-700">
+                                    <div className="flex justify-between items-start">
+                                        <input type="text" placeholder="عنوان نتیجه کلیدی" value={kr.title} onChange={(e) => updateKR(index, 'title', e.target.value)} className="w-full bg-transparent text-sm border-b border-slate-600 focus:border-violet-500 outline-none pb-1"/>
+                                        {keyResults.length > 1 && <button onClick={() => removeKR(index)} className="text-slate-500 hover:text-red-400 ml-2"><TrashIcon className="w-4 h-4"/></button>}
+                                    </div>
+                                    <div className="flex gap-2 text-xs">
+                                        <div className="flex-1">
+                                            <label className="block text-slate-500 mb-1">شروع</label>
+                                            <input type="number" value={kr.baseline} onChange={(e) => updateKR(index, 'baseline', Number(e.target.value))} className="w-full bg-slate-700 rounded p-1"/>
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-slate-500 mb-1">هدف</label>
+                                            <input type="number" value={kr.target} onChange={(e) => updateKR(index, 'target', Number(e.target.value))} className="w-full bg-slate-700 rounded p-1"/>
+                                        </div>
+                                         <div className="flex-1">
+                                            <label className="block text-slate-500 mb-1">واحد</label>
+                                            <input type="text" value={kr.unit} onChange={(e) => updateKR(index, 'unit', e.target.value)} className="w-full bg-slate-700 rounded p-1" placeholder="%"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <button onClick={addKR} className="w-full py-2 border border-dashed border-slate-600 text-slate-400 rounded-md hover:bg-slate-800 text-sm flex items-center justify-center gap-1">
+                                <PlusIcon className="w-4 h-4"/> افزودن نتیجه کلیدی
+                            </button>
+                         </div>
+                    ) : (
+                        <>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm text-slate-400 block mb-1 text-right">تاریخ هدف (اختیاری)</label>
+                                <input
+                                    type="date"
+                                    value={targetDate}
+                                    onChange={(e) => setTargetDate(e.target.value)}
+                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm text-slate-400 block mb-1 text-right">پومودورو برای تکمیل</label>
+                                <input
+                                    type="number"
+                                    value={pomodorosToComplete || ''}
+                                    onChange={(e) => setPomodorosToComplete(Number(e.target.value))}
+                                    min="0"
+                                    placeholder="مثلا: ۱۰"
+                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"
+                                />
+                            </div>
+                        </div>
+                        {availableHabits.length > 0 && (
+                            <div className="space-y-2 pt-4 border-t border-slate-700">
+                                <h4 className="font-semibold text-slate-300">عادت‌های مرتبط (اختیاری)</h4>
+                                <p className="text-xs text-slate-400">با انجام این عادت‌ها، پیشرفت این هدف خودکار زیاد می‌شود.</p>
+                                 <div className="max-h-32 overflow-y-auto space-y-1 bg-slate-800/40 p-2 rounded-md">
+                                    {availableHabits.map(habitName => (
+                                        <label key={habitName} className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-700/50">
+                                            <input
+                                                type="checkbox"
+                                                checked={linkedHabits.includes(habitName)}
+                                                onChange={() => toggleLinkedHabit(habitName)}
+                                                className="w-5 h-5 rounded text-violet-600 bg-slate-700 border-slate-600 focus:ring-violet-500"
+                                            />
+                                            <span>{habitName}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        </>
+                    )}
+                    
                     <div className="grid grid-cols-6 gap-3 bg-slate-800/40 p-3 rounded-[var(--radius-md)]">
                         {Object.entries(goalIcons).map(([key, Icon]) => (
                             <button key={key} type="button" onClick={() => setIcon(key)} className={`p-2 rounded-md flex items-center justify-center aspect-square transition-all w-full ${icon === key ? 'bg-violet-600 ring-2 ring-violet-400' : 'bg-slate-700 hover:bg-slate-600'}`}>
@@ -203,28 +367,10 @@ const GoalFormModal: React.FC<{
                             </button>
                         ))}
                     </div>
-                    {availableHabits.length > 0 && (
-                        <div className="space-y-2 pt-4 border-t border-slate-700">
-                            <h4 className="font-semibold text-slate-300">عادت‌های مرتبط (اختیاری)</h4>
-                            <p className="text-xs text-slate-400">با انجام این عادت‌ها، پیشرفت این هدف خودکار زیاد می‌شود.</p>
-                             <div className="max-h-32 overflow-y-auto space-y-1 bg-slate-800/40 p-2 rounded-md">
-                                {availableHabits.map(habitName => (
-                                    <label key={habitName} className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-700/50">
-                                        <input
-                                            type="checkbox"
-                                            checked={linkedHabits.includes(habitName)}
-                                            onChange={() => toggleLinkedHabit(habitName)}
-                                            className="w-5 h-5 rounded text-violet-600 bg-slate-700 border-slate-600 focus:ring-violet-500"
-                                        />
-                                        <span>{habitName}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+
                 </div>
                 <div className="mt-6 flex gap-4">
-                    <button onClick={handleSaveSimple} className="flex-1 py-2 bg-slate-700 rounded-[var(--radius-md)] font-semibold hover:bg-slate-600 transition-colors">ذخیره هدف ساده</button>
+                    <button onClick={handleSaveSimpleOrOKR} className="flex-1 py-2 bg-slate-700 rounded-[var(--radius-md)] font-semibold hover:bg-slate-600 transition-colors">ذخیره</button>
                     <button onClick={onClose} className="flex-1 py-2 bg-slate-600 rounded-[var(--radius-md)] font-semibold hover:bg-slate-500 transition-colors">لغو</button>
                 </div>
             </div>
@@ -337,6 +483,101 @@ const ProgressHistoryModal: React.FC<{ goal: UserGoal; onClose: () => void }> = 
     );
 };
 
+const HabitSuggestionModal: React.FC<{
+    goal: UserGoal;
+    onAddHabits: (habits: string[]) => void;
+    onClose: () => void;
+}> = ({ goal, onAddHabits, onClose }) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            const prompt = `Suggest 3 simple, daily habits to help achieve the goal: "${goal.title}". Respond ONLY with a valid JSON array of strings in Persian.`;
+            try {
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } }
+                });
+                setSuggestions(JSON.parse(response.text.trim()));
+            } catch (e) {
+                console.error(e);
+                setSuggestions(["مطالعه روزانه", "تمرین مستمر", "یادداشت برداری"]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchSuggestions();
+    }, [goal.title]);
+
+    const [selected, setSelected] = useState<string[]>([]);
+
+    const toggle = (h: string) => setSelected(prev => prev.includes(h) ? prev.filter(x => x !== h) : [...prev, h]);
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
+            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold mb-4">پیشنهاد عادت برای {goal.title}</h3>
+                {isLoading ? <p className="text-center">در حال فکر کردن...</p> : (
+                    <div className="space-y-2">
+                        {suggestions.map(h => (
+                            <div key={h} onClick={() => toggle(h)} className={`p-3 rounded-md cursor-pointer border ${selected.includes(h) ? 'bg-violet-900/50 border-violet-500' : 'bg-slate-800 border-slate-700'}`}>
+                                {h}
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <button onClick={() => onAddHabits(selected)} disabled={selected.length === 0} className="w-full mt-4 py-2 bg-violet-600 rounded-md disabled:bg-slate-700">افزودن</button>
+            </div>
+        </div>
+    );
+};
+
+const ChallengeGeneratorModal: React.FC<{
+    userData: OnboardingData;
+    onUpdateUserData: (data: OnboardingData) => void;
+    onClose: () => void;
+}> = ({ userData, onUpdateUserData, onClose }) => {
+     return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
+            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold mb-2">چالش ساز</h3>
+                <p className="text-slate-400 text-sm mb-4">این ویژگی به زودی فعال می‌شود.</p>
+                <button onClick={onClose} className="w-full py-2 bg-slate-700 rounded-md">بستن</button>
+            </div>
+        </div>
+    );
+};
+
+const AiCoachModal: React.FC<{
+    goal: UserGoal;
+    onClose: () => void;
+    onConvertToJourney: (goal: UserGoal) => void;
+    onAddHabits: (habits: string[], goalId: string) => void;
+    isConverting: boolean;
+}> = ({ goal, onClose, onConvertToJourney, isConverting }) => {
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
+            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-sm text-center" onClick={e => e.stopPropagation()}>
+                <div className="w-16 h-16 bg-violet-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <SparklesIcon className="w-8 h-8 text-violet-400"/>
+                </div>
+                <h3 className="font-bold mb-2">کوچ هوشمند</h3>
+                <p className="text-sm text-slate-400 mb-6">برای هدف "{goal.title}" چه کمکی نیاز دارید؟</p>
+                
+                <div className="space-y-3">
+                     <button onClick={() => onConvertToJourney(goal)} disabled={isConverting} className="w-full py-3 bg-blue-600/20 border border-blue-500/50 text-blue-300 rounded-lg hover:bg-blue-600/30 transition-colors flex items-center justify-center gap-2">
+                        <JourneyIcon className="w-5 h-5"/>
+                        {isConverting ? 'در حال تبدیل...' : 'تبدیل به سفر (Journey)'}
+                    </button>
+                </div>
+                 <button onClick={onClose} className="mt-4 text-slate-500 text-sm hover:text-slate-300">بستن</button>
+            </div>
+        </div>
+    );
+};
+
 interface GoalsViewProps {
     userData: OnboardingData;
     onUpdateUserData: (data: OnboardingData) => void;
@@ -422,6 +663,25 @@ const GoalsView: React.FC<GoalsViewProps> = ({ userData, onUpdateUserData, addXp
         if (progressDiff > 0) {
             addXp(progressDiff * XP_PER_PROGRESS_POINT);
         }
+    };
+
+    const handleUpdateKR = (goalId: string, krIndex: number, newValue: number) => {
+        const updatedGoals = goals.map(g => {
+            if (g.id === goalId && g.keyResults) {
+                const newKRs = [...g.keyResults];
+                newKRs[krIndex] = { ...newKRs[krIndex], current: newValue };
+                
+                // Recalculate total progress
+                const totalProgress = newKRs.reduce((sum, kr) => {
+                     const krProgress = Math.min(100, Math.max(0, ((kr.current - kr.baseline) / (kr.target - kr.baseline)) * 100));
+                     return sum + krProgress;
+                }, 0) / newKRs.length;
+                
+                 return { ...g, keyResults: newKRs, progress: Math.round(totalProgress) };
+            }
+            return g;
+        });
+        onUpdateUserData({ ...userData, goals: updatedGoals });
     };
     
     const handleShareGoal = async (goal: UserGoal) => {
@@ -592,343 +852,98 @@ const GoalsView: React.FC<GoalsViewProps> = ({ userData, onUpdateUserData, addXp
             {aiCoachModal && <AiCoachModal goal={aiCoachModal} onClose={() => setAiCoachModal(null)} onConvertToJourney={handleConvertToJourney} onAddHabits={handleAddHabits} isConverting={isConvertingToJourney === aiCoachModal.id} />}
             {isKeywordGeneratorOpen && <KeywordGoalGeneratorModal onSave={handleSaveGoal} onClose={() => setIsKeywordGeneratorOpen(false)} />}
 
-
-            <div className="flex justify-start items-center gap-2 mb-4">
-                <span className="text-sm text-slate-400">مرتب‌سازی:</span>
-                <SortButton sortKey="progress" label="پیشرفت" icon={ChartBarIcon} />
-                <SortButton sortKey="targetDate" label="تاریخ هدف" icon={CalendarIcon} />
-                {sortConfig.key !== 'manual' && (
-                    <button onClick={() => setSortConfig({ key: 'manual', direction: 'asc' })} className="text-xs text-slate-400 hover:text-white">حذف فیلتر</button>
-                )}
-            </div>
-            <div className="space-y-4">
-                {sortedGoals.map(goal => {
-                    const Icon = goalIcons[goal.icon] || TargetIcon;
-                    const completedMilestones = goal.milestones?.filter(ms => ms.tasks.length > 0 && ms.tasks.every(t => t.completed)).length || 0;
-                    const totalMilestones = goal.milestones?.length || 0;
-
-                    return (
-                        <div key={goal.id} className="bg-slate-800/50 border border-slate-700 rounded-[var(--radius-card)] p-4">
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-4 flex-grow">
-                                    <Icon className="w-8 h-8 text-violet-400 flex-shrink-0 mt-1"/>
-                                    <div>
-                                        <span className="font-bold text-lg">{goal.title}</span>
-                                        {goal.type === 'journey' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 mr-2">سفر</span>}
-                                    </div>
-                                </div>
-                                <div className="flex gap-1 relative flex-shrink-0">
-                                    <button onClick={() => setAiCoachModal(goal)} className="p-2 text-slate-400 hover:text-white" title="مربی هوشمند">
-                                        <SparklesIcon className="w-5 h-5"/>
-                                    </button>
-                                    <button onClick={() => setHistoryGoal(goal)} className="p-2 text-slate-400 hover:text-white" title="تاریخچه پیشرفت"><ChartBarIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => setIsEditing(goal)} className="p-2 text-slate-400 hover:text-white" title="ویرایش"><PencilIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => handleShareGoal(goal)} className="p-2 text-slate-400 hover:text-white" title="اشتراک گذاری"><ShareIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => handleDeleteGoal(goal.id)} className="p-2 text-slate-400 hover:text-red-500" title="حذف"><TrashIcon className="w-5 h-5"/></button>
-                                </div>
-                            </div>
-                             <div className="mt-3">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-sm font-medium text-slate-400">پیشرفت</span>
-                                    <span className="text-sm font-bold text-violet-400">{goal.progress}%</span>
-                                </div>
-                                <div className="w-full bg-slate-700 rounded-full h-2.5">
-                                    <div className="bg-violet-500 h-2.5 rounded-full progress-bar-fill" style={{ width: `${goal.progress}%` }}></div>
-                                </div>
-                                {goal.type === 'simple' ? (
-                                    <input type="range" min="0" max="100" value={goal.progress} onChange={(e) => handleProgressChange(goal.id, parseInt(e.target.value, 10))} className="w-full h-2 bg-transparent rounded-lg appearance-none cursor-pointer mt-3 accent-violet-500"/>
-                                ) : (
-                                    <button onClick={() => { setSelectedGoal(goal); setView('detail'); }} className="w-full mt-3 text-center py-2 bg-slate-700/80 rounded-md text-sm font-semibold hover:bg-slate-700">مشاهده جزئیات سفر</button>
-                                )}
-                            </div>
-                             <div className="flex items-center gap-4 text-xs text-slate-400 mt-2 border-t border-slate-700 pt-2">
-                                {goal.targetDate && (
-                                    <div className="flex items-center gap-1.5">
-                                        <CalendarIcon className="w-4 h-4" />
-                                        <span>{new Date(goal.targetDate).toLocaleDateString('fa-IR')}</span>
-                                    </div>
-                                )}
-                                {goal.pomodorosToComplete && (
-                                    <div className="flex items-center gap-1.5">
-                                        <ClockIcon className="w-4 h-4" />
-                                        <span>{goal.pomodorosCompleted || 0} / {goal.pomodorosToComplete} پومودورو</span>
-                                    </div>
-                                )}
-                                {goal.type === 'journey' && totalMilestones > 0 && (
-                                    <div className="flex items-center gap-1.5 font-semibold">
-                                        <CheckCircleIcon className="w-4 h-4 text-green-400" />
-                                        <span>{completedMilestones} / {totalMilestones} مایلستون</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-             <div className="w-full mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <button onClick={() => setIsChallengeModalOpen(true)} className="w-full py-3 bg-slate-700/70 text-violet-300 rounded-[var(--radius-md)] font-semibold flex items-center justify-center gap-2 hover:bg-slate-700">
-                    <FlagIcon className="w-6 h-6"/>
-                    <span>ایجاد چالش</span>
-                </button>
-                 <button onClick={() => setIsKeywordGeneratorOpen(true)} className="w-full py-3 bg-slate-700/70 text-violet-300 rounded-[var(--radius-md)] font-semibold flex items-center justify-center gap-2 hover:bg-slate-700">
-                    <SparklesIcon className="w-6 h-6"/>
-                    <span>ساخت هدف با AI</span>
-                </button>
-                <button onClick={() => setIsCreating(true)} className="w-full py-3 bg-violet-800 rounded-[var(--radius-md)] font-semibold flex items-center justify-center gap-2 hover:bg-violet-700">
-                    <PlusIcon className="w-6 h-6"/>
-                    <span>هدف یا سفر جدید</span>
-                </button>
-            </div>
-        </div>
-    );
-};
-
-// --- AI MODAL COMPONENTS ---
-
-const AiCoachModal: React.FC<{
-    goal: UserGoal;
-    onClose: () => void;
-    onConvertToJourney: (goal: UserGoal) => void;
-    onAddHabits: (habits: string[], goalId: string) => void;
-    isConverting: boolean;
-}> = ({ goal, onClose, onConvertToJourney, onAddHabits, isConverting }) => {
-    const [analysis, setAnalysis] = useState<any | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const analyzeGoal = async () => {
-            const history = goal.progressHistory?.slice(-5).map(h => `On ${h.date}, progress was ${h.progress}%`).join('. ') || 'No progress history.';
-            const prompt = `Act as a helpful and encouraging AI goal coach. Analyze the user's goal:
-            - Goal: "${goal.title}"
-            - Type: ${goal.type}
-            - Current Progress: ${goal.progress}%
-            - Recent Progress History: ${history}
-            - Linked Habits: ${goal.linkedHabits?.join(', ') || 'None'}
-            
-            Based on this, provide a concise analysis and actionable advice in Persian.
-            - If progress seems slow or stalled, identify potential blockers.
-            - Provide 2-3 concrete 'nextSteps'.
-            - Suggest 2 new 'suggestedHabits' that would help.
-            - Give a short, encouraging 'summary'.
-            
-            Respond ONLY with a valid JSON object.`;
-
-            const responseSchema = {
-                type: Type.OBJECT,
-                properties: {
-                    summary: { type: Type.STRING },
-                    nextSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
-                }
-            };
-            
-            try {
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                    config: { responseMimeType: 'application/json', responseSchema }
-                });
-                setAnalysis(JSON.parse(response.text.trim()));
-            } catch (error) {
-                console.error("AI Coach error:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        analyzeGoal();
-    }, [goal]);
-    
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
-            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-lg modal-panel" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold mb-2 flex items-center gap-2"><SparklesIcon className="w-6 h-6 text-violet-400" /> مربی هوشمند برای «{goal.title}»</h3>
-                {isLoading ? (
-                    <div className="flex justify-center items-center h-48"><p className="animate-pulse">در حال تحلیل...</p></div>
-                ) : !analysis ? (
-                    <p>خطا در تحلیل.</p>
-                ) : (
-                    <div className="space-y-4">
-                        <p className="text-sm italic bg-slate-800/60 p-3 rounded-md text-slate-300">"{analysis.summary}"</p>
-                        
-                        <div>
-                            <h4 className="font-semibold mb-2">قدم‌های بعدی پیشنهادی:</h4>
-                            <ul className="space-y-2 list-disc list-inside text-slate-300">
-                                {analysis.nextSteps.map((step: string, i: number) => <li key={i}>{step}</li>)}
-                            </ul>
-                        </div>
-
-                        {analysis.suggestedHabits.length > 0 && (
-                            <div>
-                                <h4 className="font-semibold mb-2">عادت‌های پیشنهادی برای افزودن:</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {analysis.suggestedHabits.map((habit: string, i: number) => <span key={i} className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full">{habit}</span>)}
-                                </div>
-                                <button onClick={() => onAddHabits(analysis.suggestedHabits, goal.id)} className="w-full mt-3 py-2 text-sm bg-green-700 rounded-md">افزودن عادت‌ها و اتصال</button>
-                            </div>
-                        )}
-                        
-                        {goal.type === 'simple' && (
-                             <button onClick={() => onConvertToJourney(goal)} disabled={isConverting} className="w-full py-2 bg-violet-700 rounded-md flex items-center justify-center gap-2">
-                                {isConverting ? 'در حال تبدیل...' : <> <JourneyIcon className="w-5 h-5"/> تبدیل به سفر (نقشه راه)</>}
-                            </button>
-                        )}
-                    </div>
-                )}
-                 <button onClick={onClose} className="w-full mt-4 py-2 bg-slate-600 rounded-md">بستن</button>
-            </div>
-        </div>
-    );
-};
-
-const HabitSuggestionModal: React.FC<{
-    goal: UserGoal;
-    onAddHabits: (habitNames: string[]) => void;
-    onClose: () => void;
-}> = ({ goal, onAddHabits, onClose }) => {
-    const [suggestions, setSuggestions] = useState<string[]>([]);
-    const [selected, setSelected] = useState<string[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchSuggestions = async () => {
-            const prompt = `Based on the user's goal "${goal.title}", suggest 3-5 relevant habits (good or bad) that would help them achieve it. The response MUST be a valid JSON object with a single key "habits" containing an array of strings. The habits should be in Persian.`;
-            try {
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                    config: {
-                        responseMimeType: 'application/json',
-                        responseSchema: {
-                            type: Type.OBJECT,
-                            properties: { habits: { type: Type.ARRAY, items: { type: Type.STRING } } }
-                        }
-                    }
-                });
-                const result = JSON.parse(response.text.trim());
-                setSuggestions(result.habits || []);
-            } catch (error) {
-                console.error("Habit suggestion error:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchSuggestions();
-    }, [goal.title]);
-
-    const toggleSelection = (habit: string) => {
-        setSelected(prev => prev.includes(habit) ? prev.filter(h => h !== habit) : [...prev, habit]);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
-            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-md modal-panel" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold mb-2">عادت‌های پیشنهادی برای «{goal.title}»</h3>
-                {isLoading ? (
-                    <div className="flex justify-center items-center h-24"><SparklesIcon className="w-8 h-8 animate-pulse text-violet-400" /></div>
-                ) : (
-                    <div className="space-y-2 my-4">
-                        {suggestions.map((habit, i) => (
-                            <label key={i} className="flex items-center gap-3 p-3 rounded-md cursor-pointer bg-slate-800/70 hover:bg-slate-700/90">
-                                <input type="checkbox" checked={selected.includes(habit)} onChange={() => toggleSelection(habit)} className="w-5 h-5 rounded text-violet-500 bg-slate-700 border-slate-600 focus:ring-violet-500" />
-                                <span>{habit}</span>
-                            </label>
-                        ))}
-                    </div>
-                )}
-                <div className="flex gap-4 mt-4">
-                    <button onClick={onClose} className="flex-1 py-2 bg-slate-600 rounded-md">لغو</button>
-                    <button onClick={() => onAddHabits(selected)} disabled={selected.length === 0} className="flex-1 py-2 bg-violet-700 rounded-md disabled:bg-slate-500">افزودن</button>
+            {/* Toolbar */}
+             <div className="flex justify-between items-center mb-4 overflow-x-auto pb-2">
+                <div className="flex items-center gap-2">
+                     <span className="text-sm text-slate-400 whitespace-nowrap">مرتب‌سازی:</span>
+                     <SortButton sortKey="progress" label="پیشرفت" icon={ChartBarIcon} />
+                     <SortButton sortKey="targetDate" label="تاریخ" icon={CalendarIcon} />
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setIsChallengeModalOpen(true)} className="p-2 bg-slate-800 rounded-full text-yellow-400 hover:bg-slate-700">
+                        <FlagIcon className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setIsKeywordGeneratorOpen(true)} className="p-2 bg-slate-800 rounded-full text-violet-400 hover:bg-slate-700">
+                         <SparklesIcon className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setIsCreating(true)} className="p-2 bg-[var(--color-primary-600)] rounded-full text-white hover:bg-[var(--color-primary-700)] shadow-lg">
+                        <PlusIcon className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
-        </div>
-    );
-};
 
-const ChallengeGeneratorModal: React.FC<{
-    userData: OnboardingData;
-    onUpdateUserData: (data: OnboardingData) => void;
-    onClose: () => void;
-}> = ({ userData, onUpdateUserData, onClose }) => {
-    const [topic, setTopic] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<any>(null);
-
-    const handleGenerate = async () => {
-        if (!topic) return;
-        setIsLoading(true);
-        setResult(null);
-        try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: `Based on the user's goal to "${topic}", create a 7-day challenge.`,
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT, properties: {
-                            challengeTitle: { type: Type.STRING },
-                            durationDays: { type: Type.NUMBER },
-                            dailyTasks: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            successCriteria: { type: Type.STRING },
-                            xpReward: { type: Type.NUMBER }
-                        }
-                    }
-                }
-            });
-            setResult(JSON.parse(response.text.trim()));
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleAddChallenge = () => {
-        if (!result) return;
-        const newChallengeGoal: UserGoal = {
-            id: `challenge-${Date.now()}`,
-            type: 'journey',
-            title: `چالش: ${result.challengeTitle}`,
-            icon: 'Flag',
-            progress: 0,
-            description: result.successCriteria,
-            milestones: result.dailyTasks.map((task: string, i: number) => ({
-                id: `ms-chal-${Date.now()}-${i}`,
-                title: `روز ${i + 1}`,
-                description: '',
-                tasks: [{ id: `task-chal-${Date.now()}-${i}`, title: task, completed: false }]
-            }))
-        };
-        onUpdateUserData({ ...userData, goals: [...userData.goals, newChallengeGoal] });
-        onClose();
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal-backdrop" onClick={onClose}>
-            <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 w-full max-w-lg modal-panel" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold mb-4">ساخت چالش با هوش مصنوعی</h3>
-                {!result ? (
-                    <>
-                        <p className="text-sm text-slate-400 mb-4">در چه زمینه‌ای می‌خواهید یک چالش ۷ روزه برای خودتان بسازید؟ (مثال: مطالعه بیشتر، ورزش روزانه، تغذیه سالم)</p>
-                        <input type="text" value={topic} onChange={e => setTopic(e.target.value)} className="w-full bg-slate-800 p-2 rounded-md mb-4"/>
-                        <button onClick={handleGenerate} disabled={isLoading || !topic} className="w-full py-2 bg-violet-700 rounded-md disabled:bg-slate-500">
-                            {isLoading ? 'در حال ساخت...' : 'ساختن چالش'}
-                        </button>
-                    </>
+            {/* Goal List */}
+            <div className="space-y-4">
+                {sortedGoals.length === 0 ? (
+                     <div className="text-center py-10 text-slate-500">
+                        <TargetIcon className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                        <p>هنوز هدفی ندارید. با دکمه + شروع کنید!</p>
+                     </div>
                 ) : (
-                    <div className="space-y-3">
-                        <h4 className="font-bold text-xl text-violet-300">{result.challengeTitle}</h4>
-                        <p className="text-sm"><span className="font-semibold">معیار موفقیت:</span> {result.successCriteria}</p>
-                        <p className="text-sm"><span className="font-semibold">پاداش:</span> {result.xpReward} XP</p>
-                        <div className="space-y-1">
-                            {result.dailyTasks.map((task: string, i: number) => <p key={i} className="text-sm"><span className="font-semibold">روز {i+1}:</span> {task}</p>)}
-                        </div>
-                        <button onClick={handleAddChallenge} className="w-full py-2 bg-green-600 rounded-md mt-4">افزودن به اهداف</button>
-                    </div>
+                    sortedGoals.map(goal => {
+                        const Icon = goalIcons[goal.icon] || TargetIcon;
+                        return (
+                         <div key={goal.id} className="bg-slate-800/50 border border-slate-700 rounded-[var(--radius-card)] p-4 relative group">
+                            {/* Goal Card Content */}
+                            <div className="flex justify-between items-start mb-2">
+                                <div className="flex items-center gap-3 cursor-pointer" onClick={() => { if(goal.type==='journey') { setSelectedGoal(goal); setView('detail'); } else { setIsEditing(goal); } }}>
+                                     <div className="p-2 rounded-lg bg-slate-700 text-violet-400">
+                                         <Icon className="w-6 h-6" />
+                                     </div>
+                                     <div>
+                                         <h3 className="font-bold text-lg">{goal.title}</h3>
+                                         {goal.targetDate && <div className="text-xs text-slate-400 flex items-center gap-1"><CalendarIcon className="w-3 h-3"/> {new Date(goal.targetDate).toLocaleDateString('fa-IR')}</div>}
+                                     </div>
+                                </div>
+                                <div className="flex gap-1">
+                                     <button onClick={() => setAiCoachModal(goal)} className="p-1.5 text-violet-400 hover:bg-slate-700 rounded-full"><SparklesIcon className="w-4 h-4"/></button>
+                                     <button onClick={() => handleShareGoal(goal)} className="p-1.5 text-slate-400 hover:bg-slate-700 rounded-full"><ShareIcon className="w-4 h-4"/></button>
+                                     <button onClick={() => handleDeleteGoal(goal.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-full"><TrashIcon className="w-4 h-4"/></button>
+                                </div>
+                            </div>
+                            
+                            {goal.type === 'okr' && goal.keyResults && (
+                                <div className="space-y-2 mb-3">
+                                    {goal.keyResults.map((kr, idx) => (
+                                        <div key={kr.id} className="text-xs text-slate-300 flex justify-between items-center bg-slate-900/30 p-1.5 rounded">
+                                            <span>{kr.title}</span>
+                                            <div className="flex items-center gap-1">
+                                                <input 
+                                                    type="number" 
+                                                    value={kr.current} 
+                                                    onChange={(e) => handleUpdateKR(goal.id, idx, Number(e.target.value))}
+                                                    className="w-12 bg-slate-700 rounded text-center text-white outline-none"
+                                                />
+                                                <span className="text-slate-500">/ {kr.target} {kr.unit}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-3 mt-3">
+                                <div className="flex-grow bg-slate-700 rounded-full h-2.5 cursor-pointer relative" onClick={() => {
+                                    const newP = prompt("درصد پیشرفت جدید (0-100):", goal.progress.toString());
+                                    if(newP !== null && !isNaN(Number(newP))) handleProgressChange(goal.id, Math.min(100, Math.max(0, Number(newP))));
+                                }}>
+                                    <div className="bg-violet-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${goal.progress}%` }}></div>
+                                </div>
+                                <span className="text-xs font-bold w-8 text-right">{goal.progress}%</span>
+                            </div>
+                            
+                            {goal.pomodorosToComplete && (
+                                <div className="flex items-center gap-1 mt-2 text-xs text-slate-400">
+                                    <ClockIcon className="w-3 h-3" />
+                                    <span>{goal.pomodorosCompleted || 0} / {goal.pomodorosToComplete} پومودورو</span>
+                                </div>
+                            )}
+                         </div>
+                        )
+                    })
                 )}
             </div>
         </div>
     );
 };
-
 
 export default GoalsView;

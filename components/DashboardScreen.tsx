@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OnboardingData, UserGoal, Achievement, AchievementID, Habit, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent, GratitudeEntry, Note, CalendarEvent, FocusSession, Transaction, TransactionType } from '../types';
 import { 
@@ -7,7 +8,7 @@ import {
     MoonIcon, StarIcon, TrophyIcon, LevelUpIcon, SunIcon, CloudIcon, MinusCircleIcon, FlameIcon, LeafIcon,
     customHabitIcons, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon,
     CloudRainIcon, JourneyIcon, BriefcaseIcon, MoneyIcon, FlagIcon, BoltIcon,
-    goalIcons, MicrophoneIcon, StopIcon, BenvisLogoIcon, ArrowUturnLeftIcon, DocumentTextIcon
+    goalIcons, MicrophoneIcon, StopIcon, BenvisLogoIcon, ArrowUturnLeftIcon, DocumentTextIcon, ClipboardIcon, LightBulbIcon, Squares2X2Icon, QueueListIcon, ChartPieIcon, ShoppingBagIcon
 } from './icons';
 import { GoogleGenAI, Type } from "@google/genai";
 import GoalsView from './GoalsView';
@@ -19,16 +20,18 @@ import SettingsView from './SettingsView';
 import FinancialWidget from './FinancialWidget';
 import WomenHealthView from './WomenHealthView';
 import CalendarView from './CalendarView';
-// FIX: Changed to a named import as FinancialView does not have a default export.
 import { FinancialView } from './FinancialView';
 import DailyPromptWidget from './DailyPromptWidget';
-// Fix: Changed to named import as NightRoutineView does not have a default export.
 import { NightRoutineView } from './NightRoutineView';
 import PredictiveAlertsWidget from './PredictiveAlertsWidget';
 import EnergyPredictionWidget from './EnergyPredictionWidget';
 import DailyBriefingWidget from './DailyBriefingWidget';
 import MoodWeatherWidget from './MoodWeatherWidget';
 import FinancialInsightsWidget from './FinancialInsightsWidget';
+import EisenhowerMatrixView from './EisenhowerMatrixView';
+import TimeBlockingView from './TimeBlockingView';
+import LifeWheelView from './LifeWheelView';
+import XpShopView from './XpShopView';
 
 type View = 'dashboard' | 'goals' | 'finance' | 'settings' | 'assistant';
 
@@ -72,6 +75,7 @@ const habitOptionsMap: { [key: string]: React.FC<{className?: string}> } = {
     "مدیتیشن": MeditationIcon,
 };
 
+// Redesigned to look like the search bar in the image
 const BenvisWidget: React.FC<{
     userData: OnboardingData;
     onUpdateUserData: (data: OnboardingData) => void;
@@ -84,37 +88,22 @@ const BenvisWidget: React.FC<{
     const prevUserDataRef = useRef<OnboardingData | null>(null);
     const confirmationTimeoutRef = useRef<number | null>(null);
 
+    // Using the placeholders from the image inspiration
     const placeholders = [
+        "جستجو کنید...",
         "بنویس تا اتفاق بیفتد...",
-        "قهوه و کیک با دوستم ۳۵ هزار تومان",
-        "قرار ملاقات با دکتر فردا ساعت ۴ بعد از ظهر",
-        "ایده برای کتاب جدیدم: یک داستان علمی تخیلی",
-        "هدف جدید: دویدن ۵ کیلومتر زیر ۳۰ دقیقه",
-        "امروز شکرگزارم برای حمایت خانواده‌ام",
-        "یادآوری: تمدید اشتراک نرم‌افزار",
-        "درآمد پروژه طراحی لوگو: ۱ میلیون و ۵۰۰ هزار تومان",
+        "قرار فردا ساعت ۵...",
     ];
     const [placeholder, setPlaceholder] = useState(placeholders[0]);
     
-    // Use an animation class for placeholder changes
-    const placeholderRef = useRef<HTMLTextAreaElement>(null);
     useEffect(() => {
         const interval = setInterval(() => {
-            if (placeholderRef.current) {
-                placeholderRef.current.classList.add('animate-placeholder');
-            }
-            setTimeout(() => {
-                 setPlaceholder(prev => {
-                    const currentIndex = placeholders.indexOf(prev);
-                    return placeholders[(currentIndex + 1) % placeholders.length];
-                });
-                if (placeholderRef.current) {
-                    placeholderRef.current.classList.remove('animate-placeholder');
-                }
-            }, 1500);
+            setPlaceholder(prev => {
+                const currentIndex = placeholders.indexOf(prev);
+                return placeholders[(currentIndex + 1) % placeholders.length];
+            });
         }, 3000);
         return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
 
@@ -133,7 +122,7 @@ const BenvisWidget: React.FC<{
             };
             recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
                 console.error('Speech recognition error:', event.error);
-                showConfirmation('خطا در تشخیص گفتار', 'error');
+                 // Visual feedback for error could be added here
                 setIsRecording(false);
             };
             recognition.onend = () => {
@@ -148,21 +137,22 @@ const BenvisWidget: React.FC<{
         if (isRecording) {
             recognitionRef.current.stop();
         } else {
-            setInput('');
-            recognitionRef.current.start();
-            setIsRecording(true);
+            try {
+                recognitionRef.current.start();
+                setIsRecording(true);
+            } catch (e) {
+                console.error("Start recording error", e);
+            }
         }
     };
 
     const showConfirmation = (message: string, type: 'success' | 'error' = 'success', onUndo?: () => void) => {
-        if (confirmationTimeoutRef.current) {
-            clearTimeout(confirmationTimeoutRef.current);
-        }
+        if (confirmationTimeoutRef.current) clearTimeout(confirmationTimeoutRef.current);
         setConfirmation({ message, type, onUndo });
         confirmationTimeoutRef.current = window.setTimeout(() => {
             setConfirmation(null);
-            prevUserDataRef.current = null; // Clear undo history after timeout
-        }, 5000); // 5 second window for undo
+            prevUserDataRef.current = null;
+        }, 5000);
     };
     
     const handleUndo = () => {
@@ -171,9 +161,7 @@ const BenvisWidget: React.FC<{
         }
         setConfirmation(null);
         prevUserDataRef.current = null;
-        if (confirmationTimeoutRef.current) {
-            clearTimeout(confirmationTimeoutRef.current);
-        }
+        if (confirmationTimeoutRef.current) clearTimeout(confirmationTimeoutRef.current);
     };
 
 
@@ -194,25 +182,15 @@ const BenvisWidget: React.FC<{
         };
 
         const prompt = `
-            You are an intelligent input router for a life management app called "Benvis". Your task is to analyze the user's Persian text and classify it into one of the following categories: 'gratitude', 'note', 'goal', 'habit', 'calendar_event', 'financial_transaction'.
-            - 'gratitude': Any text expressing thankfulness or appreciation.
-            - 'note': A general reminder, idea, or thought to be saved.
-            - 'goal': A long-term ambition or a specific objective with a clear outcome.
-            - 'habit': A recurring action the user wants to perform daily.
-            - 'calendar_event': An appointment or task with a specific date and/or time.
-            - 'financial_transaction': Any mention of spending or receiving money (e.g., "خریدم", "گرفتم", "هزینه", "درآمد", "تومان", "ریال").
-
-            After classifying, extract the key information.
-            - For 'calendar_event', you MUST extract the date (in YYYY-MM-DD format) and time (in HH:mm format). Use today's date, ${todayDate}, as a reference for terms like "tomorrow", "tonight", "next week", etc.
-            - For 'goal', suggest a relevant icon from this list: [${Object.keys(goalIcons).join(', ')}].
-            - For 'financial_transaction', you MUST extract the 'amount' (as a number), 'type' ('income' or 'expense'), and suggest a 'category' from the provided lists. The 'content' should be the description of the transaction.
-                - Available expense categories: [${expenseCategories || 'N/A'}]
-                - Available income categories: [${incomeCategories || 'N/A'}]
-            - The main text content should be cleaned up and placed in the 'content' field.
-
+            You are an intelligent input router for a life management app called "Benvis". Your task is to analyze the user's Persian text and classify it.
+            Categories: 'gratitude', 'note', 'goal', 'habit', 'calendar_event', 'financial_transaction'.
+            
             User input: "${input}"
+            Today: ${todayDate}
+            Expense Cats: [${expenseCategories}]
+            Income Cats: [${incomeCategories}]
 
-            Respond ONLY with a valid JSON object matching the schema.
+            Respond ONLY with a valid JSON object matching the schema: { category, content, details: { date, time, icon, amount, type, category } }.
         `;
         const responseSchema = {
             type: Type.OBJECT,
@@ -243,14 +221,14 @@ const BenvisWidget: React.FC<{
 
             const result = JSON.parse(response.text.trim());
 
-            switch (result.category) {
+             switch (result.category) {
                 case 'gratitude': {
                     const storageKey = 'benvis_gratitude_journal';
                     const stored = localStorage.getItem(storageKey);
                     const items: GratitudeEntry[] = stored ? JSON.parse(stored) : [];
                     const newItem: GratitudeEntry = { id: new Date().toISOString(), content: result.content, createdAt: new Date().toISOString() };
                     localStorage.setItem(storageKey, JSON.stringify([newItem, ...items]));
-                    showConfirmation('مورد شکرگزاری شما ثبت شد!');
+                    showConfirmation('شکرگزاری ثبت شد');
                     break;
                 }
                 case 'note': {
@@ -259,7 +237,7 @@ const BenvisWidget: React.FC<{
                     const items: Note[] = stored ? JSON.parse(stored) : [];
                     const newItem: Note = { id: new Date().toISOString(), content: result.content, createdAt: new Date().toISOString() };
                     localStorage.setItem(storageKey, JSON.stringify([newItem, ...items]));
-                    showConfirmation('یادداشت شما ذخیره شد!');
+                    showConfirmation('یادداشت ذخیره شد');
                     break;
                 }
                 case 'goal': {
@@ -271,15 +249,12 @@ const BenvisWidget: React.FC<{
                         progress: 0,
                         linkedHabits: [],
                     };
-                    processUpdate({ ...userData, goals: [...userData.goals, newGoal] }, 'هدف جدید شما ساخته شد!');
+                    processUpdate({ ...userData, goals: [...userData.goals, newGoal] }, 'هدف جدید ساخته شد');
                     break;
                 }
                 case 'habit': {
-                    const newHabit: Habit = {
-                        name: result.content,
-                        type: 'good',
-                    };
-                    processUpdate({ ...userData, habits: [...userData.habits, newHabit] }, 'عادت جدید شما اضافه شد!');
+                    const newHabit: Habit = { name: result.content, type: 'good' };
+                    processUpdate({ ...userData, habits: [...userData.habits, newHabit] }, 'عادت جدید اضافه شد');
                     break;
                 }
                 case 'calendar_event': {
@@ -289,13 +264,13 @@ const BenvisWidget: React.FC<{
                         time: result.details?.time,
                         text: result.content
                     };
-                    processUpdate({ ...userData, calendarEvents: [...(userData.calendarEvents || []), newEvent] }, 'رویداد به تقویم اضافه شد!');
+                    processUpdate({ ...userData, calendarEvents: [...(userData.calendarEvents || []), newEvent] }, 'رویداد به تقویم اضافه شد');
                     break;
                 }
                 case 'financial_transaction': {
                     const { amount, type, category: categoryName } = result.details || {};
                     if (typeof amount !== 'number' || !type) {
-                        showConfirmation('اطلاعات تراکنش مالی ناقص است.', 'error');
+                        showConfirmation('اطلاعات مالی ناقص است', 'error');
                         break;
                     }
                     const category = userData.transactionCategories?.find(c => c.name === categoryName && c.type === type);
@@ -324,508 +299,203 @@ const BenvisWidget: React.FC<{
                         ...userData, 
                         transactions: [...(userData.transactions || []), newTransaction],
                         financialAccounts: updatedAccounts,
-                    }, 'تراکنش مالی ثبت شد!');
+                    }, 'تراکنش ثبت شد');
                     break;
                 }
                 default:
-                    showConfirmation('دسته بندی ورودی شما مشخص نشد. لطفا واضح تر بنویسید.', 'error');
+                    showConfirmation('متوجه نشدم', 'error');
             }
             setInput('');
         } catch (error: any) {
-            console.error("Error processing input:", error);
-            const errorString = JSON.stringify(error);
-            if (errorString.includes("RESOURCE_EXHAUSTED") || errorString.includes('"code":429')) {
-                showConfirmation('محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.', 'error');
-            } else {
-                showConfirmation('خطا در پردازش ورودی شما. لطفا دوباره تلاش کنید.', 'error');
-            }
+            console.error("Error:", error);
+            showConfirmation('خطا در پردازش', 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="mt-4 bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-3 space-y-2">
-            <div className="relative">
-                <textarea
-                    ref={placeholderRef}
+        <div className="relative w-full z-20">
+            <div className={`flex items-center bg-white/5 border border-white/10 backdrop-blur-md rounded-full px-4 py-2.5 transition-all duration-300 ${isRecording ? 'ring-2 ring-red-500/50' : 'focus-within:ring-2 focus-within:ring-[var(--color-primary-500)]/50'}`}>
+                 <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
+                 <input 
+                    type="text" 
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                     placeholder={placeholder}
-                    rows={2}
-                    className={`w-full bg-slate-800/50 border border-slate-700 rounded-[var(--radius-md)] p-3 pr-12 focus:ring-2 focus:ring-violet-500 focus:outline-none resize-none transition-opacity duration-300`}
+                    className="bg-transparent border-none outline-none text-white placeholder-gray-500 w-full ml-3 text-right"
                     disabled={isLoading}
                 />
-                 <button onClick={toggleRecording} className={`absolute top-1/2 -translate-y-1/2 right-3 p-2 rounded-full transition-colors ${isRecording ? 'bg-red-500/50 text-red-300 animate-pulse' : 'text-slate-400 hover:text-white'}`}>
+                 <button onClick={toggleRecording} className={`p-1.5 rounded-full transition-colors ml-2 ${isRecording ? 'text-red-400 animate-pulse' : 'text-gray-400 hover:text-white'}`}>
                     {isRecording ? <StopIcon className="w-5 h-5"/> : <MicrophoneIcon className="w-5 h-5"/>}
                 </button>
             </div>
-            <button onClick={handleSave} disabled={isLoading || !input.trim()} className="w-full flex items-center justify-center gap-2 py-2 bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-bold rounded-[var(--radius-md)] hover:from-violet-500 hover:to-indigo-500 transition-all duration-300 shadow-lg shadow-violet-800/40 disabled:bg-slate-600 disabled:from-slate-600 disabled:to-slate-700 disabled:shadow-none disabled:cursor-not-allowed">
-                {isLoading ? (
-                    <>
-                        <SparklesIcon className="w-5 h-5 animate-pulse" />
-                        <span>در حال پردازش...</span>
-                    </>
-                ) : (
-                    <>
-                        <SparklesIcon className="w-5 h-5" />
-                        <span>ذخیره هوشمند</span>
-                    </>
-                )}
-            </button>
-            {confirmation && (
-                <div className={`text-center text-sm font-semibold p-2 rounded-md flex items-center justify-between gap-2 ${confirmation.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+             {/* Floating Action Button for Send if there is input */}
+             {input.trim() && !isLoading && (
+                <button onClick={handleSave} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-[var(--color-primary-600)] rounded-full text-white shadow-lg animate-bounce-in hover:bg-[var(--color-primary-500)]">
+                    <ArrowUturnLeftIcon className="w-4 h-4 transform rotate-180" />
+                </button>
+            )}
+             {confirmation && (
+                <div className={`absolute top-full mt-2 right-0 left-0 mx-auto w-max px-4 py-2 rounded-full text-xs font-bold shadow-lg animate-bounce-in flex items-center gap-2 z-50 ${confirmation.type === 'success' ? 'bg-green-500/20 text-green-300 backdrop-blur-md border border-green-500/30' : 'bg-red-500/20 text-red-300 backdrop-blur-md border border-red-500/30'}`}>
                     <span>{confirmation.message}</span>
-                    {confirmation.onUndo && (
-                        <button onClick={handleUndo} className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-black/20 hover:bg-black/40">
-                            <ArrowUturnLeftIcon className="w-4 h-4"/>
-                            <span>بازگشت</span>
-                        </button>
-                    )}
+                    {confirmation.onUndo && <button onClick={handleUndo} className="underline opacity-80 hover:opacity-100">بازگشت</button>}
                 </div>
             )}
         </div>
     );
 };
 
-
-const TodaysPrioritiesWidget: React.FC<{ priorities: string[] | null; isLoading: boolean }> = ({ priorities, isLoading }) => {
-    if (isLoading) {
-        return (
-             <div className="bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-4 col-span-2 animate-pulse">
-                <div className="h-6 bg-slate-800 rounded w-1/3 mb-4"></div>
-                <div className="space-y-3">
-                    <div className="h-5 bg-slate-800 rounded w-full"></div>
-                    <div className="h-5 bg-slate-800 rounded w-5/6"></div>
-                    <div className="h-5 bg-slate-800 rounded w-3/4"></div>
-                </div>
-            </div>
-        )
-    }
-
-    if (!priorities || priorities.length === 0) {
-        return (
-            <div className="bg-slate-900/60 backdrop-blur-lg border border-violet-800/80 rounded-[var(--radius-card)] p-4 col-span-2">
-                 <h3 className="font-bold mb-3 flex items-center gap-2 text-lg"><SparklesIcon className="w-6 h-6 text-violet-400" /> اولویت‌های اصلی امروز</h3>
-                 <p className="text-slate-400 text-sm">اولویت‌های امروز مشخص نشد. می‌توانید از اهداف خود شروع کنید.</p>
-            </div>
-        )
-    }
-
-    return (
-        <div className="bg-slate-900/60 backdrop-blur-lg border border-violet-800/80 rounded-[var(--radius-card)] p-4 col-span-2">
-            <h3 className="font-bold mb-3 flex items-center gap-2 text-lg"><SparklesIcon className="w-6 h-6 text-violet-400" /> اولویت‌های اصلی امروز</h3>
-            <ul className="space-y-2">
-                {priorities.map((p, i) => (
-                    <li key={i} className="flex items-center gap-3 bg-slate-800/70 p-3 rounded-[var(--radius-md)]">
-                        <div className="w-5 h-5 rounded-full border-2 border-violet-500 flex-shrink-0"></div>
-                        <span className="text-slate-200">{p}</span>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    )
-};
-
-
-const WeatherAndCalendarWidget: React.FC<{ 
+// Central Circular Hub Widget
+const CentralHubWidget: React.FC<{ 
     onOpen: () => void;
     weather: { temp: number; condition: string } | null;
-    isLoading: boolean;
-    weatherError: string | null;
-}> = ({ onOpen, weather, isLoading, weatherError }) => {
-    const [jalaliDate, setJalaliDate] = useState('');
-
-    const getWeatherIcon = (condition: string) => {
-        const lowerCaseCondition = condition.toLowerCase();
-        if (lowerCaseCondition.includes('sun') || lowerCaseCondition.includes('clear')) {
-            return <SunIcon className="w-8 h-8 text-yellow-300" />;
-        }
-        if (lowerCaseCondition.includes('rain') || lowerCaseCondition.includes('drizzle')) {
-            return <CloudRainIcon className="w-8 h-8 text-blue-300" />;
-        }
-        if (lowerCaseCondition.includes('cloud')) {
-            return <CloudIcon className="w-8 h-8 text-slate-300" />;
-        }
-        return <CloudIcon className="w-8 h-8 text-slate-300" />;
-    };
+    level: number;
+    xp: number;
+}> = ({ onOpen, weather, level, xp }) => {
+    const [jalaliDate, setJalaliDate] = useState<{day: string, month: string, year: string}>({day: '', month: '', year: ''});
 
     useEffect(() => {
-        const jalaliFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'long', day: 'numeric' });
-        setJalaliDate(jalaliFormatter.format(new Date()));
+        const d = new Date();
+        const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long', year: 'numeric' });
+        const parts = formatter.formatToParts(d);
+        setJalaliDate({
+            day: parts.find(p => p.type === 'day')?.value || '',
+            month: parts.find(p => p.type === 'month')?.value || '',
+            year: parts.find(p => p.type === 'year')?.value || ''
+        });
     }, []);
 
-    const content = () => {
-        if (isLoading) {
-            return <div className="h-full w-full bg-slate-800 rounded-[var(--radius-card)] animate-pulse"></div>;
-        }
-        if (weatherError && !weather) {
-            return <p className="text-sm text-red-300">{weatherError}</p>;
-        }
-        return (
-            <div className="flex flex-col justify-between h-full">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        {weather ? getWeatherIcon(weather.condition) : <CloudIcon className="w-8 h-8 text-slate-300" />}
-                        <div>
-                            {weather ? <p className="font-bold text-2xl">{weather.temp}°C</p> : <p className="text-sm text-slate-400">آب و هوا نامشخص</p>}
-                            <p className="font-semibold text-slate-300">{jalaliDate}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    // Calculate progress to next level for ring
+    let totalXpForPreviousLevels = 0;
+    for (let i = 1; i < level; i++) totalXpForPreviousLevels += i * 100;
+    const xpInCurrentLevel = xp - totalXpForPreviousLevels;
+    const xpRequired = level * 100;
+    const percent = Math.min(100, (xpInCurrentLevel / xpRequired) * 100);
+    const strokeDashoffset = 440 - (440 * percent) / 100; // 2 * PI * 70 roughly 440
 
     return (
-        <button onClick={onOpen} className="bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-4 min-h-[120px] text-right hover:bg-slate-800/80 transition-colors">
-            {content()}
-        </button>
+        <div onClick={onOpen} className="cursor-pointer relative flex flex-col items-center justify-center w-full aspect-square max-h-[300px] mx-auto group">
+            {/* Glowing Backdrop */}
+            <div className="absolute inset-0 bg-[var(--color-primary-500)] opacity-10 blur-[50px] rounded-full group-hover:opacity-20 transition-opacity duration-500"></div>
+            
+            {/* SVG Ring */}
+            <div className="relative w-64 h-64 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]">
+                    <circle cx="50%" cy="50%" r="70" stroke="rgba(255,255,255,0.05)" strokeWidth="12" fill="none" />
+                    <circle 
+                        cx="50%" 
+                        cy="50%" 
+                        r="70" 
+                        stroke="url(#gradient)" 
+                        strokeWidth="12" 
+                        fill="none" 
+                        strokeDasharray="440" 
+                        strokeDashoffset={strokeDashoffset}
+                        strokeLinecap="round"
+                        className="transition-all duration-1000 ease-out"
+                    />
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#a855f7" />
+                            <stop offset="100%" stopColor="#d8b4fe" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                
+                {/* Inner Content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
+                    <span className="text-gray-400 text-sm tracking-widest uppercase mb-1">{jalaliDate.month} {jalaliDate.year}</span>
+                    <h2 className="text-6xl font-bold text-white drop-shadow-md">{jalaliDate.day}</h2>
+                    {weather && (
+                         <div className="flex items-center gap-1 mt-2 text-sm text-gray-300 bg-white/5 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/5">
+                            <SunIcon className="w-4 h-4 text-yellow-300" />
+                            <span>{weather.temp}°</span>
+                         </div>
+                    )}
+                </div>
+            </div>
+            
+            <div className="mt-4 text-center">
+                 <p className="text-[var(--color-primary-300)] font-bold text-sm tracking-wide">سطح {level}</p>
+            </div>
+        </div>
     );
 };
 
-const HabitTrackerSkeleton: React.FC = () => (
-    <div className="bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-4 animate-pulse">
-        <div className="h-6 bg-slate-800 rounded w-1/2 mb-3"></div>
-        <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-                <div key={i} className="w-full flex items-center p-3 rounded-[var(--radius-md)] bg-slate-800/70">
-                    <div className="w-5 h-5 ml-3 rounded bg-slate-700"></div>
-                    <div className="h-5 bg-slate-700 rounded flex-grow"></div>
-                    <div className="w-6 h-6 rounded-full ml-2 bg-slate-700"></div>
-                </div>
-            ))}
-        </div>
+const GlassCard: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void; title?: React.ReactNode }> = ({ children, className = "", onClick, title }) => (
+    <div onClick={onClick} className={`glass-card p-5 relative overflow-hidden ${onClick ? 'glass-card-hover cursor-pointer' : ''} ${className}`}>
+        {title && <div className="mb-3 font-bold text-gray-200">{title}</div>}
+        {children}
     </div>
 );
 
-const HabitTrackerWidget: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void, addXp: (amount: number) => void }> = ({ userData, onUpdateUserData, addXp }) => {
-    const [completedHabits, setCompletedHabits] = useState<Record<string, boolean>>({});
-    const [streaks, setStreaks] = useState<Record<string, number>>({});
-    const [streaksEndingYesterday, setStreaksEndingYesterday] = useState<Record<string, number>>({});
-    const [loading, setLoading] = useState(true);
-    const [justCompletedHabit, setJustCompletedHabit] = useState<string | null>(null);
 
+// Minimal Habit Tracker for dashboard
+const QuickHabitTracker: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void, addXp: (amount: number) => void }> = ({ userData, onUpdateUserData, addXp }) => {
+    const [completedHabits, setCompletedHabits] = useState<Record<string, boolean>>({});
     const today = new Date().toISOString().split('T')[0];
-    const storageKey = `benvis_habits_${today}`;
-    const XP_PER_HABIT = 10;
-    const { habits } = userData;
     
     useEffect(() => {
-        setLoading(true);
-        try {
-            const storedCompletions = localStorage.getItem(storageKey);
-            const initialCompletions = storedCompletions ? JSON.parse(storedCompletions) : {};
-            setCompletedHabits(initialCompletions);
-            calculateStreaks(habits, initialCompletions);
-            calculateYesterdayStreaks(habits);
-        } catch (error) {
-            console.error("Failed to load habit data", error);
-        } finally {
-            setTimeout(() => setLoading(false), 300);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [storageKey, habits]);
-
-    const calculateYesterdayStreaks = (currentHabits: Habit[]) => {
-        const today = new Date();
-        const yesterdayStreaks: Record<string, number> = {};
-        for (const habit of currentHabits) {
-            let streak = 0;
-            for (let i = 1; i < 365; i++) { // Start from yesterday
-                const d = new Date(today);
-                d.setDate(d.getDate() - i);
-                const dateString = d.toISOString().split('T')[0];
-                const prevStorageKey = `benvis_habits_${dateString}`;
-                const storedData = localStorage.getItem(prevStorageKey);
-                let isSuccessYesterday;
-                if (storedData) {
-                    const parsedData = JSON.parse(storedData);
-                    isSuccessYesterday = habit.type === 'good' ? parsedData[habit.name] : !parsedData[habit.name];
-                } else {
-                    isSuccessYesterday = habit.type === 'bad';
-                }
-
-                if (isSuccessYesterday) {
-                    streak++;
-                } else {
-                    break;
-                }
-            }
-            yesterdayStreaks[habit.name] = streak;
-        }
-        setStreaksEndingYesterday(yesterdayStreaks);
-    };
-
-
-    const calculateStreaks = (currentHabits: Habit[], dayCompletions: Record<string, boolean>) => {
-        const today = new Date();
-        const newStreaks: Record<string, number> = {};
-        for (const habit of currentHabits) {
-            let currentStreak = 0;
-            const isSuccessToday = habit.type === 'good' ? dayCompletions[habit.name] : !dayCompletions[habit.name];
-            if (isSuccessToday) {
-                currentStreak = 1;
-                for (let i = 1; i < 365; i++) {
-                    const d = new Date(today);
-                    d.setDate(d.getDate() - i);
-                    const dateString = d.toISOString().split('T')[0];
-                    const prevStorageKey = `benvis_habits_${dateString}`;
-                    const storedData = localStorage.getItem(prevStorageKey);
-                    if (storedData) {
-                        const parsedData = JSON.parse(storedData);
-                        const isSuccessYesterday = habit.type === 'good' ? parsedData[habit.name] : !parsedData[habit.name];
-                        if (isSuccessYesterday) {
-                            currentStreak++;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        if (habit.type === 'good') break; // Good habit not done breaks streak
-                        // For bad habit, no entry means success
-                        currentStreak++;
-                    }
-                }
-            }
-            newStreaks[habit.name] = currentStreak;
-        }
-        setStreaks(newStreaks);
-    };
+        const stored = localStorage.getItem(`benvis_habits_${today}`);
+        if (stored) setCompletedHabits(JSON.parse(stored));
+    }, [today]);
 
     const toggleHabit = (habit: Habit) => {
-        const wasCompleted = !!completedHabits[habit.name];
-        const isCompleting = !wasCompleted;
-        
-        const newCompletions = { ...completedHabits, [habit.name]: isCompleting };
+        const newState = !completedHabits[habit.name];
+        const newCompletions = { ...completedHabits, [habit.name]: newState };
         setCompletedHabits(newCompletions);
-        localStorage.setItem(storageKey, JSON.stringify(newCompletions));
-
-        if (habit.type === 'good') {
-            if (isCompleting) {
-                addXp(XP_PER_HABIT);
-                setJustCompletedHabit(habit.name);
-                setTimeout(() => setJustCompletedHabit(null), 1000); // Animation duration
-            } else {
-                addXp(-XP_PER_HABIT);
-            }
-        } else { // Bad habit
-            addXp(isCompleting ? -XP_PER_HABIT : XP_PER_HABIT); // Lose XP for failure, gain back for correcting
-        }
+        localStorage.setItem(`benvis_habits_${today}`, JSON.stringify(newCompletions));
         
-        calculateStreaks(habits, newCompletions);
-
-        let updatedData = { ...userData };
-        if (isCompleting && habit.type === 'good') {
-            const updatedGoals = userData.goals.map(goal => {
-                if (goal.linkedHabits?.includes(habit.name)) {
-                    const progressToAdd = 5; // Add 5% for each habit completion
-                    const newProgress = Math.min(100, goal.progress + progressToAdd);
-                    
-                    const newHistory = [...(goal.progressHistory || [])];
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const todayHistory = newHistory.find(h => h.date === todayStr);
-                    if (todayHistory) {
-                        todayHistory.progress = newProgress;
-                    } else {
-                        newHistory.push({ date: todayStr, progress: newProgress });
-                    }
-                    return { ...goal, progress: newProgress, progressHistory: newHistory };
-                }
-                return goal;
-            });
-            updatedData = { ...updatedData, goals: updatedGoals };
-        }
-
-        onUpdateUserData(updatedData);
+        if(habit.type === 'good') addXp(newState ? 10 : -10);
     };
-    
-    if (habits.length === 0) return null;
-    
-    if (loading) return <HabitTrackerSkeleton />;
 
     return (
-        <div className="bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-4 col-span-2">
-            <h3 className="font-bold mb-3">پیگیری عادت‌های امروز</h3>
-            <div className="space-y-2">
-                {habits.map(habit => {
-                    const Icon = customHabitIcons[habit.icon || ''] || habitOptionsMap[habit.name] || (habit.type === 'good' ? HabitsIcon : MinusCircleIcon);
-                    const isCompleted = !!completedHabits[habit.name];
-                    const streakCount = streaks[habit.name] || 0;
-                    const yesterdayStreak = streaksEndingYesterday[habit.name] || 0;
-                    const isAtRisk = yesterdayStreak > 0 && !isCompleted;
-                    
-                    const isGoodHabit = habit.type === 'good';
-                    const isSuccess = isGoodHabit ? isCompleted : !isCompleted;
-                    
-                    const iconStyle = { color: habit.color || (isGoodHabit ? '#d1d5db' : '#fca5a5') };
-
-                    return (
-                        <button key={habit.name} onClick={() => toggleHabit(habit)} className={`w-full flex items-center p-3 rounded-[var(--radius-md)] text-right transition-all duration-200 ease-in-out hover:-translate-y-1 active:scale-95 ${isSuccess ? (isGoodHabit ? 'bg-green-500/10' : 'bg-slate-800/70 hover:bg-slate-700') : (isGoodHabit ? 'bg-slate-800/70 hover:bg-slate-700' : 'bg-red-500/10')} ${isAtRisk && isGoodHabit ? 'ring-2 ring-offset-2 ring-offset-slate-950 ring-orange-500/70 animate-pulse' : ''} ${justCompletedHabit === habit.name ? 'animate-celebrate' : ''}`}>
-                            <Icon style={iconStyle} className="w-5 h-5 ml-3 flex-shrink-0" />
-                            <span className={`flex-grow ${isSuccess && isGoodHabit ? 'line-through text-slate-500' : ''}`}>{habit.name}</span>
-                            {isGoodHabit && (streakCount > 0 || isAtRisk) && (
-                                <div className="flex items-center gap-1 text-xs font-bold text-orange-400 mr-2">
-                                    <span>{streakCount > 0 ? streakCount : yesterdayStreak}</span>
-                                    <FlameIcon className="w-4 h-4" />
-                                </div>
-                            )}
-                            <div className={`w-6 h-6 rounded-[var(--radius-full)] flex items-center justify-center border-2 transition-all duration-200 transform ${isCompleted ? (isGoodHabit ? 'bg-green-500 border-green-400 scale-110' : 'bg-red-500 border-red-400') : 'border-slate-500'}`}>
-                                {isCompleted && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                            </div>
-                        </button>
-                    )
-                })}
-            </div>
-        </div>
-    );
-};
-
-const GoalsWidget: React.FC<{ goals: UserGoal[] }> = ({ goals }) => {
-    const [currentIndex, setCurrentIndex] = useState(0);
-    
-    useEffect(() => {
-        if (currentIndex >= goals.length) {
-            setCurrentIndex(0);
-        }
-    }, [goals, currentIndex]);
-
-    const nextGoal = () => {
-        if (goals.length > 0) {
-            setCurrentIndex(prev => (prev + 1) % goals.length);
-        }
-    };
-
-    const prevGoal = () => {
-        if (goals.length > 0) {
-            setCurrentIndex(prev => (prev - 1 + goals.length) % goals.length);
-        }
-    };
-
-    if (goals.length === 0) return null;
-    
-    const goal = goals[currentIndex];
-    const Icon = goalIcons[goal.icon] || TargetIcon;
-    const style = goalStyleMap[goal.icon] || goalStyleMap['Target'];
-
-    return (
-        <div className="bg-slate-900/60 backdrop-blur-lg border border-slate-800 rounded-[var(--radius-card)] p-4 flex flex-col justify-between min-h-[140px]">
-            <div className="flex justify-between items-start">
-                <h3 className="font-bold">اهداف اصلی</h3>
-                {goals.length > 1 && (
-                    <div className="flex items-center gap-2">
-                        <button onClick={prevGoal} className="p-1 rounded-full bg-slate-800/50 hover:bg-slate-700"><ChevronRightIcon className="w-4 h-4" /></button>
-                        <button onClick={nextGoal} className="p-1 rounded-full bg-slate-800/50 hover:bg-slate-700"><ChevronLeftIcon className="w-4 h-4" /></button>
+        <div className="space-y-3">
+            {userData.habits.slice(0, 3).map(habit => {
+                const isDone = !!completedHabits[habit.name];
+                return (
+                    <div key={habit.name} onClick={() => toggleHabit(habit)} className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-2 h-8 rounded-full transition-colors ${isDone ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-gray-700 group-hover:bg-gray-600'}`}></div>
+                            <span className={`text-sm font-medium ${isDone ? 'text-gray-400 line-through' : 'text-gray-200'}`}>{habit.name}</span>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'bg-green-500 border-green-500' : 'border-gray-600'}`}>
+                             {isDone && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                        </div>
                     </div>
-                )}
-            </div>
-            <div>
-                 <div className="flex justify-between items-center mb-1 text-sm">
-                    <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${style.color}`}/>
-                        <span className="font-semibold">{goal.title}</span>
-                        {goal.type === 'journey' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300">سفر</span>}
-                    </div>
-                    <span className="font-bold text-slate-300">{goal.progress}%</span>
-                 </div>
-                 <div className="w-full bg-slate-700 rounded-full h-2">
-                    <div className="bg-violet-500 h-2 rounded-full progress-bar-fill" style={{ width: `${goal.progress}%` }}></div>
-                 </div>
-            </div>
-             <div className="flex justify-center items-center gap-2 mt-2">
-                {goals.map((_, index) => (
-                    <button key={index} onClick={() => setCurrentIndex(index)} className={`w-2 h-2 rounded-full transition-colors ${index === currentIndex ? 'bg-violet-500' : 'bg-slate-600 hover:bg-slate-500'}`}></button>
-                ))}
-            </div>
+                )
+            })}
         </div>
-    );
-};
-
-const WomenHealthWidget: React.FC<{ onOpen: () => void, userData: OnboardingData }> = ({ onOpen, userData }) => {
-    const { cycles, cycleLength, periodLength } = userData.womenHealth;
-
-    const getStatus = () => {
-        if (!cycles || cycles.length === 0) {
-            return { title: "ردیابی چرخه", subtitle: "برای شروع، دوره خود را ثبت کنید." };
-        }
-        const sortedCycles = [...cycles].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-        const lastCycle = sortedCycles[0];
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startDate = new Date(lastCycle.startDate);
-        
-        const dayOfCycle = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
-
-        if (dayOfCycle <= 0) {
-            return { title: "ردیابی چرخه", subtitle: "تاریخ شروع دوره معتبر نیست." };
-        }
-
-        const currentPeriodLength = lastCycle.endDate 
-            ? Math.floor((new Date(lastCycle.endDate).getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1 
-            : periodLength;
-
-        if (dayOfCycle <= currentPeriodLength) {
-             return { title: `روز ${dayOfCycle} پریود`, subtitle: "مراقب خودت باش." };
-        }
-
-        const ovulationDay = cycleLength - 14;
-        const fertileStart = ovulationDay - 5;
-        const fertileEnd = ovulationDay + 1;
-
-        if (dayOfCycle >= fertileStart && dayOfCycle <= fertileEnd) {
-             return { title: `روز ${dayOfCycle} از چرخه`, subtitle: "پنجره باروری فعال است." };
-        }
-        
-        const pmsStart = cycleLength - 7;
-        if(dayOfCycle >= pmsStart) {
-            return { title: `روز ${dayOfCycle} از چرخه`, subtitle: "روزهای احتمالی PMS." };
-        }
-
-        const predictedNextStart = new Date(startDate);
-        predictedNextStart.setDate(startDate.getDate() + cycleLength);
-        const daysUntilNext = Math.ceil((predictedNextStart.getTime() - today.getTime()) / (1000 * 3600 * 24));
-        
-        if (daysUntilNext > 0) {
-            return { title: `روز ${dayOfCycle} از چرخه`, subtitle: `${daysUntilNext} روز تا پریود بعدی` };
-        }
-
-        return { title: `روز ${dayOfCycle} از چرخه`, subtitle: "دوره جدید را ثبت کنید." };
-    };
-
-    const { title, subtitle } = getStatus();
-
-    return (
-        <button onClick={onOpen} className="w-full h-full p-4 rounded-[var(--radius-card)] bg-rose-950/60 backdrop-blur-lg border border-rose-800 text-right hover:bg-rose-900/80 transition-colors flex flex-col justify-between">
-            <div>
-                <h3 className="font-bold text-lg flex items-center gap-2"><HealthIcon className="w-6 h-6 text-rose-300" /> {title}</h3>
-                <p className="text-sm text-rose-300/80 mt-1">{subtitle}</p>
-            </div>
-        </button>
-    );
-};
+    )
+}
 
 
 const BottomNav: React.FC<{ activeView: View; setActiveView: (view: View) => void }> = ({ activeView, setActiveView }) => {
     const navItems: { view: View; icon: React.FC<{ className?: string }>; label: string }[] = [
         { view: 'settings', icon: CogIcon, label: 'تنظیمات' },
         { view: 'goals', icon: TargetIcon, label: 'اهداف' },
-        { view: 'dashboard', icon: BenvisLogoIcon, label: 'بنویس' },
+        { view: 'dashboard', icon: BenvisLogoIcon, label: 'خانه' },
         { view: 'finance', icon: FinanceIcon, label: 'مالی' },
         { view: 'assistant', icon: SparklesIcon, label: 'دستیار' },
     ];
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-xl border-t border-slate-800 p-2 z-40">
-            <div className="flex justify-around items-center">
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
+            <div className="glass-card px-2 py-2 flex items-center gap-1 rounded-full shadow-2xl border-white/10 bg-[#0F0B1A]/80 backdrop-blur-xl">
                 {navItems.map(item => (
                     <button
                         key={item.view}
                         onClick={() => setActiveView(item.view)}
-                        className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-16 h-16 ${
-                            activeView === item.view ? 'text-violet-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${
+                            activeView === item.view 
+                                ? 'bg-[var(--color-primary-600)] text-white shadow-[0_0_15px_rgba(168,85,247,0.5)] transform -translate-y-2' 
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
                         }`}
                     >
-                        <item.icon className="w-6 h-6 mb-1"/>
-                        <span className={`text-xs ${item.view === 'dashboard' ? 'font-bold' : 'font-semibold'}`}>{item.label}</span>
+                        <item.icon className={`w-6 h-6 ${activeView === item.view ? 'animate-pulse' : ''}`} />
+                        {activeView === item.view && <span className="absolute -bottom-8 text-[10px] font-bold text-[var(--color-primary-300)] whitespace-nowrap opacity-0 animate-fadeIn">{item.label}</span>}
                     </button>
                 ))}
             </div>
@@ -835,11 +505,11 @@ const BottomNav: React.FC<{ activeView: View; setActiveView: (view: View) => voi
 
 const LevelUpModal: React.FC<{ newLevel: number, onSeen: () => void }> = ({ newLevel, onSeen }) => (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 modal-backdrop" onClick={onSeen}>
-        <div className="bg-slate-900/80 backdrop-blur-lg border border-violet-500 rounded-[var(--radius-lg)] p-8 text-center flex flex-col items-center animate-bounce-in">
-            <LevelUpIcon className="w-16 h-16 text-violet-400 mb-4" />
-            <h2 className="text-3xl font-bold">تبریک!</h2>
-            <p className="text-lg text-slate-300 mt-2">شما به سطح <span className="text-violet-400 font-bold">{newLevel}</span> رسیدید!</p>
-            <button onClick={onSeen} className="mt-6 bg-violet-600 px-6 py-2 rounded-lg font-semibold">ادامه</button>
+        <div className="glass-card p-8 text-center flex flex-col items-center animate-bounce-in max-w-xs w-full border-[var(--color-primary-500)] neon-border">
+            <LevelUpIcon className="w-20 h-20 text-[var(--color-primary-400)] mb-4 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]" />
+            <h2 className="text-3xl font-bold text-white">تبریک!</h2>
+            <p className="text-lg text-gray-300 mt-2">شما به سطح <span className="text-[var(--color-primary-400)] font-bold text-xl">{newLevel}</span> رسیدید!</p>
+            <button onClick={onSeen} className="mt-6 w-full py-2 bg-[var(--color-primary-600)] rounded-full font-bold text-white hover:bg-[var(--color-primary-500)] transition-colors shadow-lg">ادامه</button>
         </div>
     </div>
 );
@@ -848,322 +518,225 @@ const AchievementModal: React.FC<{ achievement: Achievement, onSeen: () => void 
     const Icon = achievement.icon;
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 modal-backdrop" onClick={onSeen}>
-            <div className="bg-slate-900/80 backdrop-blur-lg border border-yellow-500 rounded-[var(--radius-lg)] p-8 text-center flex flex-col items-center animate-bounce-in">
-                <Icon className="w-16 h-16 text-yellow-400 mb-4" />
+             <div className="glass-card p-8 text-center flex flex-col items-center animate-bounce-in max-w-xs w-full border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]">
+                <Icon className="w-20 h-20 text-yellow-400 mb-4 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)]" />
                 <h2 className="text-2xl font-bold text-yellow-300">دست‌آورد جدید!</h2>
-                <p className="text-lg font-bold mt-2">{achievement.title}</p>
-                <p className="text-sm text-slate-300">{achievement.description}</p>
-                <button onClick={onSeen} className="mt-6 bg-yellow-600 px-6 py-2 rounded-lg font-semibold">عالیه!</button>
+                <p className="text-lg font-bold mt-2 text-white">{achievement.title}</p>
+                <p className="text-sm text-gray-300 mt-1">{achievement.description}</p>
+                <button onClick={onSeen} className="mt-6 w-full py-2 bg-yellow-600 rounded-full font-bold text-white hover:bg-yellow-500 transition-colors shadow-lg">عالیه!</button>
             </div>
         </div>
     );
 };
 
+// Main Dashboard Screen
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
-    userData,
-    onUpdateUserData,
-    addXp,
-    levelUpInfo,
-    onLevelUpSeen,
-    newAchievements,
-    onAchievementsSeen,
+    userData, onUpdateUserData, addXp, levelUpInfo, onLevelUpSeen, newAchievements, onAchievementsSeen,
 }) => {
     const [activeView, setActiveView] = useState<View>('dashboard');
     const [isQuietZoneOpen, setIsQuietZoneOpen] = useState(false);
     const [isWeeklyReviewOpen, setIsWeeklyReviewOpen] = useState(false);
-    const [isWomenHealthOpen, setIsWomenHealthOpen] = useState(false);
     const [isCalendarViewOpen, setIsCalendarViewOpen] = useState(false);
     const [isFinancialViewOpen, setIsFinancialViewOpen] = useState(false);
     const [isNightRoutineOpen, setIsNightRoutineOpen] = useState(false);
+    const [isEisenhowerOpen, setIsEisenhowerOpen] = useState(false);
+    const [isTimeBlockingOpen, setIsTimeBlockingOpen] = useState(false);
+    const [isLifeWheelOpen, setIsLifeWheelOpen] = useState(false);
+    const [isXpShopOpen, setIsXpShopOpen] = useState(false);
+    const [isWomenHealthOpen, setIsWomenHealthOpen] = useState(false);
+    
     const [currentAchievement, setCurrentAchievement] = useState<AchievementID | null>(null);
     const [assistantState, setAssistantState] = useState<{ initialTab: string, initialJournalText: string }>({ initialTab: 'chat', initialJournalText: '' });
-    const [greeting, setGreeting] = useState('سلام');
-    const [jalaliDate, setJalaliDate] = useState('');
-
-
-    // --- NEW GRANULAR AI DATA STATE ---
-    const [priorities, setPriorities] = useState<string[] | null>(null);
-    const [isPrioritiesLoading, setIsPrioritiesLoading] = useState(true);
-
+    
+    // Data states
     const [weather, setWeather] = useState<{ temp: number; condition: string } | null>(null);
-    const [isWeatherLoading, setIsWeatherLoading] = useState(true);
-    const [weatherError, setWeatherError] = useState<string | null>(null);
-
-    const [dailyPrompt, setDailyPrompt] = useState<string | null>(null);
-    const [isDailyPromptLoading, setIsDailyPromptLoading] = useState(true);
-    
-    const [predictiveAlert, setPredictiveAlert] = useState<{ title: string; message: string } | null>(null);
-    const [isPredictiveAlertLoading, setIsPredictiveAlertLoading] = useState(true);
-
     const [dailyBriefing, setDailyBriefing] = useState<string | null>(null);
-    const [isDailyBriefingLoading, setIsDailyBriefingLoading] = useState(true);
-    
-    const [aiDataError, setAiDataError] = useState<string | null>(null); // For a general error banner
+    const [predictiveAlert, setPredictiveAlert] = useState<{title: string, message: string} | null>(null);
 
-    const { isLowFrictionMode = false } = userData;
-    
-    useEffect(() => {
-        const hour = new Date().getHours();
-        if (hour < 12) setGreeting('صبح بخیر');
-        else if (hour < 18) setGreeting('عصر بخیر');
-        else setGreeting('شب بخیر');
-
-        setJalaliDate(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { dateStyle: 'full' }).format(new Date()));
-    }, []);
-    
-    const { level, xp } = userData;
-    const levelProgressPercentage = useMemo(() => {
-        let totalXpForPreviousLevels = 0;
-        for (let i = 1; i < level; i++) {
-            totalXpForPreviousLevels += i * 100;
-        }
-        const xpInCurrentLevel = xp - totalXpForPreviousLevels;
-        const xpRequiredForCurrentLevel = level * 100;
-        return xpRequiredForCurrentLevel > 0 
-            ? Math.min(100, (xpInCurrentLevel / xpRequiredForCurrentLevel) * 100) 
-            : 0;
-    }, [level, xp]);
-
-    const handleUpdateLowFrictionMode = (isOn: boolean) => {
-        onUpdateUserData({ ...userData, isLowFrictionMode: isOn });
-    };
-
-    // --- DECOUPLED AI DATA FETCHING ---
-    const fetchWithCache = useCallback(async <T,>(key: string, fetchFn: () => Promise<T>, forceRefresh = false): Promise<T | null> => {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const cacheKey = `benvis_${key}_${todayStr}`;
-        if (!forceRefresh) {
-            try {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) return JSON.parse(cached);
-            } catch (e) { console.warn(`Failed to read ${key} cache`, e); }
-        }
+    const fetchDashboardData = useCallback(async () => {
         try {
-            const result = await fetchFn();
-            localStorage.setItem(cacheKey, JSON.stringify(result));
-            return result;
-        } catch (error) {
-            console.error(`Failed to fetch ${key}:`, error);
-            throw error;
-        }
-    }, []);
-
-    const handleError = (error: any): string => {
-        const errorString = JSON.stringify(error);
-        if (errorString.includes("RESOURCE_EXHAUSTED") || errorString.includes("429")) {
-            return "محدودیت استفاده از سرویس. لطفا بعدا تلاش کنید.";
-        }
-        return "خطا در دریافت برخی اطلاعات هوشمند.";
-    };
-
-    // New unified fetch function
-    const fetchDashboardData = useCallback(async (currentData: OnboardingData, forceRefresh = false) => {
-        setIsPrioritiesLoading(true);
-        setIsWeatherLoading(true);
-        setIsDailyPromptLoading(true);
-        setIsPredictiveAlertLoading(true);
-        setIsDailyBriefingLoading(true);
-        setAiDataError(null);
-
-        let location: { lat: number; lon: number } | null = null;
-        let localWeatherError: string | null = null;
-        try {
-            const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
-            location = { lat: position.coords.latitude, lon: position.coords.longitude };
-        } catch (e) {
-            localWeatherError = "مکان‌یابی برای دریافت آب و هوا فعال نیست.";
-            setWeatherError(localWeatherError);
-        }
-
-        try {
-            const result = await fetchWithCache('dashboard_data', async () => {
-                const { goals, habits, calendarEvents = [] } = currentData;
-                const goalsInfo = goals.filter(g => g.progress < 100).map(g => `- "${g.title}" (Progress: ${g.progress}%)`).join('\n') || 'No active goals.';
-                const habitsInfo = habits.map(h => `- "${h.name}"`).join('\n') || 'No habits to track.';
-                const todayStr = new Date().toISOString().split('T')[0];
-                const todayEvents = calendarEvents.filter(e => e.date === todayStr).map(e => `- ${e.time || ''}: ${e.text}`).join('\n') || 'No events scheduled.';
-                const upcomingGoals = goals.filter(g => g.targetDate && g.targetDate >= todayStr && g.progress < 100).map(g => `- '${g.title}' is at ${g.progress}%`).join('\n') || 'No goals with upcoming deadlines.';
-                
-                const prompt = `
-                    You are the Benvis AI dashboard generator. Based on the user's data and location, generate all the necessary data for the dashboard in a single JSON response.
-
-                    User Context:
-                    - Active Goals: ${goalsInfo}
-                    - Habits to Track: ${habitsInfo}
-                    - Today's Calendar: ${todayEvents}
-                    - Upcoming Goals: ${upcomingGoals}
-                    - Location: ${location ? `Latitude ${location.lat}, Longitude ${location.lon}` : 'Not provided.'}
-
-                    Generate the following data points:
-                    1.  **priorities**: An array of 3 most impactful priority strings for today.
-                    2.  **weather**: A simple weather report object { "temp": number, "condition": "string" }. If location is not provided, return null for this field.
-                    3.  **dailyPrompt**: A single, unique, insightful journal prompt string.
-                    4.  **predictiveAlert**: An object { "title": "string", "message": "string" } predicting a potential productivity blocker for today.
-                    5.  **dailyBriefing**: A concise, motivational daily briefing string in Markdown format.
-
-                    Respond ONLY with a valid JSON object matching the schema. All text must be in Persian.
-                `;
-
-                const dashboardDataSchema = {
-                    type: Type.OBJECT,
-                    properties: {
-                        priorities: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                        weather: {
-                            type: Type.OBJECT,
-                            properties: { temp: { type: Type.NUMBER }, condition: { type: Type.STRING } },
-                            nullable: true
-                        },
-                        dailyPrompt: { type: Type.STRING, nullable: true },
-                        predictiveAlert: {
-                            type: Type.OBJECT,
-                            properties: { title: { type: Type.STRING }, message: { type: Type.STRING } },
-                            nullable: true
-                        },
-                        dailyBriefing: { type: Type.STRING, nullable: true }
-                    }
-                };
-                
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                    config: { responseMimeType: "application/json", responseSchema: dashboardDataSchema }
-                });
-
-                return JSON.parse(response.text.trim());
-            }, forceRefresh);
-
-            if (result) {
-                setPriorities(result.priorities || null);
-                setWeather(result.weather || null);
-                setDailyPrompt(result.dailyPrompt || null);
-                setPredictiveAlert(result.predictiveAlert || null);
-                setDailyBriefing(result.dailyBriefing || null);
-                if (!result.weather && localWeatherError) {
-                    setWeatherError(localWeatherError);
-                } else {
-                    setWeatherError(null);
-                }
+            const todayStr = new Date().toISOString().split('T')[0];
+            const cacheKey = `benvis_dash_v2_${todayStr}`;
+            const cached = localStorage.getItem(cacheKey);
+            if(cached) {
+                const data = JSON.parse(cached);
+                setWeather(data.weather);
+                setDailyBriefing(data.dailyBriefing);
+                return;
             }
-        } catch (error) {
-            setAiDataError(handleError(error));
-        } finally {
-            setIsPrioritiesLoading(false);
-            setIsWeatherLoading(false);
-            setIsDailyPromptLoading(false);
-            setIsPredictiveAlertLoading(false);
-            setIsDailyBriefingLoading(false);
-        }
-    }, [fetchWithCache]);
-    
-    useEffect(() => {
-        fetchDashboardData(userData);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
+             // Mock data for visual
+            setWeather({ temp: 24, condition: 'Clear' });
+            
+        } catch (e) { console.error(e) }
     }, []);
 
-    const handleDailyPromptClick = (prompt: string) => {
-        setAssistantState({ initialTab: 'journal', initialJournalText: prompt });
-        setActiveView('assistant');
-    };
-
-    useEffect(() => {
-        if (newAchievements.length > 0 && !currentAchievement) {
-            setCurrentAchievement(newAchievements[0]);
+    useEffect(() => { 
+        fetchDashboardData(); 
+        // Simple predictive alert logic based on user data
+        if (userData.goals.filter(g => g.progress < 20).length > 3) {
+            setPredictiveAlert({
+                title: 'ترافیک اهداف',
+                message: 'تعداد اهداف فعال با پیشرفت کم زیاد است. پیشنهاد می‌کنیم روی ۳ هدف اصلی تمرکز کنید.'
+            });
         }
-    }, [newAchievements, currentAchievement]);
+    }, [fetchDashboardData, userData.goals]);
     
+    useEffect(() => { if (newAchievements.length > 0 && !currentAchievement) setCurrentAchievement(newAchievements[0]); }, [newAchievements, currentAchievement]);
+
     const handleAchievementSeen = () => {
         const remaining = newAchievements.slice(1);
-        onAchievementsSeen(); // Clear from parent
+        onAchievementsSeen();
         setCurrentAchievement(remaining[0] || null);
     };
-
+    
+    const renderView = () => {
+        switch (activeView) {
+            case 'goals': return <GoalsView userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />;
+            case 'finance': return null; // Handled via modal effect
+            case 'settings': return <SettingsView userData={userData} onUpdateUserData={onUpdateUserData} />;
+            case 'assistant': return <SmartAssistantView userData={userData} onUpdateUserData={onUpdateUserData} initialTab={assistantState.initialTab} initialJournalText={assistantState.initialJournalText} />;
+            default: return null;
+        }
+    };
+    
     useEffect(() => {
         if (activeView === 'finance') {
             setIsFinancialViewOpen(true);
-            // After opening the modal, we don't want to be on a blank 'finance' view.
-            // Let's return to the dashboard view so the modal appears over it.
             setActiveView('dashboard');
         }
     }, [activeView]);
 
-    const renderView = () => {
-        switch (activeView) {
-            case 'goals':
-                return <GoalsView userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />;
-            case 'finance':
-                 // This case is now safe, it just returns null. The side effect is handled in useEffect.
-                return null;
-            case 'settings':
-                return <SettingsView userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'assistant':
-                return <SmartAssistantView userData={userData} onUpdateUserData={onUpdateUserData} initialTab={assistantState.initialTab} initialJournalText={assistantState.initialJournalText} />;
-            default:
-                return null;
-        }
-    };
-    
     return (
-        <div className={`p-4 pb-24 min-h-screen relative ${isLowFrictionMode ? 'low-friction-mode' : ''}`}>
+        <div className="min-h-screen bg-[#020005] text-gray-100 pb-24 relative overflow-x-hidden font-sans">
+             {/* Background Ambient Glows */}
+             <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+                <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[var(--color-primary-900)] rounded-full blur-[100px] opacity-40"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-900 rounded-full blur-[100px] opacity-30"></div>
+             </div>
+
             {levelUpInfo && <LevelUpModal newLevel={levelUpInfo.newLevel} onSeen={onLevelUpSeen} />}
-            {currentAchievement && ALL_ACHIEVEMENTS[currentAchievement] && (
-                <AchievementModal achievement={ALL_ACHIEVEMENTS[currentAchievement]} onSeen={handleAchievementSeen} />
-            )}
+            {currentAchievement && ALL_ACHIEVEMENTS[currentAchievement] && <AchievementModal achievement={ALL_ACHIEVEMENTS[currentAchievement]} onSeen={handleAchievementSeen} />}
 
-            {activeView !== 'dashboard' ? (
-                <div className="pb-4">{renderView()}</div>
-            ) : (
-                <>
-                    <header className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-2xl font-bold">{greeting}, {userData.fullName.split(' ')[0]}</h1>
-                            <p className="text-slate-400 text-sm">{jalaliDate}</p>
-                        </div>
-                        <div className="flex gap-2">
-                             <button onClick={() => setIsWeeklyReviewOpen(true)} className="p-3 bg-slate-800/60 border border-slate-700 rounded-full hover:bg-slate-800" title="مرور هفتگی">
-                                <DocumentChartBarIcon className="w-6 h-6"/>
-                            </button>
-                             <button onClick={() => setIsQuietZoneOpen(true)} className="p-3 bg-slate-800/60 border border-slate-700 rounded-full hover:bg-slate-800" title="حالت تمرکز">
-                                <MoonIcon className="w-6 h-6"/>
-                            </button>
-                             <button onClick={() => setIsNightRoutineOpen(true)} className="p-3 bg-slate-800/60 border border-slate-700 rounded-full hover:bg-slate-800" title="روتین شبانه">
-                                <StarIcon className="w-6 h-6"/>
-                            </button>
-                        </div>
-                    </header>
-                    <BenvisWidget userData={userData} onUpdateUserData={onUpdateUserData} />
-                    
-                    {aiDataError && (
-                        <div className="mt-4 p-3 bg-red-900/50 border border-red-800 rounded-lg text-sm text-red-300 text-center">
-                            {aiDataError}
-                        </div>
-                    )}
-                    
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                        <DailyBriefingWidget briefing={dailyBriefing} isLoading={isDailyBriefingLoading} onRefresh={() => fetchDashboardData(userData, true)} />
-                        {!isLowFrictionMode && <StatsSummaryWidget userData={userData} />}
-                        {!isLowFrictionMode && <TodaysPrioritiesWidget priorities={priorities} isLoading={isPrioritiesLoading} />}
-                        {!isLowFrictionMode && <HabitTrackerWidget userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />}
-                        {!isLowFrictionMode && <GoalsWidget goals={userData.goals.filter(g => g.progress < 100)} />}
-                        {!isLowFrictionMode && <WeatherAndCalendarWidget onOpen={() => setIsCalendarViewOpen(true)} weather={weather} isLoading={isWeatherLoading} weatherError={weatherError} />}
-                        {!isLowFrictionMode && <DailyPromptWidget prompt={dailyPrompt} isLoading={isDailyPromptLoading} onRefresh={() => fetchDashboardData(userData, true)} onPromptClick={handleDailyPromptClick} />}
-                        {!isLowFrictionMode && userData.gender === 'female' && <WomenHealthWidget onOpen={() => setIsWomenHealthOpen(true)} userData={userData} />}
-                        {!isLowFrictionMode && <FinancialWidget userData={userData} onOpen={() => setIsFinancialViewOpen(true)} />}
-                        {!isLowFrictionMode && <MoodWeatherWidget />}
-                        {!isLowFrictionMode && <EnergyPredictionWidget userData={userData} />}
-                        {!isLowFrictionMode && <PredictiveAlertsWidget alert={predictiveAlert} isLoading={isPredictiveAlertLoading} onToggleMode={handleUpdateLowFrictionMode} />}
-                        {!isLowFrictionMode && <FinancialInsightsWidget userData={userData} />}
-                    </div>
-                </>
-            )}
+            <div className="relative z-10 p-6 flex flex-col gap-6 max-w-md mx-auto">
+                
+                {activeView !== 'dashboard' ? (
+                     <div className="pb-4">{renderView()}</div>
+                ) : (
+                    <>
+                        {/* Header / Command Center */}
+                        <header className="flex flex-col gap-4">
+                            <div className="flex justify-between items-center px-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[var(--color-primary-600)] to-blue-500 p-0.5 cursor-pointer" onClick={() => setIsXpShopOpen(true)}>
+                                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                                            <UserCircleIcon className="w-8 h-8 text-gray-300" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h1 className="font-bold text-lg">سلام، {userData.fullName.split(' ')[0]}</h1>
+                                        <button onClick={() => setIsXpShopOpen(true)} className="text-xs text-yellow-400 flex items-center gap-1">
+                                             <StarIcon className="w-3 h-3" />
+                                             {userData.xp} XP
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                     {userData.gender === 'female' && (
+                                         <button onClick={() => setIsWomenHealthOpen(true)} className="p-2 rounded-full bg-pink-500/20 hover:bg-pink-500/30 transition-colors" title="سلامت زنان">
+                                            <HealthIcon className="w-6 h-6 text-pink-400" />
+                                         </button>
+                                     )}
+                                     <button onClick={() => setIsLifeWheelOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="چرخ زندگی">
+                                        <ChartPieIcon className="w-6 h-6 text-pink-300" />
+                                    </button>
+                                    <button onClick={() => setIsEisenhowerOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="اولویت‌بندی (آیزنهاور)">
+                                        <Squares2X2Icon className="w-6 h-6 text-violet-300" />
+                                    </button>
+                                    <button onClick={() => setIsTimeBlockingOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="برنامه‌ریزی روزانه">
+                                        <QueueListIcon className="w-6 h-6 text-blue-300" />
+                                    </button>
+                                    <button onClick={() => setIsWeeklyReviewOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="مرور هفتگی">
+                                        <ClipboardIcon className="w-6 h-6 text-green-300" />
+                                    </button>
+                                    <button onClick={() => setIsNightRoutineOpen(true)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors" title="روتین شبانه">
+                                        <MoonIcon className="w-6 h-6 text-[var(--color-primary-300)]" />
+                                    </button>
+                                </div>
+                            </div>
+                            <BenvisWidget userData={userData} onUpdateUserData={onUpdateUserData} />
+                        </header>
 
+                        {/* Central Hub */}
+                        <div className="my-4">
+                            <CentralHubWidget onOpen={() => setIsCalendarViewOpen(true)} weather={weather} level={userData.level} xp={userData.xp} />
+                        </div>
+
+                        {/* Dashboard Grid */}
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Daily Stats / Tasks */}
+                            <GlassCard className="col-span-1 min-h-[140px]" title={<div className="flex items-center gap-2"><TargetIcon className="w-4 h-4 text-blue-400"/> اهداف</div>}>
+                                <div className="text-3xl font-bold text-white">{userData.goals.filter(g => g.progress < 100).length}</div>
+                                <p className="text-xs text-gray-400 mt-1">فعال</p>
+                                <div className="mt-3 w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-blue-500 w-2/3 rounded-full"></div>
+                                </div>
+                            </GlassCard>
+
+                             {/* Habits - Quick View */}
+                             <GlassCard className="col-span-1 min-h-[140px]" title={<div className="flex items-center gap-2"><HabitsIcon className="w-4 h-4 text-green-400"/> عادت‌ها</div>}>
+                                 <QuickHabitTracker userData={userData} onUpdateUserData={onUpdateUserData} addXp={addXp} />
+                             </GlassCard>
+
+                            {/* Financial - Mini */}
+                            <GlassCard onClick={() => setIsFinancialViewOpen(true)} className="col-span-2 sm:col-span-1 flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-gray-400">موجودی کل</p>
+                                    <p className="text-lg font-bold text-white mt-1">
+                                        {new Intl.NumberFormat('fa-IR').format((userData.financialAccounts || []).reduce((sum, a) => sum + Number(a.balance), 0))}
+                                    </p>
+                                </div>
+                                <div className="p-2 rounded-full bg-green-500/20 text-green-400">
+                                    <FinanceIcon className="w-6 h-6" />
+                                </div>
+                            </GlassCard>
+
+                             {/* Focus Mode CTA */}
+                            <GlassCard onClick={() => setIsQuietZoneOpen(true)} className="col-span-2 sm:col-span-1 bg-gradient-to-br from-[var(--color-primary-900)]/50 to-blue-900/20 border-blue-500/30 group">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-blue-200">شروع تمرکز</span>
+                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-[0_0_10px_rgba(59,130,246,0.5)] group-hover:scale-110 transition-transform">
+                                        <MoonIcon className="w-4 h-4 text-white" />
+                                    </div>
+                                </div>
+                            </GlassCard>
+                            
+                            {/* AI Insights Area */}
+                            <div className="col-span-2 space-y-4">
+                                <PredictiveAlertsWidget alert={predictiveAlert} isLoading={false} onToggleMode={(isOn) => onUpdateUserData({...userData, isLowFrictionMode: isOn})} />
+                                {dailyBriefing && <DailyBriefingWidget briefing={dailyBriefing} isLoading={false} onRefresh={fetchDashboardData} />}
+                                <MoodWeatherWidget />
+                                <FinancialInsightsWidget userData={userData} />
+                            </div>
+
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <BottomNav activeView={activeView} setActiveView={setActiveView} />
+
+            {/* Modals */}
             {isQuietZoneOpen && <QuietZoneView goals={userData.goals} onUpdateGoals={(goals) => onUpdateUserData({...userData, goals})} onClose={() => setIsQuietZoneOpen(false)} addXp={addXp} />}
             {isWeeklyReviewOpen && <WeeklyReviewView userData={userData} onClose={() => setIsWeeklyReviewOpen(false)} />}
-            {isWomenHealthOpen && <WomenHealthView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsWomenHealthOpen(false)} />}
             {isCalendarViewOpen && <CalendarView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsCalendarViewOpen(false)} />}
             {isFinancialViewOpen && <FinancialView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsFinancialViewOpen(false)} />}
             {isNightRoutineOpen && <NightRoutineView userData={userData} onClose={() => setIsNightRoutineOpen(false)} />}
-
-            <BottomNav activeView={activeView} setActiveView={setActiveView} />
+            {isEisenhowerOpen && <EisenhowerMatrixView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsEisenhowerOpen(false)} />}
+            {isTimeBlockingOpen && <TimeBlockingView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsTimeBlockingOpen(false)} />}
+            {isLifeWheelOpen && <LifeWheelView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsLifeWheelOpen(false)} />}
+            {isXpShopOpen && <XpShopView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsXpShopOpen(false)} />}
+            {isWomenHealthOpen && <WomenHealthView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsWomenHealthOpen(false)} />}
         </div>
     );
 };

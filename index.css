@@ -1,5 +1,4 @@
 
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -22,7 +21,6 @@
   100% { background-position: 0% 80%; }
 }
 
-/* New keyframes for UI polish */
 @keyframes bounce-in {
   0% { transform: scale(0.9); opacity: 0; }
   70% { transform: scale(1.02); opacity: 1; }
@@ -31,46 +29,47 @@
 
 @keyframes celebrate {
   0% { transform: scale(1); }
-  50% { transform: scale(1.05); box-shadow: 0 0 20px var(--color-primary-500); }
+  50% { transform: scale(1.05); box-shadow: 0 0 30px var(--color-primary-500); }
   100% { transform: scale(1); }
 }
 
 @keyframes placeholder-fade {
-    0% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.5;
-    }
-    100% {
-        opacity: 1;
-    }
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
 }
 
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 15px var(--color-primary-500), inset 0 0 10px var(--color-primary-500); }
+    50% { box-shadow: 0 0 25px var(--color-primary-400), inset 0 0 15px var(--color-primary-400); }
+}
 
 /* --- THEME DEFINITIONS --- */
 
-/* 1. Benvis Classic (Default) - Redesigned */
+/* 1. Benvis Classic (Deep Neon Glass) - REVISED */
 :root, [data-theme-name="benvis_classic"] {
-    --color-primary-200: #c4b5fd;
-    --color-primary-300: #a78bfa;
-    --color-primary-400: #8b5cf6;
-    --color-primary-500: #7c3aed;
-    --color-primary-600: #6d28d9;
-    --color-primary-700: #5b21b6;
-    --color-primary-800: #4c1d95;
-    --radius-card: 1.25rem; /* 20px */
-    --radius-lg: 0.75rem; /* 12px */
-    --radius-md: 0.5rem; /* 8px */
-    --radius-sm: 0.25rem; /* 4px */
+    --color-primary-200: #e9d5ff;
+    --color-primary-300: #d8b4fe;
+    --color-primary-400: #c084fc;
+    --color-primary-500: #a855f7; /* Neon Purple */
+    --color-primary-600: #9333ea;
+    --color-primary-700: #7e22ce;
+    --color-primary-800: #6b21a8;
+    
+    --radius-card: 1.75rem; /* 28px for that organic look */
+    --radius-lg: 1rem;
+    --radius-md: 0.75rem;
+    --radius-sm: 0.5rem;
     --radius-full: 9999px;
-    --bg-color: #0f172a; /* slate-900 */
-    --bg-image: radial-gradient(at 20% 20%, hsla(259, 70%, 25%, 0.15) 0px, transparent 50%),
-                radial-gradient(at 80% 80%, hsla(214, 70%, 30%, 0.1) 0px, transparent 50%),
-                radial-gradient(at 90% 10%, hsla(320, 60%, 30%, 0.1) 0px, transparent 50%);
+
+    --bg-color: #020005; /* Deepest Black/Purple */
+    --bg-image: 
+        radial-gradient(circle at 50% 0%, rgba(126, 34, 206, 0.25) 0%, transparent 50%),
+        radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 0% 100%, rgba(236, 72, 153, 0.15) 0%, transparent 40%);
 }
 
-/* 2. Oceanic Deep */
+/* Other themes remain... */
 [data-theme-name="oceanic_deep"] {
     --color-primary-200: #93c5fd;
     --color-primary-300: #60a5fa;
@@ -86,7 +85,6 @@
 }
 body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; }
 
-/* 3. Forest Whisper */
 [data-theme-name="forest_whisper"] {
     --color-primary-200: #86efac;
     --color-primary-300: #4ade80;
@@ -101,7 +99,6 @@ body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; 
                 radial-gradient(at 80% 20%, hsla(130, 50%, 25%, 0.3) 0px, transparent 50%);
 }
 
-/* 4. Sunset Bliss */
 [data-theme-name="sunset_bliss"] {
     --color-primary-200: #fda4af;
     --color-primary-300: #fb7185;
@@ -116,7 +113,6 @@ body[data-theme-name="oceanic_deep"] { animation: move-ocean 20s ease infinite; 
 }
 body[data-theme-name="sunset_bliss"] { background-size: 400% 400%; animation: move-gradient 15s ease infinite; }
 
-/* 5. Galaxy Dream */
 [data-theme-name="galaxy_dream"] {
     --color-primary-200: #c4b5fd;
     --color-primary-300: #a78bfa;
@@ -135,7 +131,6 @@ body[data-theme-name="sunset_bliss"] { background-size: 400% 400%; animation: mo
 }
 body[data-theme-name="galaxy_dream"] { background-size: 100% 100%, 2000px 2000px; animation: move-stars 200s linear infinite; }
 
-/* 6. Cyberpunk Neon */
 [data-theme-name="cyberpunk_neon"] {
     --color-primary-200: #f9a8d4;
     --color-primary-300: #f472b6;
@@ -151,7 +146,6 @@ body[data-theme-name="galaxy_dream"] { background-size: 100% 100%, 2000px 2000px
 }
 body[data-theme-name="cyberpunk_neon"] { background-size: 20px 20px; }
 
-/* 7. Royal Gold */
 [data-theme-name="royal_gold"] {
     --color-primary-200: #fde68a;
     --color-primary-300: #fcd34d;
@@ -165,7 +159,6 @@ body[data-theme-name="cyberpunk_neon"] { background-size: 20px 20px; }
     --bg-image: none;
 }
 
-/* 8. Zen Garden */
 [data-theme-name="zen_garden"] {
     --color-primary-200: #a3a3a3;
     --color-primary-300: #737373;
@@ -178,16 +171,13 @@ body[data-theme-name="cyberpunk_neon"] { background-size: 20px 20px; }
     --bg-color: #f5f5f5;
     --bg-image: none;
 }
-/* Special overrides for light theme */
 body[data-theme-name="zen_garden"] { color: #262626; }
 [data-theme-name="zen_garden"] .bg-slate-950 { background-color: #e5e5e5 !important; }
 [data-theme-name="zen_garden"] .text-slate-200 { color: #262626 !important; }
 [data-theme-name="zen_garden"] .text-slate-400 { color: #737373 !important; }
-[data-theme-name="zen_garden"] .border-slate-800 { border-color: #d4d4d4 !important; }
-[data-theme-name="zen_garden"] .bg-slate-900\/60 { background-color: rgba(255,255,255,0.6) !important; }
-[data-theme-name="zen_garden"] .bg-slate-800\/50 { background-color: rgba(229,229,229,0.5) !important; }
+[data-theme-name="zen_garden"] .glass-card { background-color: rgba(255,255,255,0.7) !important; border-color: rgba(0,0,0,0.1) !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+[data-theme-name="zen_garden"] .neon-text { text-shadow: none !important; }
 
-/* 9. Crimson Night */
 [data-theme-name="crimson_night"] {
     --color-primary-200: #fca5a5;
     --color-primary-300: #f87171;
@@ -201,7 +191,6 @@ body[data-theme-name="zen_garden"] { color: #262626; }
     --bg-image: radial-gradient(at 90% 90%, hsla(0, 50%, 20%, 0.3) 0px, transparent 50%);
 }
 
-/* 10. Pastel Dream */
 [data-theme-name="pastel_dream"] {
     --color-primary-200: #bae6fd;
     --color-primary-300: #7dd3fc;
@@ -214,14 +203,8 @@ body[data-theme-name="zen_garden"] { color: #262626; }
     --bg-color: #f0f9ff;
     --bg-image: linear-gradient(120deg, #a1c4fd, #c2e9fb);
 }
-/* Special overrides for light theme */
 body[data-theme-name="pastel_dream"] { color: #075985; }
-[data-theme-name="pastel_dream"] .bg-slate-950 { background-color: #e0f2fe !important; }
-[data-theme-name="pastel_dream"] .text-slate-200 { color: #075985 !important; }
-[data-theme-name="pastel_dream"] .text-slate-400 { color: #38bdf8 !important; }
-[data-theme-name="pastel_dream"] .border-slate-800 { border-color: #bae6fd !important; }
-[data-theme-name="pastel_dream"] .bg-slate-900\/60 { background-color: rgba(255,255,255,0.6) !important; }
-[data-theme-name="pastel_dream"] .bg-slate-800\/50 { background-color: rgba(240, 249, 255, 0.7) !important; }
+[data-theme-name="pastel_dream"] .glass-card { background-color: rgba(255,255,255,0.6) !important; border-color: #bae6fd !important; }
 
 
 /* --- BASE STYLES & THEME APPLY --- */
@@ -229,62 +212,51 @@ body {
     background-color: var(--bg-color);
     background-image: var(--bg-image);
     transition: background-color 0.5s ease;
+    font-family: 'Vazirmatn', sans-serif;
 }
 
-body:not(.animations-disabled) {
-  /* Apply animations only when not disabled */
+/* --- UI UTILITIES --- */
+.modal-backdrop { animation: fadeIn 0.3s ease-out; }
+.modal-panel { animation: slideInUp 0.4s ease-out; }
+.progress-bar-fill { transition: width 0.5s ease-out; }
+.animate-bounce-in { animation: bounce-in 0.5s ease-out; }
+.animate-celebrate { animation: celebrate 0.6s ease-in-out; }
+.animate-placeholder { animation: placeholder-fade 3s infinite; }
+
+/* GLASSMORPHISM & NEON UTILITIES */
+.glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-card);
 }
 
-/* --- UI POLISH & UTILITIES --- */
-.modal-backdrop {
-    animation: fadeIn 0.3s ease-out;
+.glass-card-hover {
+    transition: all 0.3s ease;
+}
+.glass-card-hover:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.15); /* Subtle purple glow */
+    transform: translateY(-2px);
 }
 
-.modal-panel {
-    animation: slideInUp 0.4s ease-out;
+.neon-text {
+    text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
 }
 
-.progress-bar-fill {
-    transition: width 0.5s ease-out;
+.neon-border {
+    border-color: var(--color-primary-500);
+    box-shadow: 0 0 10px var(--color-primary-500);
 }
 
-.animate-bounce-in {
-    animation: bounce-in 0.5s ease-out;
-}
-.animate-celebrate {
-    animation: celebrate 0.6s ease-in-out;
+.glow-ring {
+    filter: drop-shadow(0 0 8px var(--color-primary-500));
 }
 
-.animate-placeholder {
-    animation: placeholder-fade 3s infinite;
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideInUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-/* Low Friction Mode */
-.low-friction-mode {
-    filter: saturate(0.8) contrast(0.9);
-}
-
-.low-friction-mode .progress-bar-fill,
-.low-friction-mode .bg-violet-600,
-.low-friction-mode .bg-violet-800 {
-    background-color: #52525b !important; /* zinc-600 */
-}
-.low-friction-mode .text-violet-400 {
-    color: #a1a1aa !important; /* zinc-400 */
-}
-
-/* Remove scrollbar */
-::-webkit-scrollbar {
-  width: 0px;
-  background: transparent; /* make scrollbar transparent */
-}
+::-webkit-scrollbar { width: 0px; background: transparent; }

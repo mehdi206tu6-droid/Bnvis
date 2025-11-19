@@ -1,3 +1,4 @@
+
 import type { FC } from 'react';
 
 export type ThemeName = 
@@ -10,11 +11,13 @@ export type ThemeName =
   | 'royal_gold'
   | 'zen_garden'
   | 'crimson_night'
-  | 'pastel_dream';
+  | 'pastel_dream'
+  | 'custom';
 
 export interface ThemeSettings {
   name: ThemeName;
   animations?: { enabled: boolean; };
+  customColor?: string;
 }
 
 export interface Habit {
@@ -24,34 +27,6 @@ export interface Habit {
   icon?: string;
   color?: string;
   notification?: NotificationSetting;
-}
-
-export type Symptom = 'cramps' | 'headache' | 'fatigue' | 'nausea' | 'bloating' | 'mood_swings';
-export type FlowIntensity = 'light' | 'medium' | 'heavy' | 'spotting';
-
-export interface SymptomLog {
-    symptoms: Symptom[];
-    flow: FlowIntensity | null;
-}
-
-export interface Cycle {
-  startDate: string; // YYYY-MM-DD
-  endDate: string; // YYYY-MM-DD
-  logs: Record<string, SymptomLog>; // Key is YYYY-MM-DD
-}
-
-export interface Companion {
-    email: string;
-    sharePeriod: boolean;
-    shareFertility: boolean;
-    sharePms: boolean;
-}
-
-export interface WomenHealthData {
-  cycleLength: number; // in days, e.g., 28
-  periodLength: number; // in days, e.g., 5
-  cycles: Cycle[];
-  companion?: Companion;
 }
 
 export interface CalendarEvent {
@@ -130,6 +105,87 @@ export interface JourneyMilestone {
     tasks: JourneyTask[];
 }
 
+export interface KeyResult {
+    id: string;
+    title: string;
+    baseline: number;
+    target: number;
+    current: number;
+    unit: string;
+}
+
+export interface SmartCriteria {
+    specific: string;
+    measurable: string;
+    achievable: string;
+    relevant: string;
+    timeBound: string;
+    effort?: 'Low' | 'Medium' | 'High';
+    actionSteps?: string[];
+}
+
+export interface StandaloneTask {
+    id: string;
+    title: string;
+    urgent: boolean;
+    important: boolean;
+    completed: boolean;
+    dueDate?: string;
+}
+
+export interface TimeBlock {
+    id: string;
+    title: string;
+    startTime: string; // HH:mm
+    endTime: string; // HH:mm
+    type: 'focus' | 'routine' | 'break' | 'meeting';
+    energyLevel?: 'high' | 'medium' | 'low';
+}
+
+export interface LifeWheelCategory {
+    id: string;
+    label: string;
+    score: number; // 1-10
+}
+
+export interface LifeWheelAssessment {
+    date: string;
+    categories: LifeWheelCategory[];
+    analysis?: string;
+}
+
+export interface ShopItem {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    purchased: boolean;
+    type: 'theme' | 'badge' | 'feature';
+    value?: string; // e.g., theme name
+}
+
+// --- Women's Health Types ---
+export interface CycleLog {
+    date: string;
+    flow?: 'spotting' | 'light' | 'medium' | 'heavy';
+    symptoms: string[];
+    mood?: 'happy' | 'sensitive' | 'energetic' | 'tired' | 'anxious' | 'irritable';
+    notes?: string;
+}
+
+export interface PartnerSettings {
+    enabled: boolean;
+    name: string;
+    shareContent?: 'full' | 'summary';
+}
+
+export interface WomenHealthData {
+    cycleLogs: CycleLog[];
+    periodStarts: string[]; // List of YYYY-MM-DD dates where a period started
+    avgCycleLength: number;
+    partner: PartnerSettings;
+}
+
 export interface OnboardingData {
   fullName: string;
   age: string;
@@ -141,17 +197,19 @@ export interface OnboardingData {
     tasks: NotificationSetting;
     reminders: NotificationSetting;
     daily_report: DailyReportSetting;
-    womenHealth_period?: NotificationSetting;
-    womenHealth_fertile?: NotificationSetting;
     budget_alerts?: NotificationSetting;
     low_balance_warnings?: NotificationSetting;
   };
   goals: UserGoal[];
+  tasks: StandaloneTask[];
+  timeBlocks: TimeBlock[];
+  lifeWheel?: LifeWheelAssessment;
+  shopInventory?: ShopItem[];
+  womenHealth?: WomenHealthData;
   xp: number;
   level: number;
   achievements: AchievementID[];
   theme: ThemeSettings;
-  womenHealth: WomenHealthData;
   calendarEvents?: CalendarEvent[];
   transactions?: Transaction[];
   transactionCategories?: TransactionCategory[];
@@ -175,11 +233,11 @@ export interface DailyReportSetting {
   sound?: string;
 }
 
-export type NotificationType = 'tasks' | 'reminders' | 'daily_report' | 'womenHealth_period' | 'womenHealth_fertile' | 'budget_alerts' | 'low_balance_warnings';
+export type NotificationType = 'tasks' | 'reminders' | 'daily_report' | 'budget_alerts' | 'low_balance_warnings';
 
 export interface UserGoal {
   id: string;
-  type: 'simple' | 'journey';
+  type: 'simple' | 'journey' | 'okr' | 'smart';
   title: string;
   icon: string;
   description?: string;
@@ -190,6 +248,8 @@ export interface UserGoal {
   pomodorosToComplete?: number;
   pomodorosCompleted?: number;
   milestones?: JourneyMilestone[];
+  keyResults?: KeyResult[]; // For OKR
+  smartCriteria?: SmartCriteria; // For SMART
 }
 
 export interface ChatMessage {
@@ -198,7 +258,7 @@ export interface ChatMessage {
 }
 
 export interface FocusSession {
-  date: string; // YYY-MM-DD
+  date: string; // YYYY-MM-DD
   duration: number; // in minutes
   goalId: string | null;
 }
@@ -229,7 +289,6 @@ export interface Agent {
   id: string;
   title: string;
   description: string;
-  // FIX: Changed React.FC to FC to fix namespace error.
   icon: FC<{ className?: string }>;
   systemPrompt: string;
   inputSchema: any; 

@@ -1,7 +1,42 @@
+
 import React, { useState, useEffect } from 'react';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import DashboardScreen from './components/DashboardScreen';
 import { OnboardingData, UserGoal, AchievementID, Transaction, FinancialAccount, ThemeName } from './types';
+
+// Helper to lighten or darken a color
+// percent > 0 to lighten (mix with white), percent < 0 to darken (mix with black)
+const adjustColor = (hex: string, percent: number) => {
+    hex = hex.replace(/^\s*#|\s*$/g, '');
+    if (hex.length === 3) {
+        hex = hex.replace(/(.)/g, '$1$1');
+    }
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    let newR, newG, newB;
+
+    if (percent > 0) {
+        // Mix with white
+        newR = Math.round(r + (255 - r) * percent);
+        newG = Math.round(g + (255 - g) * percent);
+        newB = Math.round(b + (255 - b) * percent);
+    } else {
+        // Mix with black
+        const factor = 1 + percent;
+        newR = Math.round(r * factor);
+        newG = Math.round(g * factor);
+        newB = Math.round(b * factor);
+    }
+
+    const toHex = (n: number) => {
+        const hexStr = Math.max(0, Math.min(255, n)).toString(16);
+        return hexStr.length === 1 ? '0' + hexStr : hexStr;
+    };
+
+    return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+};
 
 const App: React.FC = () => {
   const [userData, setUserData] = useState<OnboardingData | null>(null);
@@ -34,6 +69,28 @@ const App: React.FC = () => {
         if (userDataFromStorage.level === undefined) userDataFromStorage.level = 1;
         if (!userDataFromStorage.achievements) userDataFromStorage.achievements = [];
         
+        // New Features Migration (Eisenhower & TimeBlocking & Women's Health)
+        if (!userDataFromStorage.tasks) userDataFromStorage.tasks = [];
+        if (!userDataFromStorage.timeBlocks) userDataFromStorage.timeBlocks = [];
+        
+        // ** NEW: Life Wheel & Shop & Women Health Migration **
+        if (!userDataFromStorage.shopInventory) userDataFromStorage.shopInventory = [];
+        if (!userDataFromStorage.lifeWheel) userDataFromStorage.lifeWheel = undefined;
+        
+        // Women's Health Migration
+        if (userDataFromStorage.gender === 'female' && !userDataFromStorage.womenHealth) {
+            userDataFromStorage.womenHealth = {
+                cycleLogs: [],
+                periodStarts: [],
+                avgCycleLength: 28,
+                partner: { enabled: false, name: '' }
+            };
+        } else if (userDataFromStorage.womenHealth && !userDataFromStorage.womenHealth.partner) {
+             // Migrate existing structure if needed to include partner
+             userDataFromStorage.womenHealth.partner = { enabled: false, name: '' };
+        }
+
+
         // Notifications migration (for older data structures)
         if (userDataFromStorage.notifications && typeof userDataFromStorage.notifications === 'object') {
           if(typeof (userDataFromStorage.notifications as any).tasks === 'boolean') {
@@ -67,13 +124,6 @@ const App: React.FC = () => {
           if (typeof userDataFromStorage.notifications.daily_report.sound === 'undefined') {
               userDataFromStorage.notifications.daily_report.sound = 'default';
           }
-           // Women's Health Notifications migration
-          if (!userDataFromStorage.notifications.womenHealth_period) {
-              userDataFromStorage.notifications.womenHealth_period = { enabled: true, timing: '1d', sound: 'default' };
-          }
-          if (!userDataFromStorage.notifications.womenHealth_fertile) {
-              userDataFromStorage.notifications.womenHealth_fertile = { enabled: true, timing: '1d', sound: 'default' };
-          }
           // Financial Notifications migration
           if (!userDataFromStorage.notifications.budget_alerts) {
               userDataFromStorage.notifications.budget_alerts = { enabled: true, timing: '1h', sound: 'default' };
@@ -87,8 +137,6 @@ const App: React.FC = () => {
                 tasks: { enabled: true, timing: '1h', sound: 'default' },
                 reminders: { enabled: false, timing: '1d', sound: 'default' },
                 daily_report: { enabled: false, time: '09:00', sound: 'default' },
-                womenHealth_period: { enabled: true, timing: '1d', sound: 'default' },
-                womenHealth_fertile: { enabled: true, timing: '1d', sound: 'default' },
                 budget_alerts: { enabled: true, timing: '1h', sound: 'default' },
                 low_balance_warnings: { enabled: true, timing: '1h', sound: 'default' },
             };
@@ -149,31 +197,8 @@ const App: React.FC = () => {
             });
         }
 
-
-        // Women's Health Feature Migration
         if (userDataFromStorage.gender === undefined) {
             userDataFromStorage.gender = 'prefer_not_to_say';
-        }
-        if (!userDataFromStorage.womenHealth) {
-            userDataFromStorage.womenHealth = {
-                cycleLength: 28,
-                periodLength: 5,
-                cycles: [],
-                companion: undefined,
-            };
-        } else {
-            // Ensure cycles have logs property
-            if (userDataFromStorage.womenHealth.cycles) {
-                userDataFromStorage.womenHealth.cycles.forEach(cycle => {
-                    if (!cycle.logs) {
-                        cycle.logs = {};
-                    }
-                });
-            }
-            // Ensure companion exists
-            if (userDataFromStorage.womenHealth.companion === undefined) {
-                 userDataFromStorage.womenHealth.companion = undefined;
-            }
         }
 
         // Calendar Events Migration
@@ -318,75 +343,6 @@ const App: React.FC = () => {
             });
         }
 
-        // Add 'Learn new language' journey goal
-        if (!userDataFromStorage.goals.some(g => g.title === 'یادگیری زبان جدید')) {
-            userDataFromStorage.goals.push({
-                id: `goal-journey-${Date.now()}`,
-                type: 'journey',
-                title: 'یادگیری زبان جدید',
-                icon: 'Education',
-                progress: 0,
-                milestones: [
-                    {
-                        id: `ms-${Date.now()}-1`,
-                        title: 'مایلستون اول: اصول اولیه',
-                        description: 'یادگیری الفبا و کلمات پایه',
-                        tasks: [
-                            { id: `task-${Date.now()}-1-1`, title: 'یادگیری الفبا و تلفظ', completed: false },
-                            { id: `task-${Date.now()}-1-2`, title: 'یادگیری ۱۰۰ کلمه پرکاربرد', completed: false },
-                        ]
-                    },
-                    {
-                        id: `ms-${Date.now()}-2`,
-                        title: 'مایلستون دوم: ساخت جمله',
-                        description: 'تمرین ساخت جملات ساده',
-                        tasks: [
-                            { id: `task-${Date.now()}-2-1`, title: 'یادگیری گرامر پایه', completed: false },
-                            { id: `task-${Date.now()}-2-2`, title: 'تمرین مکالمه روزمره', completed: false },
-                        ]
-                    },
-                    {
-                        id: `ms-${Date.now()}-3`,
-                        title: 'مایلستون سوم: مکالمه',
-                        description: 'توانایی مکالمه در مورد موضوعات ساده',
-                        tasks: [
-                            { id: `task-${Date.now()}-3-1`, title: 'تماشای یک فیلم با زیرنویس', completed: false },
-                            { id: `task-${Date.now()}-3-2`, title: 'پیدا کردن یک پارتنر زبان', completed: false },
-                        ]
-                    }
-                ]
-            });
-        }
-        
-        // Add 'Learn Python' simple goal
-        if (!userDataFromStorage.goals.some(g => g.title === 'یادگیری پایتون')) {
-            const targetDate = new Date();
-            targetDate.setMonth(targetDate.getMonth() + 3);
-            const targetDateString = targetDate.toISOString().split('T')[0];
-
-            userDataFromStorage.goals.push({
-                id: `goal-python-${Date.now()}`,
-                type: 'simple',
-                title: 'یادگیری پایتون',
-                icon: 'Education',
-                progress: 0,
-                targetDate: targetDateString,
-            });
-        }
-
-        // Add 'complete 10 pomodoros of meditation' goal
-        if (!userDataFromStorage.goals.some(g => g.title === 'تکمیل ۱۰ پومودورو مدیتیشن')) {
-            userDataFromStorage.goals.push({
-                id: `goal-pomodoro-meditation-${Date.now()}`,
-                type: 'simple',
-                title: 'تکمیل ۱۰ پومودورو مدیتیشن',
-                icon: 'Target',
-                progress: 0,
-                pomodorosToComplete: 10,
-                pomodorosCompleted: 0,
-            });
-        }
-
         // Low Friction Mode Migration
         if (userDataFromStorage.isLowFrictionMode === undefined) {
             userDataFromStorage.isLowFrictionMode = false;
@@ -402,10 +358,6 @@ const App: React.FC = () => {
             });
         }
 
-        // Theme Override
-        userDataFromStorage.theme = { name: 'galaxy_dream', animations: { enabled: false } };
-
-
         localStorage.setItem('benvis_user_data', JSON.stringify(userDataFromStorage));
         // --- END MIGRATION LOGIC ---
       }
@@ -420,13 +372,39 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (userData?.theme?.name) {
-        document.documentElement.setAttribute('data-theme-name', userData.theme.name);
-        document.body.setAttribute('data-theme-name', userData.theme.name); // Also apply to body for animations
+    const themeName = userData?.theme?.name || 'benvis_classic';
+    document.documentElement.setAttribute('data-theme-name', themeName);
+    document.body.setAttribute('data-theme-name', themeName); // Also apply to body for animations
+
+    if (themeName === 'custom' && userData?.theme?.customColor) {
+        const base = userData.theme.customColor;
+        const color200 = adjustColor(base, 0.6); // Lightest
+        const color300 = adjustColor(base, 0.4);
+        const color400 = adjustColor(base, 0.2);
+        const color500 = base;
+        const color600 = adjustColor(base, -0.1);
+        const color700 = adjustColor(base, -0.2);
+        const color800 = adjustColor(base, -0.4); // Darkest
+
+        document.documentElement.style.setProperty('--color-primary-200', color200);
+        document.documentElement.style.setProperty('--color-primary-300', color300);
+        document.documentElement.style.setProperty('--color-primary-400', color400);
+        document.documentElement.style.setProperty('--color-primary-500', color500);
+        document.documentElement.style.setProperty('--color-primary-600', color600);
+        document.documentElement.style.setProperty('--color-primary-700', color700);
+        document.documentElement.style.setProperty('--color-primary-800', color800);
+
+        // Set default background for custom theme
+        document.documentElement.style.setProperty('--bg-color', '#0f172a');
+        document.documentElement.style.setProperty('--bg-image', 'radial-gradient(at 20% 20%, rgba(30, 41, 59, 0.5) 0px, transparent 50%), radial-gradient(at 80% 80%, rgba(15, 23, 42, 0.5) 0px, transparent 50%)');
     } else {
-        // Fallback for safety
-        document.documentElement.setAttribute('data-theme-name', 'benvis_classic');
-        document.body.setAttribute('data-theme-name', 'benvis_classic');
+        // Clean up custom properties when switching back to presets
+        const keys = [
+            '--color-primary-200', '--color-primary-300', '--color-primary-400', 
+            '--color-primary-500', '--color-primary-600', '--color-primary-700', 
+            '--color-primary-800', '--bg-color', '--bg-image'
+        ];
+        keys.forEach(key => document.documentElement.style.removeProperty(key));
     }
 
     if (userData?.theme?.animations?.enabled === false) {
@@ -512,6 +490,14 @@ const App: React.FC = () => {
             { id: 'cat-inc-2', name: 'پروژه', type: 'income' },
         ],
         incomeAnalysis: { sources: [], report: null, lastUpdated: null },
+        tasks: [],
+        timeBlocks: [],
+        womenHealth: data.gender === 'female' ? {
+            cycleLogs: [],
+            periodStarts: [],
+            avgCycleLength: 28,
+            partner: { enabled: false, name: '' }
+        } : undefined,
     };
     localStorage.setItem('benvis_user_data', JSON.stringify(finalData));
     setUserData(finalData);

@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeName, Habit, TransactionCategory } from '../types';
-import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon } from './icons';
+import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon } from './icons';
 
 interface SettingsViewProps {
     userData: OnboardingData;
@@ -234,6 +233,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         onUpdateUserData({ ...userData, theme: { ...userData.theme, name } });
     };
 
+    const handleCustomColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdateUserData({ ...userData, theme: { name: 'custom', customColor: e.target.value, animations: userData.theme.animations } });
+    };
+
     return (
      <div className="pb-24 space-y-6">
         {habitModal.isOpen && <HabitModal habitToEdit={habitModal.habitToEdit} currentHabits={userData.habits} onSave={handleSaveHabit} onClose={() => setHabitModal({isOpen: false})} />}
@@ -323,11 +326,25 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                             <div key={theme.id} className="text-center">
                                 <button
                                     onClick={() => handleThemeChange(theme.id)}
-                                    className={`w-full rounded-lg p-1 border-2 transition-colors ${isSelected ? 'border-[var(--color-primary-500)]' : 'border-transparent'}`}
+                                    className={`w-full rounded-lg p-1 border-2 transition-colors ${isSelected ? 'border-[var(--color-primary-500)] scale-105' : 'border-transparent hover:scale-105'} transform duration-200`}
                                 >
-                                    <div data-theme-name={theme.id} className={`h-20 w-full rounded-md theme-preview flex flex-col justify-end p-2`}>
-                                        <div className="w-1/2 h-2.5 bg-[var(--color-primary-500)] rounded-sm mb-1"></div>
-                                        <div className="w-2/3 h-2.5 bg-[var(--color-primary-400)] rounded-sm"></div>
+                                    <div 
+                                        data-theme-name={theme.id} 
+                                        className="h-24 w-full rounded-lg theme-preview relative overflow-hidden shadow-lg"
+                                        style={{
+                                            backgroundColor: 'var(--bg-color)',
+                                            backgroundImage: 'var(--bg-image)',
+                                        }}
+                                    >
+                                        <div className="absolute bottom-0 left-0 right-0 p-2 space-y-1.5 opacity-80">
+                                            <div className="w-3/4 h-2 bg-[var(--color-primary-500)] rounded-full"></div>
+                                            <div className="w-1/2 h-2 bg-[var(--color-primary-400)] rounded-full"></div>
+                                        </div>
+                                        {isSelected && (
+                                            <div className="absolute top-2 right-2 bg-[var(--color-primary-500)] text-white rounded-full p-0.5 shadow-sm">
+                                                <CheckCircleIcon className="w-4 h-4" />
+                                            </div>
+                                        )}
                                     </div>
                                 </button>
                                 <p className={`mt-2 text-sm font-semibold transition-colors ${isSelected ? 'text-[var(--color-primary-300)]' : 'text-gray-400'}`}>
@@ -336,7 +353,45 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                             </div>
                         );
                     })}
+                    {/* Custom Theme Option */}
+                    <div className="text-center">
+                        <button
+                            onClick={() => handleThemeChange('custom')}
+                            className={`w-full rounded-lg p-1 border-2 transition-colors ${userData.theme.name === 'custom' ? 'border-[var(--color-primary-500)] scale-105' : 'border-transparent hover:scale-105'} transform duration-200`}
+                        >
+                            <div 
+                                className="h-24 w-full rounded-lg bg-slate-800 flex items-center justify-center relative overflow-hidden shadow-lg"
+                            >
+                                <div className="absolute inset-0 opacity-50 bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500"></div>
+                                <SparklesIcon className="w-8 h-8 text-white relative z-10" />
+                                {userData.theme.name === 'custom' && (
+                                    <div className="absolute top-2 right-2 bg-[var(--color-primary-500)] text-white rounded-full p-0.5 shadow-sm z-20">
+                                        <CheckCircleIcon className="w-4 h-4" />
+                                    </div>
+                                )}
+                            </div>
+                        </button>
+                        <p className={`mt-2 text-sm font-semibold transition-colors ${userData.theme.name === 'custom' ? 'text-[var(--color-primary-300)]' : 'text-gray-400'}`}>
+                            شخصی‌سازی
+                        </p>
+                    </div>
                 </div>
+
+                {userData.theme.name === 'custom' && (
+                    <div className="mt-4 p-4 bg-gray-700/30 rounded-lg flex items-center justify-between animate-bounce-in">
+                        <span className="text-sm font-semibold text-gray-300">رنگ اصلی تم خود را انتخاب کنید:</span>
+                        <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded-full shadow-sm border border-gray-500" style={{ backgroundColor: userData.theme.customColor || '#7c3aed' }}></div>
+                             <input 
+                                type="color" 
+                                value={userData.theme.customColor || '#7c3aed'} 
+                                onChange={handleCustomColorChange}
+                                className="w-24 h-10 p-1 bg-gray-800 border border-gray-600 rounded-md cursor-pointer"
+                            />
+                        </div>
+                    </div>
+                )}
+
                 <div className="mt-6 pt-4 border-t border-gray-700">
                     <div className="flex justify-between items-center">
                         <div>

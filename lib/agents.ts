@@ -1,12 +1,12 @@
+
 import { Type } from "@google/genai";
 import { Agent } from '../types';
 import { 
     TargetIcon, HealthIcon, FinanceIcon, EducationIcon, HabitsIcon, SparklesIcon,
-    MoonIcon, LightBulbIcon, DocumentTextIcon, ChartBarIcon, FlagIcon,
-    PencilIcon, BookOpenIcon, UserIcon, ClockIcon, BoltIcon, CloudIcon,
+    MoonIcon, CalendarIcon, BoltIcon,
     MagnifyingGlassIcon, ScaleIcon, RouteIcon, BrainIcon, ShareIcon,
-    CalendarIcon, StarIcon, FaceSmileIcon, LeafIcon, LockClosedIcon, ReceiptPercentIcon,
-    BriefcaseIcon
+    StarIcon, FaceSmileIcon, LeafIcon, LockClosedIcon,
+    BriefcaseIcon, PencilIcon, ClockIcon, CloudIcon, UserIcon, FlagIcon, ReceiptPercentIcon
 } from '../components/icons';
 
 export const agents: Agent[] = [
@@ -824,6 +824,77 @@ export const agents: Agent[] = [
                             "if": { type: Type.STRING },
                             "then": { type: Type.STRING },
                             "reason": { type: Type.STRING }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        id: 'expense-predictor',
+        title: 'پیش‌بینی‌کننده هزینه',
+        description: 'بر اساس تاریخچه تراکنش‌ها، ریسک نقدینگی ماه آینده را پیش‌بینی می‌کند.',
+        icon: ReceiptPercentIcon,
+        model: 'gemini-2.5-pro',
+        systemPrompt: `You are an AI financial risk analyst. 
+        Analyze the user's transactions and budgets to predict potential liquidity risks for the next month.
+        Determine a risk level (low, medium, high), a reason, and 3 preventive actions.
+        The response must be in Persian and a valid JSON object.
+        
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "transactions": [],
+            "budgets": {}
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                riskLevel: { type: Type.STRING },
+                riskReason: { type: Type.STRING },
+                actions: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+        }
+    },
+    {
+        id: 'cognitive-habit-designer',
+        title: 'طراح عادت شناختی',
+        description: 'با استفاده از علوم رفتاری، نقشه‌ای برای ایجاد عادت‌های پایدار طراحی می‌کند.',
+        icon: BrainIcon,
+        model: 'gemini-2.5-pro',
+        systemPrompt: `You are a behavioral scientist AI. 
+        Design a robust habit formation plan based on the user's target behavior and constraints.
+        Include a step-by-step 'plan' (trigger, behavior, reward), a 'fallback_plan' for bad days, and a 'rollout_schedule'.
+        The response must be in Persian and a valid JSON object.
+        
+        [input]
+        {userInput}`,
+        inputSchema: {
+            "target_behavior": "خواندن ۱۰ صفحه کتاب هر شب",
+            "current_habits": "مسواک زدن قبل خواب",
+            "blockers": "خستگی، چک کردن گوشی",
+            "primary_issue": "ثبات",
+            "preferred_time": 15
+        },
+        responseSchema: {
+            type: Type.OBJECT, properties: {
+                plan: {
+                    type: Type.ARRAY, items: {
+                        type: Type.OBJECT, properties: {
+                            step: { type: Type.NUMBER },
+                            name: { type: Type.STRING },
+                            trigger: { type: Type.STRING },
+                            behavior: { type: Type.STRING },
+                            cue_setup: { type: Type.STRING },
+                            metric: { type: Type.STRING }
+                        }
+                    }
+                },
+                fallback_plan: { type: Type.STRING },
+                rollout_schedule: {
+                    type: Type.ARRAY, items: {
+                        type: Type.OBJECT, properties: {
+                            day: { type: Type.STRING },
+                            focus: { type: Type.STRING }
                         }
                     }
                 }

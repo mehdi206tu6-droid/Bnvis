@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { OnboardingData, FocusSession } from '../types';
@@ -49,13 +50,6 @@ const EnergyPredictionWidget: React.FC<{ userData: OnboardingData }> = ({ userDa
         const allSessions: FocusSession[] = storedSessions ? JSON.parse(storedSessions) : [];
         const todaySessions = allSessions.filter(s => s.date === todayStr);
         const focusMinutes = todaySessions.reduce((sum, s) => sum + s.duration, 0);
-
-        let womenHealthContext = '';
-        if (userData.gender === 'female' && userData.womenHealth.cycles.length > 0) {
-            const lastCycle = [...userData.womenHealth.cycles].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
-            const dayOfCycle = Math.floor((new Date().getTime() - new Date(lastCycle.startDate).getTime()) / 86400000) + 1;
-            womenHealthContext = `User is on day ${dayOfCycle} of their menstrual cycle.`;
-        }
         
         const incompleteGoals = userData.goals.filter(g => g.progress < 100).map(g => g.title).join(', ') || 'None';
 
@@ -68,7 +62,6 @@ const EnergyPredictionWidget: React.FC<{ userData: OnboardingData }> = ({ userDa
             - Missed habits: ${missedHabits.join(', ') || 'None'}
             - Total focus time: ${focusMinutes} minutes
             - Current goals: ${goalsProgress}
-            - ${womenHealthContext}
             - Incomplete goals available for tasks: ${incompleteGoals}
 
             Task:

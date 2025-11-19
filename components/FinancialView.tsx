@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { OnboardingData, Transaction, TransactionCategory, TransactionType, FinancialAccount, Budget } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -19,7 +20,9 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('fa-IR').format
 // --- SUB-COMPONENTS ---
 
 const OverviewTab: React.FC<{ userData: OnboardingData }> = ({ userData }) => {
-    const { transactions = [], transactionCategories = [], financialAccounts = [] } = userData;
+    const transactions: Transaction[] = userData.transactions || [];
+    const transactionCategories: TransactionCategory[] = userData.transactionCategories || [];
+    const financialAccounts: FinancialAccount[] = userData.financialAccounts || [];
     
     const monthlySummary = useMemo(() => {
         const now = new Date();
@@ -96,8 +99,8 @@ const OverviewTab: React.FC<{ userData: OnboardingData }> = ({ userData }) => {
                                         <span className="font-semibold">{category}</span>
                                         <span className="text-gray-400">{formatCurrency(Number(amount))}</span>
                                     </div>
-                                    <div className="w-full bg-gray-700 rounded-full h-2">
-                                        <div className="h-2 rounded-full" style={{ width: `${percent}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                    <div className="w-full bg-gray-700 rounded-full h-2.5">
+                                        <div className="h-2.5 rounded-full" style={{ width: `${percent}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
                                     </div>
                                 </div>
                             )
@@ -175,7 +178,10 @@ const TransactionFormModal: React.FC<{
 };
 
 const TransactionsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void }> = ({ userData, onUpdateUserData }) => {
-    const { transactions = [], transactionCategories = [], financialAccounts = [] } = userData;
+    const transactions: Transaction[] = userData.transactions || [];
+    const transactionCategories: TransactionCategory[] = userData.transactionCategories || [];
+    const financialAccounts: FinancialAccount[] = userData.financialAccounts || [];
+
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
@@ -264,7 +270,7 @@ const TransactionsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (d
                 </button>
             </div>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                {Object.entries(groupedTransactions).map(([date, txs]) => (
+                {Object.entries(groupedTransactions).map(([date, txs]: [string, Transaction[]]) => (
                     <div key={date}>
                         <h4 className="font-semibold text-gray-400 mb-2">{new Date(date).toLocaleDateString('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
                         <div className="space-y-2">
@@ -359,13 +365,55 @@ const SmsParserTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data
                 contents: prompt,
                 config: { responseMimeType: "application/json", responseSchema }
             });
-            setParsedTxs(JSON.parse(response.text.trim()));
+            
+            const text = response.text;
+            if (text) {
+                try {
+                    const parsed = JSON.parse(text.trim());
+                    if (Array.isArray(parsed)) {
+                        setParsedTxs(parsed);
+                    } else {
+                         alert('فرمت پاسخ معتبر نیست.');
+                    }
+                } catch (e) {
+                    console.error("JSON parse error", e);
+                    alert('خطا در خواندن پاسخ هوش مصنوعی.');
+                }
+            } else {
+                alert('پاسخی از هوش مصنوعی دریافت نشد.');
+            }
         } catch (error) {
             console.error(error);
             alert('خطا در پردازش پیامک‌ها.');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleAddTransaction = (tx: Omit<Transaction, 'id' | 'accountId'>) => {
+        const defaultAccount = userData.financialAccounts?.[0]?.id || 'default-cash';
+        const newTx: Transaction = {
+            ...tx,
+            id: `tx-${Date.now()}-${Math.random()}`,
+            accountId: defaultAccount,
+            categoryId: userData.transactionCategories?.[0]?.id || '' // Default to first category, user should edit later
+        };
+        
+        const balanceChange = newTx.type === 'income' ? newTx.amount : -newTx.amount;
+        const updatedAccounts = (userData.financialAccounts || []).map(acc => {
+            if (acc.id === defaultAccount) {
+                return { ...acc, balance: acc.balance + balanceChange };
+            }
+            return acc;
+        });
+
+        onUpdateUserData({
+            ...userData,
+            transactions: [...(userData.transactions || []), newTx],
+            financialAccounts: updatedAccounts
+        });
+        
+        setParsedTxs(prev => prev.filter(t => t !== tx));
     };
     
     return (
@@ -382,7 +430,23 @@ const SmsParserTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data
             <button onClick={handleParse} disabled={isLoading} className="w-full mt-4 py-3 bg-violet-600 rounded-lg font-semibold disabled:bg-gray-600">
                 {isLoading ? 'در حال پردازش...' : 'پردازش پیامک‌ها'}
             </button>
-            {/* Display parsed transactions and allow user to confirm/add them */}
+            
+            {parsedTxs.length > 0 && (
+                <div className="mt-6 space-y-3">
+                    <h4 className="font-bold text-slate-300">تراکنش‌های شناسایی شده</h4>
+                    {parsedTxs.map((tx, index) => (
+                        <div key={index} className="bg-gray-700/50 p-3 rounded-lg flex justify-between items-center">
+                            <div>
+                                <p className="font-semibold">{tx.description}</p>
+                                <p className={`text-sm ${tx.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)} تومان</p>
+                            </div>
+                            <button onClick={() => handleAddTransaction(tx)} className="px-3 py-1 bg-green-600 rounded text-sm hover:bg-green-500">
+                                افزودن
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
