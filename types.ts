@@ -232,6 +232,40 @@ export interface SocialCircle {
     summaries: { date: string; data: CircleSummaryData }[];
 }
 
+// --- Book / Reading Types ---
+export interface BookNote {
+    id: string;
+    chapter: number;
+    content: string;
+    createdAt: string;
+}
+
+export interface BookVocabulary {
+    id: string;
+    word: string;
+    definition: string;
+    createdAt: string;
+}
+
+export interface Book {
+    id: string;
+    title: string;
+    author: string;
+    totalChapters: number;
+    currentChapter: number;
+    summary: string; // Brief overview
+    aiPersona: string; // System prompt for the AI when chatting about this book
+    status: 'reading' | 'completed' | 'wishlist';
+    coverColor: string;
+    coverImage?: string; // URL to image
+    genre?: string; // New field for categorization
+    lastReadDate?: string;
+    notes?: BookNote[];
+    vocabulary?: BookVocabulary[];
+    contentSource?: string; // Full text content if uploaded
+    chatHistory?: ChatMessage[]; // Store chat history per book
+}
+
 export interface SmartNotification {
     message: string;
     reason: string;
@@ -282,6 +316,7 @@ export interface OnboardingData {
   womenHealth?: WomenHealthData;
   socialCircles?: SocialCircle[];
   microCourses?: MicroCourse[];
+  books?: Book[]; // New field for books
   xp: number;
   level: number;
   achievements: AchievementID[];

@@ -8,7 +8,7 @@ import {
     ArrowLeftIcon, goalIcons, QueueListIcon,
     Squares2X2Icon, ChartPieIcon, UserCircleIcon, ArrowUpIcon,
     LevelUpIcon, HealthIcon, AcademicCapIcon, MicrophoneIcon,
-    MagnifyingGlassIcon, CheckCircleIcon, PlusIcon, SunIcon, BenvisLogoIcon
+    MagnifyingGlassIcon, CheckCircleIcon, PlusIcon, SunIcon, BenvisLogoIcon, BookOpenIcon
 } from './icons';
 
 // Import Views
@@ -27,6 +27,7 @@ import { NightRoutineView } from './NightRoutineView';
 import EisenhowerMatrixView from './EisenhowerMatrixView';
 import TimeBlockingView from './TimeBlockingView';
 import LifeWheelView from './LifeWheelView';
+import BooksView from './BooksView'; // Import the new BooksView
 
 // Import Widgets
 import StatsSummaryWidget from './StatsSummaryWidget';
@@ -55,7 +56,7 @@ type ViewState =
     'dashboard' | 'goals' | 'focus' | 'calendar' | 'finance' | 
     'assistant' | 'settings' | 'womenHealth' | 'social' | 
     'shop' | 'microCourse' | 'review' | 'nightRoutine' | 
-    'eisenhower' | 'timeBlocking' | 'lifeWheel';
+    'eisenhower' | 'timeBlocking' | 'lifeWheel' | 'books';
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
     userData, onUpdateUserData, addXp, levelUpInfo, onLevelUpSeen, newAchievements, onAchievementsSeen 
@@ -274,13 +275,15 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         const todayStr = new Date().toISOString().split('T')[0];
         const todayEventsCount = (userData.calendarEvents || []).filter(e => e.date === todayStr).length;
         const todayTransactionsCount = (userData.transactions || []).filter(t => t.date === todayStr).length;
+        const readingBooksCount = (userData.books || []).filter(b => b.status === 'reading').length;
 
         // iOS Style Tiles
         const tiles = [
             { id: 'goals', label: 'اهداف', icon: TargetIcon, color: 'text-blue-400', bg: 'bg-blue-500/10', count: activeGoalsCount },
             { id: 'focus', label: 'تمرکز', icon: MoonIcon, color: 'text-indigo-400', bg: 'bg-indigo-500/10', count: pendingTasksCount },
-            { id: 'calendar', label: 'تقویم', icon: CalendarIcon, color: 'text-red-400', bg: 'bg-red-500/10', count: todayEventsCount }, // Apple Calendar red
+            { id: 'calendar', label: 'تقویم', icon: CalendarIcon, color: 'text-red-400', bg: 'bg-red-500/10', count: todayEventsCount }, 
             { id: 'finance', label: 'مالی', icon: FinanceIcon, color: 'text-green-400', bg: 'bg-green-500/10', count: todayTransactionsCount },
+            { id: 'books', label: 'کتاب‌باز', icon: BookOpenIcon, color: 'text-amber-400', bg: 'bg-amber-500/10', count: readingBooksCount }, // Added Book Tile
             { id: 'assistant', label: 'دستیار', icon: SparklesIcon, color: 'text-purple-400', bg: 'bg-purple-500/10', count: 0 },
             { id: 'eisenhower', label: 'اولویت', icon: Squares2X2Icon, color: 'text-orange-400', bg: 'bg-orange-500/10', count: pendingTasksCount },
             { id: 'timeBlocking', label: 'زمان', icon: QueueListIcon, color: 'text-cyan-400', bg: 'bg-cyan-500/10', count: 0 },
@@ -486,6 +489,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
             {activeView === 'eisenhower' && <EisenhowerMatrixView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'timeBlocking' && <TimeBlockingView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'lifeWheel' && <LifeWheelView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'books' && <BooksView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} addXp={addXp} />}
         </div>
     );
 };
