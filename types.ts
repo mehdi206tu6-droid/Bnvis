@@ -2,126 +2,82 @@
 import type { FC } from 'react';
 
 export type ThemeName = 
-  | 'benvis_classic'
-  | 'oceanic_deep'
-  | 'forest_whisper'
-  | 'sunset_bliss'
-  | 'galaxy_dream'
-  | 'cyberpunk_neon'
-  | 'royal_gold'
-  | 'zen_garden'
-  | 'crimson_night'
-  | 'pastel_dream'
-  | 'custom';
+    | 'benvis_classic' 
+    | 'oceanic_deep' 
+    | 'forest_whisper' 
+    | 'sunset_bliss' 
+    | 'galaxy_dream' 
+    | 'cyberpunk_neon' 
+    | 'royal_gold' 
+    | 'zen_garden' 
+    | 'crimson_night' 
+    | 'pastel_dream' 
+    | 'custom';
 
-export interface ThemeSettings {
-  name: ThemeName;
-  animations?: { enabled: boolean; };
-  customColor?: string;
+export type NotificationTiming = '1h' | '6h' | '1d';
+export type NotificationType = 'tasks' | 'reminders' | 'daily_report' | 'budget_alerts' | 'low_balance_warnings';
+
+export interface NotificationSetting {
+    enabled: boolean;
+    timing?: NotificationTiming;
+    sound?: string;
+    time?: string; // For daily report
+}
+
+export interface DailyReportSetting extends NotificationSetting {
+    time: string;
 }
 
 export interface Habit {
-  name: string;
-  type: 'good' | 'bad';
-  category?: string;
-  icon?: string;
-  color?: string;
-  notification?: NotificationSetting;
-}
-
-export interface CalendarEvent {
-    id: string; // ISO string date as ID
-    date: string; // YYYY-MM-DD
-    time?: string; // HH:mm
-    text: string;
-}
-
-export type TransactionType = 'income' | 'expense';
-
-export interface TransactionCategory {
-    id: string;
     name: string;
-    type: TransactionType;
+    type: 'good' | 'bad';
+    category?: string;
     icon?: string;
     color?: string;
-}
-
-export interface FinancialAccount {
-    id: string;
-    name: string;
-    type: 'bank' | 'card' | 'cash';
-    last4?: string;
-    balance: number;
-}
-
-export interface Budget {
-    categoryId: string;
-    amount: number;
-}
-
-export interface Transaction {
-    id: string;
-    type: TransactionType;
-    amount: number;
-    description: string;
-    date: string; // YYYY-MM-DD
-    categoryId: string;
-    accountId: string;
-}
-
-export type IncomeSourceType = 'main_job' | 'freelance' | 'investment' | 'rent' | 'online_store' | 'other';
-export type IncomeVariability = 'fixed' | 'variable';
-export type Rating = 'low' | 'medium' | 'high';
-
-export interface IncomeSource {
-    id: string;
-    name: string; // e.g., "Main Job", "Freelance Graphic Design"
-    type: IncomeSourceType;
-    role?: string; // Only for main_job
-    incomeType: IncomeVariability;
-    avgMonthlyIncome: number;
-    associatedCosts?: string;
-    stability: Rating;
-    growthPotential: Rating;
-    risk: Rating;
-}
-
-export interface IncomeAnalysis {
-    sources: IncomeSource[];
-    report: string | null;
-    lastUpdated: string | null;
-}
-
-export interface JourneyTask {
-    id: string;
-    title: string;
-    completed: boolean;
-}
-
-export interface JourneyMilestone {
-    id: string;
-    title: string;
-    description: string;
-    tasks: JourneyTask[];
+    notification?: NotificationSetting;
 }
 
 export interface KeyResult {
     id: string;
     title: string;
     baseline: number;
-    target: number;
     current: number;
+    target: number;
     unit: string;
 }
 
 export interface SmartCriteria {
-    specific: string;
-    measurable: string;
-    achievable: string;
-    relevant: string;
-    timeBound: string;
-    effort?: 'Low' | 'Medium' | 'High';
+    specific?: string;
+    measurable?: string;
+    achievable?: string;
+    relevant?: string;
+    timeBound?: string;
+    effort?: string;
     actionSteps?: string[];
+}
+
+export interface JourneyMilestone {
+    id: string;
+    title: string;
+    description: string;
+    tasks: { id: string; title: string; completed: boolean }[];
+}
+
+export interface UserGoal {
+    id: string;
+    title: string;
+    type: 'simple' | 'smart' | 'journey' | 'okr';
+    description?: string;
+    icon: string;
+    progress: number;
+    progressHistory: { date: string; progress: number }[];
+    targetDate?: string;
+    linkedHabits?: string[];
+    pomodorosToComplete?: number;
+    pomodorosCompleted?: number;
+    keyResults?: KeyResult[];
+    smartCriteria?: SmartCriteria;
+    milestones?: JourneyMilestone[];
 }
 
 export interface StandaloneTask {
@@ -135,22 +91,9 @@ export interface StandaloneTask {
 export interface TimeBlock {
     id: string;
     title: string;
-    startTime: string; // HH:mm
-    endTime: string; // HH:mm
-    type: 'focus' | 'routine' | 'break' | 'meeting';
-    energyLevel?: 'high' | 'medium' | 'low';
-}
-
-export interface LifeWheelCategory {
-    id: string;
-    label: string;
-    score: number; // 1-10
-}
-
-export interface LifeWheelAssessment {
-    date: string;
-    categories: LifeWheelCategory[];
-    analysis?: string;
+    startTime: string;
+    endTime: string;
+    type: 'focus' | 'break' | 'routine' | 'meeting';
 }
 
 export interface ShopItem {
@@ -158,12 +101,35 @@ export interface ShopItem {
     title: string;
     description: string;
     price: number;
+    type: 'theme' | 'badge';
+    value?: string;
     purchased: boolean;
-    type: 'theme' | 'badge' | 'feature';
-    value?: string; // e.g., theme name
 }
 
-// --- Micro-Courses Types ---
+export interface CircleMember {
+    id: string;
+    name: string;
+    score: number;
+}
+
+export interface CircleSummaryData {
+    groupProgress: string;
+    memberHighlights: {
+        name: string;
+        wins: string[];
+        growthOpportunities: string[];
+    }[];
+    nextWeekChallenge: string;
+    motivationMessage: string;
+}
+
+export interface SocialCircle {
+    id: string;
+    name: string;
+    members: CircleMember[];
+    summaries: { date: string; data: CircleSummaryData }[];
+}
+
 export interface MicroCourseDay {
     day: number;
     focus: string;
@@ -179,60 +145,141 @@ export interface MicroCourse {
     title: string;
     goal: string;
     days: MicroCourseDay[];
-    progress: number; // 0-100
+    progress: number;
     status: 'active' | 'completed';
     createdAt: string;
 }
 
-// --- Women's Health Types ---
-export interface CycleLog {
+export interface CalendarEvent {
+    id: string;
     date: string;
-    flow?: 'spotting' | 'light' | 'medium' | 'heavy';
-    symptoms: string[];
-    mood?: 'happy' | 'sensitive' | 'energetic' | 'tired' | 'anxious' | 'irritable';
-    notes?: string;
+    time?: string;
+    text: string;
 }
 
-export interface PartnerSettings {
-    enabled: boolean;
+export type TransactionType = 'income' | 'expense';
+
+export interface TransactionCategory {
+    id: string;
     name: string;
-    shareContent?: 'full' | 'summary';
+    type: TransactionType;
+}
+
+export interface Transaction {
+    id: string;
+    type: TransactionType;
+    amount: number;
+    description: string;
+    date: string;
+    categoryId: string;
+    accountId: string;
+}
+
+export interface Budget {
+    categoryId: string;
+    amount: number;
+}
+
+export interface FinancialAccount {
+    id: string;
+    name: string;
+    type: 'card' | 'cash' | 'bank';
+    balance: number;
+}
+
+export type IncomeVariability = 'fixed' | 'variable';
+export type Rating = 'low' | 'medium' | 'high';
+
+export interface IncomeSource {
+    id: string;
+    name: string;
+    role?: string;
+    type: 'main_job' | 'freelance' | 'investment' | 'rent' | 'online_store' | 'other';
+    avgMonthlyIncome: number;
+    incomeType: IncomeVariability;
+    stability: Rating;
+    growthPotential: Rating;
+    risk: Rating;
+    associatedCosts?: string;
+}
+
+export interface IncomeAnalysis {
+    sources: IncomeSource[];
+    report: string | null;
+    lastUpdated: string;
+}
+
+export interface LifeWheelCategory {
+    id: string;
+    label: string;
+    score: number;
+}
+
+export interface LifeWheelAssessment {
+    date: string;
+    categories: LifeWheelCategory[];
+    analysis: string;
+}
+
+export interface CycleLog {
+    date: string;
+    symptoms: string[];
+    mood?: 'happy' | 'energetic' | 'sensitive' | 'tired' | 'anxious' | 'irritable';
+    flow?: 'spotting' | 'light' | 'medium' | 'heavy';
 }
 
 export interface WomenHealthData {
     cycleLogs: CycleLog[];
-    periodStarts: string[]; // List of YYYY-MM-DD dates where a period started
+    periodStarts: string[];
     avgCycleLength: number;
-    partner: PartnerSettings;
+    partner: { enabled: boolean; name: string };
 }
 
-// --- Social Accountability Types ---
-export interface CircleSummaryData {
-    groupProgress: string;
-    memberHighlights: {
-        name: string;
-        wins: string[];
-        growthOpportunities: string[];
-    }[];
-    nextWeekChallenge: string;
-    motivationMessage: string;
+export interface OnboardingData {
+    fullName: string;
+    age: string;
+    role: string;
+    gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+    notifications: {
+        tasks: NotificationSetting;
+        reminders: NotificationSetting;
+        daily_report: DailyReportSetting;
+        budget_alerts?: NotificationSetting;
+        low_balance_warnings?: NotificationSetting;
+    };
+    theme: {
+        name: ThemeName;
+        customColor?: string;
+        animations?: { enabled: boolean };
+    };
+    xp: number;
+    level: number;
+    habits: Habit[];
+    goals: UserGoal[];
+    tasks: StandaloneTask[];
+    timeBlocks: TimeBlock[];
+    shopInventory: ShopItem[];
+    socialCircles: SocialCircle[];
+    microCourses: MicroCourse[];
+    calendarEvents: CalendarEvent[];
+    transactions: Transaction[];
+    budgets: Budget[];
+    financialAccounts: FinancialAccount[];
+    transactionCategories: TransactionCategory[];
+    incomeAnalysis?: IncomeAnalysis;
+    lifeWheel?: LifeWheelAssessment;
+    womenHealth?: WomenHealthData;
+    achievements: AchievementID[];
+    books: Book[];
 }
 
-export interface CircleMember {
-    id: string;
-    name: string;
-    score: number;
-    lastUpdateText?: string; // Temporary holding for generating summary
+export type AchievementID = string;
+
+export interface ChatMessage {
+    role: 'user' | 'model';
+    text: string;
 }
 
-export interface SocialCircle {
-    id: string;
-    name: string;
-    members: CircleMember[];
-    summaries: { date: string; data: CircleSummaryData }[];
-}
-
-// --- Book / Reading Types ---
 export interface BookNote {
     id: string;
     chapter: number;
@@ -244,7 +291,54 @@ export interface BookVocabulary {
     id: string;
     word: string;
     definition: string;
+    page?: number;
     createdAt: string;
+}
+
+// --- Advanced BookBuilder & Spiritual Types ---
+
+export interface BookUIHint {
+    themeColor: string;
+    coverStyle: string; // 'modern' | 'classic' | 'minimal' | 'mystic'
+    icon: string;
+}
+
+export interface BookPage {
+    page: number;
+    content: string;
+}
+
+export interface BookChapter {
+    id: string;
+    title: string;
+    summary: string;
+    pages: number[];
+}
+
+export interface RagChunk {
+    id: string;
+    sourcePages: number[];
+    text: string;
+}
+
+export interface BookMethod {
+    id: string;
+    name: string;
+    summary: string;
+    steps: string[];
+    sourceChapter?: string;
+}
+
+export interface ApplicationIdea {
+    feature: string;
+    description: string;
+    methodRefs: string[];
+}
+
+export interface BookHighlight {
+    text: string;
+    page: number;
+    note?: string;
 }
 
 export interface Book {
@@ -253,17 +347,57 @@ export interface Book {
     author: string;
     totalChapters: number;
     currentChapter: number;
-    summary: string; // Brief overview
-    aiPersona: string; // System prompt for the AI when chatting about this book
+    summary: string;
+    aiPersona: string; // System prompt for the "Spirit of the Book"
     status: 'reading' | 'completed' | 'wishlist';
     coverColor: string;
-    coverImage?: string; // URL to image
-    genre?: string; // New field for categorization
+    coverImage?: string;
+    genre?: string;
+    publishedYear?: string;
+    tags?: string[];
     lastReadDate?: string;
     notes?: BookNote[];
     vocabulary?: BookVocabulary[];
-    contentSource?: string; // Full text content if uploaded
-    chatHistory?: ChatMessage[]; // Store chat history per book
+    contentSource?: string; // Legacy simple text or generated summary
+    chatHistory?: ChatMessage[];
+    
+    // Advanced Structure
+    uiHint?: BookUIHint;
+    pages?: BookPage[];
+    chapters?: BookChapter[];
+    ragChunks?: RagChunk[];
+    methods?: BookMethod[]; // Actionable steps extracted from book
+    applicationIdeas?: ApplicationIdea[]; // How to use this book in Benvis
+    highlights?: BookHighlight[];
+}
+
+export interface Note {
+    id: string;
+    content: string;
+    createdAt: string;
+}
+
+export interface GratitudeEntry {
+    id: string;
+    content: string;
+    createdAt: string;
+}
+
+export interface Agent {
+    id: string;
+    title: string;
+    description: string;
+    icon: FC<any>;
+    model: string;
+    systemPrompt: string;
+    inputSchema: Record<string, any>;
+    responseSchema: any;
+}
+
+export interface FocusSession {
+    date: string;
+    duration: number;
+    goalId: string | null;
 }
 
 export interface SmartNotification {
@@ -278,194 +412,45 @@ export interface RescheduleSuggestion {
     alternatives: string[];
 }
 
-export interface VoiceActionResponse {
-    intent: string;
-    parsedData: {
-        text: string;
-        metadata: any;
-    }
-}
-
-// --- Privacy & Encryption Types ---
 export interface EncryptedBackup {
-    data: string; // Ciphertext
+    data: string;
     iv: string;
     salt: string;
     version: number;
 }
 
-export interface OnboardingData {
-  fullName: string;
-  age: string;
-  role: string;
-  gender: 'female' | 'male' | 'other' | 'prefer_not_to_say';
-  selectedGoals: string[];
-  habits: Habit[];
-  notifications: {
-    tasks: NotificationSetting;
-    reminders: NotificationSetting;
-    daily_report: DailyReportSetting;
-    budget_alerts?: NotificationSetting;
-    low_balance_warnings?: NotificationSetting;
-  };
-  goals: UserGoal[];
-  tasks: StandaloneTask[];
-  timeBlocks: TimeBlock[];
-  lifeWheel?: LifeWheelAssessment;
-  shopInventory?: ShopItem[];
-  womenHealth?: WomenHealthData;
-  socialCircles?: SocialCircle[];
-  microCourses?: MicroCourse[];
-  books?: Book[]; // New field for books
-  xp: number;
-  level: number;
-  achievements: AchievementID[];
-  theme: ThemeSettings;
-  calendarEvents?: CalendarEvent[];
-  transactions?: Transaction[];
-  transactionCategories?: TransactionCategory[];
-  incomeAnalysis?: IncomeAnalysis;
-  financialAccounts?: FinancialAccount[];
-  budgets?: Budget[];
-  isLowFrictionMode?: boolean;
+// Interfaces for Web Speech API
+export interface SpeechRecognitionEvent {
+    results: {
+        [index: number]: {
+            [index: number]: {
+                transcript: string;
+            };
+        };
+    };
 }
 
-export type NotificationTiming = '1h' | '6h' | '1d' | 'none';
-
-export interface NotificationSetting {
-  enabled: boolean;
-  timing: NotificationTiming;
-  time?: string; // HH:mm specific time
-  sound?: string;
+export interface SpeechRecognitionErrorEvent {
+    error: string;
 }
 
-export interface DailyReportSetting {
-  enabled: boolean;
-  time: string; // "HH:mm"
-  sound?: string;
+export interface SpeechRecognition {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    start(): void;
+    stop(): void;
+    onstart: () => void;
+    onend: () => void;
+    onerror: (event: SpeechRecognitionErrorEvent) => void;
+    onresult: (event: SpeechRecognitionEvent) => void;
 }
 
-export type NotificationType = 'tasks' | 'reminders' | 'daily_report' | 'budget_alerts' | 'low_balance_warnings';
-
-export interface UserGoal {
-  id: string;
-  type: 'simple' | 'journey' | 'okr' | 'smart';
-  title: string;
-  icon: string;
-  description?: string;
-  progress: number; // 0-100
-  targetDate?: string;
-  linkedHabits?: string[];
-  progressHistory?: Array<{ date: string; progress: number }>;
-  pomodorosToComplete?: number;
-  pomodorosCompleted?: number;
-  milestones?: JourneyMilestone[];
-  keyResults?: KeyResult[]; // For OKR
-  smartCriteria?: SmartCriteria; // For SMART
-}
-
-export interface ChatMessage {
-  role: 'user' | 'model';
-  text: string;
-}
-
-export interface FocusSession {
-  date: string; // YYYY-MM-DD
-  duration: number; // in minutes
-  goalId: string | null;
-}
-
-export type AchievementID = 'first_goal_completed' | 'level_5' | '10_day_streak';
-
-export interface Achievement {
-  id: AchievementID;
-  title: string;
-  description: string;
-  icon: FC<{ className?: string }>;
-}
-
-export interface Note {
-    id: string;
-    content: string;
-    createdAt: string;
-}
-
-export interface GratitudeEntry {
-  id: string;
-  content: string;
-  createdAt: string;
-}
-
-// AI Agent Type
-export interface Agent {
-  id: string;
-  title: string;
-  description: string;
-  icon: FC<{ className?: string }>;
-  systemPrompt: string;
-  inputSchema: any; 
-  responseSchema: any;
-  model: 'gemini-2.5-pro' | 'gemini-2.5-flash';
-}
-
-// Types for Web Speech API
-export interface SpeechRecognitionErrorEvent extends Event {
-  readonly error: SpeechRecognitionErrorCode;
-  readonly message: string;
-}
-
-export type SpeechRecognitionErrorCode =
-  | "no-speech"
-  | "aborted"
-  | "audio-capture"
-  | "network"
-  | "not-allowed"
-  | "service-not-allowed"
-  | "bad-grammar"
-  | "language-not-supported";
-
-export interface SpeechRecognitionEvent extends Event {
-  readonly resultIndex: number;
-  readonly results: SpeechRecognitionResultList;
-}
-
-export interface SpeechRecognitionResultList {
-  readonly length: number;
-  item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
-}
-
-export interface SpeechRecognitionResult {
-  readonly isFinal: boolean;
-  readonly length: number;
-  item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
-}
-
-export interface SpeechRecognitionAlternative {
-  readonly transcript: string;
-  readonly confidence: number;
-}
-
-export interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  start(): void;
-  stop(): void;
-}
-
-export interface SpeechRecognitionStatic {
-  new (): SpeechRecognition;
-}
-
+// Augment Window interface to include webkitSpeechRecognition
 declare global {
-  interface Window {
-    SpeechRecognition: SpeechRecognitionStatic;
-    webkitSpeechRecognition: SpeechRecognitionStatic;
-  }
+    interface Window {
+        webkitSpeechRecognition: {
+            new (): SpeechRecognition;
+        };
+    }
 }

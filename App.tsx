@@ -1,6 +1,5 @@
-
-import React, { useState, useEffect, Component, type ReactNode } from 'react';
-import { OnboardingData, AchievementID, Book } from './types';
+import React, { Component, useState, useEffect, type ReactNode } from 'react';
+import { OnboardingData, AchievementID } from './types';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import DashboardScreen from './components/DashboardScreen';
 
@@ -15,7 +14,7 @@ interface ErrorBoundaryState {
 
 // Simple Error Boundary Component
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false, error: null };
+    state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: any) {
     return { hasError: true, error };
@@ -58,113 +57,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-const PRESET_BOOKS: Book[] = [
-    {
-        id: 'book-atomic',
-        title: 'عادت‌های اتمی',
-        author: 'جیمز کلیر',
-        totalChapters: 20,
-        currentChapter: 4,
-        summary: 'روشی آسان و اثبات‌شده برای ایجاد عادت‌های خوب و شکستن عادت‌های بد. تغییرات کوچک، نتایج بزرگ.',
-        aiPersona: 'You are the book Atomic Habits. Teach the user about the 1% rule and habit stacking.',
-        status: 'reading',
-        coverColor: '#f59e0b', // Amber
-        genre: 'توسعه فردی',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-write-happen',
-        title: 'بنویس تا اتفاق بیفتد',
-        author: 'هنریت کلاوسر',
-        totalChapters: 15,
-        currentChapter: 2,
-        summary: 'چگونه با مکتوب کردن آرزوها و اهداف، اولین قدم را برای دستیابی به آن‌ها برداریم.',
-        aiPersona: 'You are the book Write It Down, Make It Happen. Encourage the user to write their goals clearly.',
-        status: 'reading',
-        coverColor: '#8b5cf6', // Violet
-        genre: 'موفقیت',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-deep-work',
-        title: 'کار عمیق',
-        author: 'کال نیوپورت',
-        totalChapters: 12,
-        currentChapter: 0,
-        summary: 'قوانینی برای موفقیت متمرکز در دنیای حواس‌پرتی. چگونه در زمان کمتر، کار بیشتری انجام دهیم.',
-        aiPersona: 'You are the book Deep Work. Advocate for focus blocks and eliminating distractions.',
-        status: 'wishlist',
-        coverColor: '#eab308', // Yellow
-        genre: 'بهره‌وری',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-tiny-habits',
-        title: 'خرده‌عادت‌ها',
-        author: 'بی‌جی‌ فاگ',
-        totalChapters: 18,
-        currentChapter: 0,
-        summary: 'قدرت تغییرات کوچک که همه چیز را تغییر می‌دهد. تمرکز بر رفتارهای کوچک و جشن گرفتن پیروزی‌ها.',
-        aiPersona: 'You are the book Tiny Habits. Teach the ABC of habits: Anchor, Behavior, Celebration.',
-        status: 'wishlist',
-        coverColor: '#10b981', // Emerald
-        genre: 'روانشناسی',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-bullet-journal',
-        title: 'بولت ژورنال',
-        author: 'رایدر کارول',
-        totalChapters: 10,
-        currentChapter: 0,
-        summary: 'روش بولت ژورنال: پیگیری گذشته، ساماندهی حال، طراحی آینده.',
-        aiPersona: 'You are the Bullet Journal Method. Help the user organize their chaotic mind using lists and logs.',
-        status: 'wishlist',
-        coverColor: '#3b82f6', // Blue
-        genre: 'برنامه‌ریزی',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-compound-effect',
-        title: 'اثر مرکب',
-        author: 'دارن هاردی',
-        totalChapters: 6,
-        currentChapter: 0,
-        summary: 'آغاز جهشی در زندگی، موفقیت و درآمد. راز موفقیت در ثبات قدم و انتخاب‌های کوچک است.',
-        aiPersona: 'You are The Compound Effect. Remind the user that small, consistent actions yield huge results over time.',
-        status: 'wishlist',
-        coverColor: '#ef4444', // Red
-        genre: 'موفقیت',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-essentialism',
-        title: 'اصل‌گرایی',
-        author: 'گرگ مک‌کیون',
-        totalChapters: 14,
-        currentChapter: 0,
-        summary: 'چگونه انجام کارهای کمتر اما بهتر را یاد بگیریم. هنرِ مقدسِ "نه" گفتن.',
-        aiPersona: 'You are Essentialism. Teach the disciplined pursuit of less.',
-        status: 'wishlist',
-        coverColor: '#6366f1', // Indigo
-        genre: 'مدیریت زمان',
-        lastReadDate: new Date().toISOString()
-    },
-    {
-        id: 'book-5am-club',
-        title: 'باشگاه پنج صبحی‌ها',
-        author: 'رابین شارما',
-        totalChapters: 17,
-        currentChapter: 0,
-        summary: 'سحرخیز باشید تا رستگار شوید. فرمول ۲۰/۲۰/۲۰ برای شروع یک روز طوفانی.',
-        aiPersona: 'You are The 5 AM Club. Motivate the user to own their morning and elevate their life.',
-        status: 'wishlist',
-        coverColor: '#f97316', // Orange
-        genre: 'توسعه فردی',
-        lastReadDate: new Date().toISOString()
-    }
-];
-
 const App: React.FC = () => {
   const [userData, setUserData] = useState<OnboardingData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -195,17 +87,12 @@ const App: React.FC = () => {
             userDataFromStorage = null;
         } else {
             // 1. Sanitize Arrays
-            const arrayFields = ['goals', 'tasks', 'timeBlocks', 'shopInventory', 'socialCircles', 'microCourses', 'calendarEvents', 'transactions', 'budgets', 'financialAccounts', 'transactionCategories', 'habits', 'achievements'];
+            const arrayFields = ['goals', 'tasks', 'timeBlocks', 'shopInventory', 'socialCircles', 'microCourses', 'calendarEvents', 'transactions', 'budgets', 'financialAccounts', 'transactionCategories', 'habits', 'achievements', 'books'];
             arrayFields.forEach(field => {
                 if (!userDataFromStorage[field] || !Array.isArray(userDataFromStorage[field])) {
                     userDataFromStorage[field] = [];
                 }
             });
-
-            // 1.5 Inject Preset Books if empty
-            if (!userDataFromStorage.books || !Array.isArray(userDataFromStorage.books) || userDataFromStorage.books.length === 0) {
-                userDataFromStorage.books = PRESET_BOOKS;
-            }
 
             // 2. Goal Sanitation
             userDataFromStorage.goals = userDataFromStorage.goals.filter((g: any) => g && typeof g === 'object');
@@ -287,10 +174,6 @@ const App: React.FC = () => {
   
   const handleUpdateUserData = (data: OnboardingData) => {
     try {
-        // Ensure books are preserved or initialized if somehow lost in update
-        if (!data.books || data.books.length === 0) {
-            data.books = PRESET_BOOKS;
-        }
         localStorage.setItem('benvis_user_data', JSON.stringify(data));
         setUserData(data);
     } catch (e) {

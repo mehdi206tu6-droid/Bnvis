@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { OnboardingData, UserGoal, JourneyMilestone, Habit, KeyResult, SmartCriteria } from '../types';
 import { goalIcons, PlusIcon, PencilIcon, TrashIcon, ShareIcon, SparklesIcon, JourneyIcon, CheckCircleIcon, TargetIcon, CalendarIcon, ClockIcon, ChartBarIcon, ArrowUpIcon, ArrowDownIcon, FlagIcon, HabitsIcon } from './icons';
@@ -54,6 +55,7 @@ const KeywordGoalGeneratorModal: React.FC<{
                 description: result.description,
                 icon: Object.keys(goalIcons).includes(result.icon) ? result.icon : 'Target',
                 progress: 0,
+                progressHistory: [{ date: new Date().toISOString().split('T')[0], progress: 0 }],
                 targetDate: result.targetDate,
             };
             onSave(newGoal);
@@ -585,7 +587,8 @@ interface GoalsViewProps {
 }
 
 const GoalsView: React.FC<GoalsViewProps> = ({ userData, onUpdateUserData, addXp }) => {
-    const { goals, habits } = userData;
+    const goals = userData.goals || [];
+    const habits = userData.habits || [];
     const availableHabits = habits.map(h => h.name);
 
     const [view, setView] = useState<'list' | 'detail'>('list');

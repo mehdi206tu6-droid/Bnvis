@@ -1,39 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
-import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, Habit, ThemeName, UserGoal } from '../types';
+import React, { useState } from 'react';
+import { OnboardingData, ThemeName } from '../types';
 import { 
-    WavingHandIcon, UserIcon, TargetIcon, MoneyIcon, BellIcon, CalendarIcon, CheckCircleIcon,
-    HealthIcon, FinanceIcon, EducationIcon, HabitsIcon, BatteryIcon, WifiIcon, 
-    WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, SunIcon, CloudIcon, PlusIcon, TrashIcon,
-    BriefcaseIcon, SparklesIcon, MoonIcon, BoltIcon
+    WavingHandIcon, 
+    CheckCircleIcon
 } from './icons';
-import { GoogleGenAI } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface OnboardingScreenProps {
   onComplete: (data: OnboardingData) => void;
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 6;
 
 // Temporary state for onboarding flow
-type OnboardingState = Omit<OnboardingData, 'theme' | 'habits' | 'financialAccounts' | 'budgets' | 'transactions' | 'transactionCategories' | 'incomeAnalysis' | 'calendarEvents'> & {
-  habits: string[];
+type OnboardingState = Omit<OnboardingData, 'theme' | 'habits' | 'goals' | 'financialAccounts' | 'budgets' | 'transactions' | 'transactionCategories' | 'incomeAnalysis' | 'calendarEvents'> & {
   theme: ThemeName;
 };
-
-const presetGoals = [
-    { id: 'goal-health', title: 'بهبود سلامتی', icon: 'Health' },
-    { id: 'goal-finance', title: 'مدیریت مالی', icon: 'Finance' },
-    { id: 'goal-education', title: 'یادگیری مهارت جدید', icon: 'Education' },
-    { id: 'goal-habit', title: 'ساخت عادت‌های خوب', icon: 'Habits' },
-    { id: 'goal-work', title: 'پیشرفت شغلی', icon: 'Briefcase' },
-];
-
-const presetHabits = [
-    'نوشیدن آب', 'مطالعه', 'ورزش', 'مدیتیشن', 'خواب زود', 'برنامه‌ریزی روزانه'
-];
 
 const themes: { id: ThemeName; name: string; color: string }[] = [
     { id: 'benvis_classic', name: 'کلاسیک بنویس', color: '#a855f7' },
@@ -50,8 +32,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     age: '',
     role: '',
     gender: 'prefer_not_to_say',
-    selectedGoals: [],
-    habits: [],
     notifications: {
       tasks: { enabled: true, timing: '1h', sound: 'default' },
       reminders: { enabled: true, timing: '1d', sound: 'default' },
@@ -59,16 +39,17 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
       budget_alerts: { enabled: true, timing: '1h', sound: 'default' },
       low_balance_warnings: { enabled: true, timing: '1h', sound: 'default' },
     },
-    goals: [],
     tasks: [],
     timeBlocks: [],
     xp: 0,
     level: 1,
     achievements: [],
+    books: [],
     theme: 'benvis_classic',
     shopInventory: [],
+    socialCircles: [],
+    microCourses: [],
   });
-  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleNext = () => {
     if (step < TOTAL_STEPS - 1) {
@@ -85,55 +66,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
   };
 
   const finishOnboarding = () => {
-      // Convert local state to full OnboardingData
-      const finalHabits: Habit[] = data.habits.map(h => ({
-          name: h,
-          type: 'good',
-          icon: h === 'نوشیدن آب' ? 'WaterDrop' : 
-                h === 'مطالعه' ? 'Reading' : 
-                h === 'ورزش' ? 'Walking' : 
-                h === 'مدیتیشن' ? 'Meditation' : 'CheckCircle'
-      }));
-      
       const finalTheme = { name: data.theme, animations: { enabled: true } };
       
-      // Create Goal objects from selected IDs
-      const finalGoals: UserGoal[] = data.selectedGoals.map(id => {
-          const preset = presetGoals.find(p => p.id === id);
-          return {
-              id: `goal-${Date.now()}-${id}`,
-              type: 'simple',
-              title: preset?.title || 'هدف جدید',
-              icon: preset?.icon || 'Target',
-              progress: 0,
-              progressHistory: [{ date: new Date().toISOString().split('T')[0], progress: 0 }]
-          };
-      });
-
       onComplete({
           ...data,
-          habits: finalHabits,
+          habits: [], 
+          goals: [],  
+          financialAccounts: [],
+          budgets: [],
+          transactions: [],
+          transactionCategories: [],
+          calendarEvents: [],
+          books: [],
+          socialCircles: [],
+          microCourses: [],
+          achievements: [],
+          shopInventory: [],
+          tasks: [],
+          timeBlocks: [],
           theme: finalTheme,
-          goals: finalGoals
       });
-  };
-
-  const toggleGoal = (id: string) => {
-      setData(prev => ({
-          ...prev,
-          selectedGoals: prev.selectedGoals.includes(id) 
-            ? prev.selectedGoals.filter(g => g !== id)
-            : [...prev.selectedGoals, id]
-      }));
-  };
-
-  const toggleHabit = (habit: string) => {
-      setData(prev => ({
-          ...prev,
-          habits: prev.habits.includes(habit)
-            ? prev.habits.filter(h => h !== habit)
-            : [...prev.habits, habit]
-      }));
   };
 
   const updateNotification = (key: keyof typeof data.notifications, field: string, value: any) => {
@@ -230,48 +182,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
          );
          case 4: return (
             <div className="space-y-6">
-                 <h2 className="text-2xl font-bold text-white text-center">اهداف اصلی</h2>
-                 <div className="space-y-3">
-                     {presetGoals.map(goal => (
-                         <button
-                            key={goal.id}
-                            onClick={() => toggleGoal(goal.id)}
-                            className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${data.selectedGoals.includes(goal.id) ? 'bg-violet-600/20 border-violet-500 text-white' : 'bg-slate-800 border-slate-700 text-gray-400 hover:bg-slate-700'}`}
-                         >
-                             <div className={`p-2 rounded-full ${data.selectedGoals.includes(goal.id) ? 'bg-violet-600' : 'bg-slate-700'}`}>
-                                <TargetIcon className="w-5 h-5"/>
-                             </div>
-                             <span className="font-semibold">{goal.title}</span>
-                             {data.selectedGoals.includes(goal.id) && <CheckCircleIcon className="w-5 h-5 text-violet-400 mr-auto"/>}
-                         </button>
-                     ))}
-                 </div>
-                 <button onClick={handleNext} className="w-full py-3 bg-violet-600 rounded-xl font-bold text-white hover:bg-violet-500 transition-all">
-                      ادامه ({data.selectedGoals.length} انتخاب شده)
-                  </button>
-             </div>
-         );
-         case 5: return (
-            <div className="space-y-6">
-                 <h2 className="text-2xl font-bold text-white text-center">عادت‌های اولیه</h2>
-                 <div className="grid grid-cols-2 gap-3">
-                     {presetHabits.map(habit => (
-                         <button
-                            key={habit}
-                            onClick={() => toggleHabit(habit)}
-                            className={`p-3 rounded-xl border text-center text-sm transition-all ${data.habits.includes(habit) ? 'bg-violet-600/20 border-violet-500 text-white' : 'bg-slate-800 border-slate-700 text-gray-400 hover:bg-slate-700'}`}
-                         >
-                             {habit}
-                         </button>
-                     ))}
-                 </div>
-                 <button onClick={handleNext} className="w-full py-3 bg-violet-600 rounded-xl font-bold text-white hover:bg-violet-500 transition-all">
-                      ادامه
-                  </button>
-             </div>
-         );
-         case 6: return (
-            <div className="space-y-6">
                  <h2 className="text-2xl font-bold text-white text-center">تنظیمات اعلان</h2>
                  <div className="space-y-4">
                      <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl">
@@ -307,7 +217,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
                   </button>
              </div>
          );
-         case 7: return (
+         case 5: return (
             <div className="space-y-6">
                  <h2 className="text-2xl font-bold text-white text-center">انتخاب تم</h2>
                  <div className="grid grid-cols-2 gap-4">
