@@ -28,6 +28,18 @@ export interface DailyReportSetting extends NotificationSetting {
     time: string;
 }
 
+export interface AudioSettings {
+    voice: 'Kore' | 'Fenrir' | 'Puck' | 'Charon'; // Female, Male, Playful, Deep
+    speed: 'slow' | 'normal' | 'fast';
+    volume: number; // 0-1
+    soundEffects: boolean; // General UI sounds
+    bookSounds: {
+        pageTurn: boolean;
+        ambientMusic: boolean;
+        sfx: boolean;
+    };
+}
+
 export interface Habit {
     name: string;
     type: 'good' | 'bad';
@@ -235,44 +247,6 @@ export interface WomenHealthData {
     partner: { enabled: boolean; name: string };
 }
 
-export interface OnboardingData {
-    fullName: string;
-    age: string;
-    role: string;
-    gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
-    notifications: {
-        tasks: NotificationSetting;
-        reminders: NotificationSetting;
-        daily_report: DailyReportSetting;
-        budget_alerts?: NotificationSetting;
-        low_balance_warnings?: NotificationSetting;
-    };
-    theme: {
-        name: ThemeName;
-        customColor?: string;
-        animations?: { enabled: boolean };
-    };
-    xp: number;
-    level: number;
-    habits: Habit[];
-    goals: UserGoal[];
-    tasks: StandaloneTask[];
-    timeBlocks: TimeBlock[];
-    shopInventory: ShopItem[];
-    socialCircles: SocialCircle[];
-    microCourses: MicroCourse[];
-    calendarEvents: CalendarEvent[];
-    transactions: Transaction[];
-    budgets: Budget[];
-    financialAccounts: FinancialAccount[];
-    transactionCategories: TransactionCategory[];
-    incomeAnalysis?: IncomeAnalysis;
-    lifeWheel?: LifeWheelAssessment;
-    womenHealth?: WomenHealthData;
-    achievements: AchievementID[];
-    books: Book[];
-}
-
 export type AchievementID = string;
 
 export interface ChatMessage {
@@ -295,11 +269,9 @@ export interface BookVocabulary {
     createdAt: string;
 }
 
-// --- Advanced BookBuilder & Spiritual Types ---
-
 export interface BookUIHint {
     themeColor: string;
-    coverStyle: string; // 'modern' | 'classic' | 'minimal' | 'mystic'
+    coverStyle: string; 
     icon: string;
 }
 
@@ -339,6 +311,27 @@ export interface BookHighlight {
     text: string;
     page: number;
     note?: string;
+    color?: string;
+}
+
+export interface ReadingSession {
+    id: string;
+    date: string;
+    durationMinutes: number;
+    pagesRead: number;
+    startPage?: number;
+    endPage?: number;
+    mood?: string;
+    note?: string;
+}
+
+export interface Flashcard {
+    id: string;
+    question: string;
+    answer: string;
+    box: number; 
+    nextReviewDate?: string;
+    status: 'new' | 'learning' | 'review' | 'mastered';
 }
 
 export interface Book {
@@ -346,10 +339,12 @@ export interface Book {
     title: string;
     author: string;
     totalChapters: number;
+    totalPages?: number; 
     currentChapter: number;
+    currentPage?: number; 
     summary: string;
-    aiPersona: string; // System prompt for the "Spirit of the Book"
-    status: 'reading' | 'completed' | 'wishlist';
+    aiPersona: string; 
+    status: 'reading' | 'completed' | 'want_to_read';
     coverColor: string;
     coverImage?: string;
     genre?: string;
@@ -358,17 +353,63 @@ export interface Book {
     lastReadDate?: string;
     notes?: BookNote[];
     vocabulary?: BookVocabulary[];
-    contentSource?: string; // Legacy simple text or generated summary
+    contentSource?: string; 
+    pdfSource?: string;
+    hasExternalContent?: boolean; 
     chatHistory?: ChatMessage[];
     
-    // Advanced Structure
     uiHint?: BookUIHint;
     pages?: BookPage[];
     chapters?: BookChapter[];
     ragChunks?: RagChunk[];
-    methods?: BookMethod[]; // Actionable steps extracted from book
-    applicationIdeas?: ApplicationIdea[]; // How to use this book in Benvis
+    methods?: BookMethod[];
+    applicationIdeas?: ApplicationIdea[];
     highlights?: BookHighlight[];
+    
+    sessions?: ReadingSession[];
+    flashcards?: Flashcard[];
+}
+
+export interface OnboardingData {
+    fullName: string;
+    age: string;
+    role: string;
+    gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+    notifications: {
+        tasks: NotificationSetting;
+        reminders: NotificationSetting;
+        daily_report: DailyReportSetting;
+        budget_alerts?: NotificationSetting;
+        low_balance_warnings?: NotificationSetting;
+    };
+    
+    audioSettings: AudioSettings;
+    
+    theme: {
+        name: ThemeName;
+        customColor?: string;
+        animations?: { enabled: boolean };
+    };
+    xp: number;
+    level: number;
+    habits: Habit[];
+    goals: UserGoal[];
+    tasks: StandaloneTask[];
+    timeBlocks: TimeBlock[];
+    shopInventory: ShopItem[];
+    socialCircles: SocialCircle[];
+    microCourses: MicroCourse[];
+    calendarEvents: CalendarEvent[];
+    transactions: Transaction[];
+    budgets: Budget[];
+    financialAccounts: FinancialAccount[];
+    transactionCategories: TransactionCategory[];
+    incomeAnalysis?: IncomeAnalysis;
+    lifeWheel?: LifeWheelAssessment;
+    womenHealth?: WomenHealthData;
+    achievements: AchievementID[];
+    books: Book[];
+    readingChallenge?: { year: number, target: number };
 }
 
 export interface Note {
@@ -419,7 +460,6 @@ export interface EncryptedBackup {
     version: number;
 }
 
-// Interfaces for Web Speech API
 export interface SpeechRecognitionEvent {
     results: {
         [index: number]: {
@@ -446,7 +486,6 @@ export interface SpeechRecognition {
     onresult: (event: SpeechRecognitionEvent) => void;
 }
 
-// Augment Window interface to include webkitSpeechRecognition
 declare global {
     interface Window {
         webkitSpeechRecognition: {

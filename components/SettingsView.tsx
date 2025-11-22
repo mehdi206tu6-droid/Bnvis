@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeName, Habit, TransactionCategory } from '../types';
-import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon, ShieldCheckIcon, LockClosedIcon } from './icons';
+import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeName, Habit, TransactionCategory, AudioSettings } from '../types';
+import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon, ShieldCheckIcon, LockClosedIcon, MicrophoneIcon, BoltIcon } from './icons';
 import PrivacyVaultView from './PrivacyVaultView';
 
 interface SettingsViewProps {
@@ -131,9 +131,25 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
     const [isPrivacyVaultOpen, setIsPrivacyVaultOpen] = useState(false);
     const audioContextRef = useRef<AudioContext | null>(null);
 
+    const audioSettings = userData.audioSettings || {
+        voice: 'Kore',
+        speed: 'normal',
+        volume: 1,
+        soundEffects: true,
+        bookSounds: { pageTurn: true, ambientMusic: false, sfx: true }
+    };
+
     useEffect(() => {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }, []);
+
+    const updateAudioSettings = (updates: Partial<AudioSettings>) => {
+        onUpdateUserData({ ...userData, audioSettings: { ...audioSettings, ...updates } });
+    };
+
+    const updateBookSound = (key: keyof AudioSettings['bookSounds'], value: boolean) => {
+        updateAudioSettings({ bookSounds: { ...audioSettings.bookSounds, [key]: value } });
+    };
 
     const playSound = (sound: string) => {
         if (!audioContextRef.current) return;
@@ -177,12 +193,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         onUpdateUserData({ ...userData, notifications: updatedNotifications });
     };
 
-    const handleDeleteAllData = () => {
-        if (window.confirm("آیا مطمئن هستید؟ تمام اطلاعات شما از جمله اهداف و عادت‌ها برای همیشه پاک خواهد شد.")) {
-            localStorage.clear();
-            window.location.reload();
-        }
-    };
     
     const handleSaveHabit = (habit: Habit) => {
         const isUpdating = userData.habits.some(h => h.name === habit.name);
@@ -211,7 +221,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                 const newCat: TransactionCategory = {
                     id: `cat-custom-${Date.now()}`,
                     name: trimmed,
-                    type: 'expense' // Default to expense for new budget categories
+                    type: 'expense' 
                 };
                 const updatedCategories = [...transactionCategories, newCat];
                 setTransactionCategories(updatedCategories);
@@ -243,16 +253,102 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
 
     const isThemeOwned = (themeId: string) => {
         if (!PREMIUM_THEMES.includes(themeId)) return true;
-        // Owned if it's the current theme (legacy support or onboarding choice) OR in inventory
         if (userData.theme.name === themeId) return true;
         return userData.shopInventory?.some(item => item.type === 'theme' && item.value === themeId && item.purchased);
     };
 
     return (
-     <div className="pb-24 space-y-6">
+     <div className="pb-32 space-y-6">
         {habitModal.isOpen && <HabitModal habitToEdit={habitModal.habitToEdit} currentHabits={userData.habits} onSave={handleSaveHabit} onClose={() => setHabitModal({isOpen: false})} />}
         {isPrivacyVaultOpen && <PrivacyVaultView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsPrivacyVaultOpen(false)} />}
         
+        <div>
+            <h3 className="text-lg font-semibold text-gray-400 mb-2">صدا و دستیار صوتی</h3>
+            <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 space-y-6">
+                {/* Voice Persona Selection */}
+                <div>
+                    <label className="text-sm text-gray-400 font-bold mb-3 block">شخصیت و صدای دستیار</label>
+                    <div className="grid grid-cols-3 gap-3">
+                        {[
+                            { id: 'Fenrir', label: 'مرد (آرام)', icon: '🤵' },
+                            { id: 'Kore', label: 'زن (مهربان)', icon: '👩' },
+                            { id: 'Puck', label: 'کودکانه (شاد)', icon: '🧒' }
+                        ].map(v => (
+                            <button
+                                key={v.id}
+                                onClick={() => updateAudioSettings({ voice: v.id as any })}
+                                className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${audioSettings.voice === v.id ? 'bg-violet-600/20 border-violet-500 text-white' : 'bg-slate-700/50 border-transparent text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                <span className="text-2xl">{v.icon}</span>
+                                <span className="text-xs font-bold">{v.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Speed & Volume */}
+                <div className="space-y-4">
+                    <div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-2">
+                            <span>سرعت صحبت</span>
+                            <span>{audioSettings.speed === 'slow' ? 'آهسته' : audioSettings.speed === 'fast' ? 'سریع' : 'نرمال'}</span>
+                        </div>
+                        <div className="flex gap-2 bg-slate-700/50 p-1 rounded-lg">
+                            {['slow', 'normal', 'fast'].map(s => (
+                                <button 
+                                    key={s} 
+                                    onClick={() => updateAudioSettings({ speed: s as any })}
+                                    className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${audioSettings.speed === s ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    {s === 'slow' ? 'آهسته' : s === 'fast' ? 'سریع' : 'نرمال'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-2">
+                            <span>بلندی صدا</span>
+                            <span>{Math.round(audioSettings.volume * 100)}%</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="0" max="1" step="0.1" 
+                            value={audioSettings.volume}
+                            onChange={(e) => updateAudioSettings({ volume: parseFloat(e.target.value) })}
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                        />
+                    </div>
+                </div>
+
+                {/* Book Ambience */}
+                <div className="pt-4 border-t border-gray-700">
+                    <label className="text-sm text-gray-400 font-bold mb-3 block">فضای مطالعه (کتابخانه)</label>
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-300">صدای ورق زدن</span>
+                            <button onClick={() => updateBookSound('pageTurn', !audioSettings.bookSounds.pageTurn)} className={`w-10 h-6 rounded-full p-1 transition-colors ${audioSettings.bookSounds.pageTurn ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${audioSettings.bookSounds.pageTurn ? 'translate-x-[-16px]' : 'translate-x-0'}`}></div>
+                            </button>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-300">موسیقی پس‌زمینه</span>
+                            <button onClick={() => updateBookSound('ambientMusic', !audioSettings.bookSounds.ambientMusic)} className={`w-10 h-6 rounded-full p-1 transition-colors ${audioSettings.bookSounds.ambientMusic ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${audioSettings.bookSounds.ambientMusic ? 'translate-x-[-16px]' : 'translate-x-0'}`}></div>
+                            </button>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-300">جلوه‌های صوتی خاص</span>
+                            <button onClick={() => updateBookSound('sfx', !audioSettings.bookSounds.sfx)} className={`w-10 h-6 rounded-full p-1 transition-colors ${audioSettings.bookSounds.sfx ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${audioSettings.bookSounds.sfx ? 'translate-x-[-16px]' : 'translate-x-0'}`}></div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Existing User Account Section */}
         <div>
             <h3 className="text-lg font-semibold text-gray-400 mb-2">حساب کاربری</h3>
             <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 flex justify-between items-center">
@@ -368,7 +464,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                                             backgroundImage: 'var(--bg-image)',
                                         }}
                                     >
-                                        {/* Abstract representation of theme content */}
                                         <div className="absolute bottom-0 left-0 right-0 p-2 space-y-1.5 opacity-80">
                                             <div className="w-3/4 h-2 bg-[var(--color-primary-500)] rounded-full"></div>
                                             <div className="w-1/2 h-2 bg-[var(--color-primary-400)] rounded-full"></div>
@@ -399,7 +494,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                             </div>
                         );
                     })}
-                    {/* Custom Theme Option */}
                     <div className="text-center">
                         <button
                             onClick={() => handleThemeChange('custom')}

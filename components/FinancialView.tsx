@@ -2,7 +2,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { OnboardingData, Transaction, TransactionCategory, TransactionType, FinancialAccount, Budget } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
-import { PlusIcon, TrashIcon, PencilIcon, SparklesIcon, ChartPieIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, ChartBarIcon, FinanceIcon, CreditCardIcon, ReceiptPercentIcon, DocumentTextIcon, DocumentChartBarIcon } from './icons';
+import { 
+    PlusIcon, TrashIcon, PencilIcon, SparklesIcon, ChartPieIcon, 
+    ArrowUpCircleIcon, ArrowDownCircleIcon, ChartBarIcon, FinanceIcon, 
+    CreditCardIcon, ReceiptPercentIcon, DocumentTextIcon, DocumentChartBarIcon,
+    ArrowLeftIcon, XMarkIcon, BriefcaseIcon, Squares2X2Icon
+} from './icons';
 import IncomeAnalysisView from './IncomeAnalysisView';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -60,47 +65,48 @@ const OverviewTab: React.FC<{ userData: OnboardingData }> = ({ userData }) => {
     const totalBalance = financialAccounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-32 animate-fadeIn">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <p className="text-sm text-green-400">درآمد این ماه</p>
-                    <p className="text-2xl font-bold">{formatCurrency(monthlySummary.income)} <span className="text-sm">تومان</span></p>
+                <div className="bg-slate-800/50 border border-green-500/20 p-6 rounded-2xl backdrop-blur-md">
+                    <p className="text-xs font-bold text-green-400 uppercase tracking-wider mb-1">درآمد ماه</p>
+                    <p className="text-2xl font-black text-white">{formatCurrency(monthlySummary.income)} <span className="text-sm font-normal text-slate-400">تومان</span></p>
                 </div>
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <p className="text-sm text-red-400">هزینه این ماه</p>
-                    <p className="text-2xl font-bold">{formatCurrency(totalExpenses)} <span className="text-sm">تومان</span></p>
+                <div className="bg-slate-800/50 border border-red-500/20 p-6 rounded-2xl backdrop-blur-md">
+                    <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">هزینه ماه</p>
+                    <p className="text-2xl font-black text-white">{formatCurrency(totalExpenses)} <span className="text-sm font-normal text-slate-400">تومان</span></p>
                 </div>
-                 <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <p className="text-sm text-blue-400">موجودی کل</p>
-                    <p className="text-2xl font-bold">{formatCurrency(totalBalance)} <span className="text-sm">تومان</span></p>
+                 <div className="bg-slate-800/50 border border-blue-500/20 p-6 rounded-2xl backdrop-blur-md">
+                    <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">موجودی کل</p>
+                    <p className="text-2xl font-black text-white">{formatCurrency(totalBalance)} <span className="text-sm font-normal text-slate-400">تومان</span></p>
                 </div>
             </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <h3 className="font-bold mb-4 text-center">تفکیک هزینه‌های ماه</h3>
-                    <div className="flex justify-center items-center">
-                         <div className="relative w-48 h-48">
-                            <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(${conicGradient || '#374151 0% 100%'})` }}></div>
-                            <div className="absolute inset-2 bg-gray-900 rounded-full flex flex-col items-center justify-center">
-                                <span className="text-xs text-gray-400">جمع کل</span>
-                                <span className="font-bold text-xl">{formatCurrency(totalExpenses)}</span>
+                <div className="bg-slate-800/30 p-6 rounded-2xl border border-slate-700/50">
+                    <h3 className="font-bold mb-6 text-center text-slate-300">تفکیک هزینه‌های ماه</h3>
+                    <div className="flex justify-center items-center my-4">
+                         <div className="relative w-56 h-56">
+                            <div className="absolute inset-0 rounded-full transition-all duration-1000" style={{ background: `conic-gradient(${conicGradient || '#374151 0% 100%'})` }}></div>
+                            <div className="absolute inset-3 bg-[#0a0f1c] rounded-full flex flex-col items-center justify-center shadow-inner">
+                                <span className="text-xs text-slate-500 mb-1">جمع هزینه‌ها</span>
+                                <span className="font-bold text-xl text-white">{formatCurrency(totalExpenses)}</span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                     <h3 className="font-bold mb-4">دسته‌بندی‌های برتر</h3>
-                     <div className="space-y-3">
-                        {sortedCategories.slice(0, 5).map(([category, amount], index) => {
+                <div className="bg-slate-800/30 p-6 rounded-2xl border border-slate-700/50">
+                     <h3 className="font-bold mb-4 text-slate-300">بیشترین مخارج</h3>
+                     <div className="space-y-4">
+                        {sortedCategories.length === 0 ? <p className="text-center text-slate-500 py-4">هنوز هزینه‌ای ثبت نشده است.</p> :
+                        sortedCategories.slice(0, 5).map(([category, amount], index) => {
                             const percent = totalExpenses > 0 ? (Number(amount) / totalExpenses) * 100 : 0;
                             return (
                                 <div key={category}>
-                                    <div className="flex justify-between text-sm mb-1">
-                                        <span className="font-semibold">{category}</span>
-                                        <span className="text-gray-400">{formatCurrency(Number(amount))}</span>
+                                    <div className="flex justify-between text-sm mb-1.5">
+                                        <span className="font-semibold text-slate-200">{category}</span>
+                                        <span className="text-slate-400">{formatCurrency(Number(amount))}</span>
                                     </div>
-                                    <div className="w-full bg-gray-700 rounded-full h-2.5">
-                                        <div className="h-2.5 rounded-full" style={{ width: `${percent}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                    <div className="w-full bg-slate-700/50 rounded-full h-2">
+                                        <div className="h-2 rounded-full transition-all duration-500" style={{ width: `${percent}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
                                     </div>
                                 </div>
                             )
@@ -148,29 +154,34 @@ const TransactionFormModal: React.FC<{
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold mb-4">{tx ? 'ویرایش تراکنش' : 'تراکنش جدید'}</h2>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]" onClick={onClose}>
+            <div className="bg-[#0f172a] border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold mb-6 text-white">{tx ? 'ویرایش تراکنش' : 'تراکنش جدید'}</h2>
                 <div className="space-y-4">
-                    <div className="flex gap-2 bg-gray-700 p-1 rounded-full">
-                        <button onClick={() => setType('expense')} className={`flex-1 py-2 text-sm font-semibold rounded-full ${type === 'expense' ? 'bg-red-500' : ''}`}>هزینه</button>
-                        <button onClick={() => setType('income')} className={`flex-1 py-2 text-sm font-semibold rounded-full ${type === 'income' ? 'bg-green-500' : ''}`}>درآمد</button>
+                    <div className="flex gap-2 bg-slate-800 p-1 rounded-xl">
+                        <button onClick={() => setType('expense')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${type === 'expense' ? 'bg-red-500/20 text-red-400 shadow-inner' : 'text-slate-400 hover:text-slate-200'}`}>هزینه</button>
+                        <button onClick={() => setType('income')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${type === 'income' ? 'bg-green-500/20 text-green-400 shadow-inner' : 'text-slate-400 hover:text-slate-200'}`}>درآمد</button>
                     </div>
-                    <input type="number" placeholder="مبلغ (تومان)" value={amount || ''} onChange={e => setAmount(Number(e.target.value))} className="w-full bg-gray-700 p-2 rounded-md" />
-                    <input type="text" placeholder="توضیحات" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-700 p-2 rounded-md" />
-                    <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-gray-700 p-2 rounded-md">
-                        <option value="">انتخاب دسته‌بندی</option>
-                        {filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                    <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full bg-gray-700 p-2 rounded-md">
-                         <option value="">انتخاب حساب</option>
-                         {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-gray-700 p-2 rounded-md" />
+                    <div className="relative">
+                        <input type="number" placeholder="0" value={amount || ''} onChange={e => setAmount(Number(e.target.value))} className="w-full bg-slate-800/50 border border-slate-700 p-4 rounded-xl text-center text-2xl font-bold text-white focus:ring-2 focus:ring-green-500 outline-none" />
+                        <span className="absolute left-4 top-5 text-xs text-slate-500 font-bold">تومان</span>
+                    </div>
+                    <input type="text" placeholder="بابت... (مثلا: خرید شام)" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white" />
+                    <div className="grid grid-cols-2 gap-3">
+                        <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm text-white outline-none">
+                            <option value="">انتخاب دسته‌بندی</option>
+                            {filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm text-white outline-none">
+                             <option value="">انتخاب حساب</option>
+                             {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                    </div>
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-white text-center" />
                 </div>
-                <div className="mt-6 flex gap-4">
-                    <button onClick={onClose} className="flex-1 py-2 bg-gray-600 rounded-md">لغو</button>
-                    <button onClick={handleSave} className="flex-1 py-2 bg-violet-600 rounded-md">ذخیره</button>
+                <div className="mt-8 flex gap-4">
+                    <button onClick={onClose} className="flex-1 py-3 bg-slate-700 rounded-xl font-bold hover:bg-slate-600 transition-colors">لغو</button>
+                    <button onClick={handleSave} className="flex-1 py-3 bg-green-600 rounded-xl font-bold text-white hover:bg-green-500 transition-colors shadow-lg shadow-green-900/20">ذخیره</button>
                 </div>
             </div>
         </div>
@@ -260,40 +271,57 @@ const TransactionsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (d
     }, [transactions]);
 
     return (
-        <div>
+        <div className="pb-32 animate-fadeIn">
             {isFormOpen && <TransactionFormModal tx={editingTx} categories={transactionCategories} accounts={financialAccounts} onSave={handleSave} onClose={() => setIsFormOpen(false)} />}
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold">تاریخچه تراکنش‌ها</h3>
-                <button onClick={() => openForm()} className="flex items-center gap-2 px-4 py-2 bg-violet-600 rounded-md font-semibold hover:bg-violet-700">
+            <div className="flex justify-between items-center mb-6 px-2">
+                <h3 className="font-bold text-lg text-white">تراکنش‌ها</h3>
+                <button onClick={() => openForm()} className="flex items-center gap-2 px-4 py-2 bg-green-600/20 border border-green-500/30 text-green-400 rounded-xl font-bold hover:bg-green-600/30 transition-all shadow-lg shadow-green-900/20">
                     <PlusIcon className="w-5 h-5"/>
-                    <span>تراکنش جدید</span>
+                    <span>جدید</span>
                 </button>
             </div>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-6">
+                {Object.keys(groupedTransactions).length === 0 && (
+                    <div className="text-center py-10 opacity-50">
+                        <DocumentTextIcon className="w-16 h-16 mx-auto mb-2"/>
+                        <p>تراکنشی یافت نشد.</p>
+                    </div>
+                )}
                 {Object.entries(groupedTransactions).map(([date, txs]: [string, Transaction[]]) => (
                     <div key={date}>
-                        <h4 className="font-semibold text-gray-400 mb-2">{new Date(date).toLocaleDateString('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
-                        <div className="space-y-2">
+                        <div className="flex items-center gap-4 mb-3">
+                            <span className="text-xs font-bold text-slate-400 bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700">
+                                {new Date(date).toLocaleDateString('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            </span>
+                            <div className="h-[1px] bg-slate-800 flex-grow"></div>
+                        </div>
+                        <div className="space-y-3">
                             {txs.map(tx => {
                                 const category = transactionCategories.find(c => c.id === tx.categoryId);
                                 const account = financialAccounts.find(a => a.id === tx.accountId);
                                 const isExpense = tx.type === 'expense';
                                 return (
-                                    <div key={tx.id} className="bg-gray-700/50 p-3 rounded-md flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isExpense ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
-                                                {isExpense ? <ArrowDownCircleIcon className="w-5 h-5 text-red-400"/> : <ArrowUpCircleIcon className="w-5 h-5 text-green-400"/>}
+                                    <div key={tx.id} className="bg-slate-800/40 border border-slate-800 hover:border-slate-600 p-4 rounded-2xl flex justify-between items-center transition-colors group">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isExpense ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+                                                {isExpense ? <ArrowDownCircleIcon className="w-6 h-6"/> : <ArrowUpCircleIcon className="w-6 h-6"/>}
                                             </div>
                                             <div>
-                                                <p className="font-semibold">{tx.description}</p>
-                                                <p className="text-xs text-gray-400">{category?.name || 'بدون دسته'} &bull; {account?.name || 'بدون حساب'}</p>
+                                                <p className="font-bold text-white">{tx.description}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                                                    <span>{category?.name || 'عمومی'}</span>
+                                                    <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
+                                                    <span>{account?.name || 'نقدی'}</span>
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="text-left">
-                                            <p className={`font-bold ${isExpense ? 'text-red-400' : 'text-green-400'}`}>{formatCurrency(tx.amount)}</p>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <button onClick={() => openForm(tx)} className="text-gray-400 hover:text-white"><PencilIcon className="w-4 h-4"/></button>
-                                                <button onClick={() => handleDelete(tx.id)} className="text-gray-400 hover:text-red-400"><TrashIcon className="w-4 h-4"/></button>
+                                            <p className={`font-bold font-mono text-lg ${isExpense ? 'text-white' : 'text-green-400'}`}>
+                                                {isExpense ? '-' : '+'}{formatCurrency(tx.amount)}
+                                            </p>
+                                            <div className="flex items-center justify-end gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openForm(tx)} className="text-slate-500 hover:text-blue-400"><PencilIcon className="w-4 h-4"/></button>
+                                                <button onClick={() => handleDelete(tx.id)} className="text-slate-500 hover:text-red-400"><TrashIcon className="w-4 h-4"/></button>
                                             </div>
                                         </div>
                                     </div>
@@ -309,25 +337,98 @@ const TransactionsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (d
 
 const AccountsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void }> = ({ userData, onUpdateUserData }) => {
     return (
-      <div>
-        <h3 className="font-bold mb-4">حساب‌های شما</h3>
-        <div className="space-y-3">
+      <div className="pb-32 animate-fadeIn">
+        <h3 className="font-bold mb-6 text-lg px-2">کیف پول و حساب‌ها</h3>
+        <div className="grid gap-4">
           {(userData.financialAccounts || []).map(acc => (
-            <div key={acc.id} className="bg-gray-700/50 p-4 rounded-lg flex justify-between items-center">
-              <div>
-                <p className="font-bold text-lg">{acc.name}</p>
-                <p className="text-sm text-gray-400">{acc.type === 'bank' ? 'بانک' : (acc.type === 'card' ? 'کارت' : 'پول نقد')}</p>
+            <div key={acc.id} className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 p-6 rounded-2xl flex justify-between items-center shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-1">
+                    <CreditCardIcon className="w-5 h-5 text-slate-400"/>
+                    <p className="font-bold text-lg text-white">{acc.name}</p>
+                </div>
+                <p className="text-xs text-slate-400 font-mono tracking-wider opacity-70">**** **** **** 1234</p>
               </div>
-              <p className="text-xl font-bold">{formatCurrency(acc.balance)} <span className="text-sm">تومان</span></p>
+              <div className="text-left relative z-10">
+                  <p className="text-sm text-slate-400 mb-1">موجودی</p>
+                  <p className="text-xl font-black text-white">{formatCurrency(acc.balance)} <span className="text-xs font-normal text-slate-500">تومان</span></p>
+              </div>
             </div>
           ))}
+          <button className="w-full py-4 border-2 border-dashed border-slate-700 text-slate-500 rounded-2xl hover:bg-slate-800/50 hover:border-slate-600 transition-all flex flex-col items-center justify-center gap-2">
+                <PlusIcon className="w-6 h-6"/>
+                <span className="font-bold text-sm">افزودن حساب جدید</span>
+          </button>
         </div>
       </div>
     );
 };
 
-const BudgetsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void }> = ({ userData, onUpdateUserData }) => {
-    return <div className="text-center p-8 text-gray-400">بخش بودجه‌بندی به زودی اضافه خواهد شد.</div>;
+const ToolsTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void }> = ({ userData, onUpdateUserData }) => {
+    const [activeTool, setActiveTool] = useState<'menu' | 'sms' | 'income' | 'budget'>('menu');
+
+    if (activeTool === 'sms') {
+        return (
+            <div className="pb-32 animate-fadeIn">
+                <button onClick={() => setActiveTool('menu')} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4"><ArrowLeftIcon className="w-5 h-5"/> بازگشت</button>
+                <SmsParserTab userData={userData} onUpdateUserData={onUpdateUserData} />
+            </div>
+        );
+    }
+    if (activeTool === 'income') {
+        return (
+            <div className="pb-32 animate-fadeIn">
+                <button onClick={() => setActiveTool('menu')} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4"><ArrowLeftIcon className="w-5 h-5"/> بازگشت</button>
+                <IncomeAnalysisView userData={userData} onUpdateUserData={onUpdateUserData} />
+            </div>
+        );
+    }
+    if (activeTool === 'budget') {
+        return (
+            <div className="pb-32 animate-fadeIn">
+                <button onClick={() => setActiveTool('menu')} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4"><ArrowLeftIcon className="w-5 h-5"/> بازگشت</button>
+                <div className="text-center py-20 text-slate-500">بخش بودجه‌بندی به زودی...</div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="pb-32 animate-fadeIn">
+            <h3 className="font-bold text-lg mb-6 px-2">ابزارهای مالی</h3>
+            <div className="grid grid-cols-1 gap-4">
+                <button onClick={() => setActiveTool('sms')} className="bg-slate-800/60 border border-slate-700 hover:bg-slate-800 hover:border-green-500/50 p-5 rounded-2xl flex items-center gap-4 transition-all group text-right">
+                    <div className="p-3 bg-slate-700 rounded-xl text-green-400 group-hover:bg-green-500/20 transition-colors">
+                        <SparklesIcon className="w-6 h-6"/>
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-white text-lg">پردازشگر پیامک</h4>
+                        <p className="text-sm text-slate-400 mt-1">تبدیل خودکار پیامک‌های بانکی به تراکنش</p>
+                    </div>
+                </button>
+
+                <button onClick={() => setActiveTool('income')} className="bg-slate-800/60 border border-slate-700 hover:bg-slate-800 hover:border-blue-500/50 p-5 rounded-2xl flex items-center gap-4 transition-all group text-right">
+                    <div className="p-3 bg-slate-700 rounded-xl text-blue-400 group-hover:bg-blue-500/20 transition-colors">
+                        <DocumentChartBarIcon className="w-6 h-6"/>
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-white text-lg">تحلیل درآمد</h4>
+                        <p className="text-sm text-slate-400 mt-1">بررسی پایداری شغلی و جریان‌های مالی</p>
+                    </div>
+                </button>
+
+                <button onClick={() => setActiveTool('budget')} className="bg-slate-800/60 border border-slate-700 hover:bg-slate-800 hover:border-orange-500/50 p-5 rounded-2xl flex items-center gap-4 transition-all group text-right">
+                    <div className="p-3 bg-slate-700 rounded-xl text-orange-400 group-hover:bg-orange-500/20 transition-colors">
+                        <ReceiptPercentIcon className="w-6 h-6"/>
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-white text-lg">بودجه‌بندی</h4>
+                        <p className="text-sm text-slate-400 mt-1">تعین سقف مخارج برای دسته‌های مختلف</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+    );
 };
 
 const SmsParserTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data: OnboardingData) => void }> = ({ userData, onUpdateUserData }) => {
@@ -396,7 +497,7 @@ const SmsParserTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data
             ...tx,
             id: `tx-${Date.now()}-${Math.random()}`,
             accountId: defaultAccount,
-            categoryId: userData.transactionCategories?.[0]?.id || '' // Default to first category, user should edit later
+            categoryId: userData.transactionCategories?.[0]?.id || '' 
         };
         
         const balanceChange = newTx.type === 'income' ? newTx.amount : -newTx.amount;
@@ -418,29 +519,30 @@ const SmsParserTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data
     
     return (
         <div>
-            <h3 className="font-bold mb-4">پردازشگر پیامک بانکی</h3>
-            <p className="text-sm text-gray-400 mb-4">متن پیامک‌های بانکی خود را اینجا کپی کنید تا به صورت خودکار به تراکنش تبدیل شوند.</p>
-            <textarea
-                value={smsText}
-                onChange={e => setSmsText(e.target.value)}
-                rows={8}
-                className="w-full bg-gray-700/80 p-3 rounded-lg"
-                placeholder="مثال: برداشت ۱۲۰،۰۰۰ تومان از حساب شما در تاریخ ... بابت خرید از فروشگاه"
-            />
-            <button onClick={handleParse} disabled={isLoading} className="w-full mt-4 py-3 bg-violet-600 rounded-lg font-semibold disabled:bg-gray-600">
-                {isLoading ? 'در حال پردازش...' : 'پردازش پیامک‌ها'}
+            <h3 className="font-bold mb-4 text-white">پردازشگر هوشمند پیامک</h3>
+            <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl mb-4">
+                <textarea
+                    value={smsText}
+                    onChange={e => setSmsText(e.target.value)}
+                    rows={6}
+                    className="w-full bg-transparent text-white placeholder-slate-500 outline-none text-sm resize-none"
+                    placeholder="متن پیامک‌های بانکی خود را اینجا Paste کنید..."
+                />
+            </div>
+            <button onClick={handleParse} disabled={isLoading} className="w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold shadow-lg shadow-green-900/20 disabled:opacity-50 transition-all">
+                {isLoading ? 'در حال تحلیل...' : 'استخراج تراکنش‌ها'}
             </button>
             
             {parsedTxs.length > 0 && (
-                <div className="mt-6 space-y-3">
-                    <h4 className="font-bold text-slate-300">تراکنش‌های شناسایی شده</h4>
+                <div className="mt-6 space-y-3 animate-fadeIn">
+                    <h4 className="font-bold text-slate-300 px-1">نتایج یافت شده</h4>
                     {parsedTxs.map((tx, index) => (
-                        <div key={index} className="bg-gray-700/50 p-3 rounded-lg flex justify-between items-center">
+                        <div key={index} className="bg-slate-800 p-4 rounded-xl flex justify-between items-center border border-slate-700">
                             <div>
-                                <p className="font-semibold">{tx.description}</p>
-                                <p className={`text-sm ${tx.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)} تومان</p>
+                                <p className="font-bold text-white text-sm">{tx.description}</p>
+                                <p className={`text-xs font-mono mt-1 ${tx.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)} تومان</p>
                             </div>
-                            <button onClick={() => handleAddTransaction(tx)} className="px-3 py-1 bg-green-600 rounded text-sm hover:bg-green-500">
+                            <button onClick={() => handleAddTransaction(tx)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-white transition-colors">
                                 افزودن
                             </button>
                         </div>
@@ -451,50 +553,69 @@ const SmsParserTab: React.FC<{ userData: OnboardingData, onUpdateUserData: (data
     );
 };
 
+// --- MAIN VIEW ---
+
+type Tab = 'overview' | 'transactions' | 'accounts' | 'tools';
+
 export const FinancialView: React.FC<FinancialViewProps> = ({ userData, onUpdateUserData, onClose }) => {
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-    const tabs = [
-        { id: 'overview', label: 'نمای کلی', icon: ChartPieIcon },
-        { id: 'transactions', label: 'تراکنش‌ها', icon: DocumentTextIcon },
-        { id: 'accounts', label: 'حساب‌ها', icon: CreditCardIcon },
-        { id: 'budgets', label: 'بودجه‌ها', icon: ReceiptPercentIcon },
-        { id: 'sms-parser', label: 'پردازش پیامک', icon: SparklesIcon },
-        { id: 'income-analysis', label: 'تحلیل درآمد', icon: DocumentChartBarIcon }
-    ];
-
-    const renderTabContent = () => {
-        switch(activeTab) {
-            case 'transactions': return <TransactionsTab userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'accounts': return <AccountsTab userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'budgets': return <BudgetsTab userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'sms-parser': return <SmsParserTab userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'income-analysis': return <IncomeAnalysisView userData={userData} onUpdateUserData={onUpdateUserData} />;
-            case 'overview':
-            default:
-                return <OverviewTab userData={userData} />;
-        }
+    const NavButton: React.FC<{ id: Tab; label: string; icon: React.FC<{className?: string}> }> = ({ id, label, icon: Icon }) => {
+        const isActive = activeTab === id;
+        return (
+            <button 
+                onClick={() => setActiveTab(id)}
+                className={`flex flex-col items-center justify-center w-full py-3 gap-1.5 transition-all relative group ${isActive ? 'text-green-400' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+                <div className={`p-2 rounded-xl transition-all duration-300 ${isActive ? 'bg-green-500/20 -translate-y-3 shadow-lg shadow-green-900/20 ring-1 ring-green-500/50' : 'bg-transparent group-hover:bg-white/5'}`}>
+                    <Icon className={`w-7 h-7 ${isActive ? 'fill-current' : ''}`} />
+                </div>
+                <span className={`text-xs font-bold absolute bottom-1 transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{label}</span>
+            </button>
+        );
     };
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-gray-900 border border-gray-700 rounded-[var(--radius-card)] p-4 sm:p-6 w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                    <h2 className="text-xl font-bold text-green-300 flex items-center gap-2"><FinanceIcon className="w-6 h-6"/> مرکز مالی</h2>
-                    <button onClick={onClose} className="text-2xl text-gray-400 hover:text-white">&times;</button>
-                </div>
+        <div className="fixed inset-0 z-50 bg-[#020617] text-slate-200 font-[Vazirmatn] flex flex-col overflow-hidden animate-fadeIn">
+            {/* Background Ambient */}
+            <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-green-900/10 rounded-full blur-[100px] pointer-events-none"></div>
+            <div className="absolute bottom-[-20%] right-[-20%] w-[80vw] h-[80vw] bg-blue-900/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-                <div className="flex gap-1 bg-gray-800/50 p-1 rounded-[var(--radius-full)] mb-4 flex-shrink-0 overflow-x-auto">
-                    {tabs.map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-[var(--radius-full)] transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-violet-600 text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                           <tab.icon className="w-5 h-5" />
-                           <span>{tab.label}</span>
-                        </button>
-                    ))}
-                 </div>
-                
-                <div className="overflow-y-auto pr-2 flex-grow">
-                    {renderTabContent()}
+            {/* Header */}
+            <div className="relative z-10 px-6 pt-6 pb-2 flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">خزانه‌داری</h2>
+                    <p className="text-xs text-green-500 font-bold uppercase tracking-widest opacity-80">Financial OS</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 shadow-lg">
+                    <FinanceIcon className="w-5 h-5 text-green-400"/>
+                </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-grow overflow-y-auto px-4 pt-4 relative z-10 scrollbar-hide pb-28">
+                {activeTab === 'overview' && <OverviewTab userData={userData} />}
+                {activeTab === 'transactions' && <TransactionsTab userData={userData} onUpdateUserData={onUpdateUserData} />}
+                {activeTab === 'accounts' && <AccountsTab userData={userData} onUpdateUserData={onUpdateUserData} />}
+                {activeTab === 'tools' && <ToolsTab userData={userData} onUpdateUserData={onUpdateUserData} />}
+            </div>
+
+            {/* Bottom Navigation Bar - Enhanced */}
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 w-[90%] max-w-lg">
+                <div className="bg-[#1c1c1e]/90 backdrop-blur-xl border border-white/20 rounded-[2rem] p-3 shadow-2xl flex items-center justify-between px-6">
+                    <NavButton id="overview" label="نمای کلی" icon={ChartPieIcon} />
+                    <NavButton id="transactions" label="تراکنش‌ها" icon={DocumentTextIcon} />
+                    
+                    {/* Center Home Button */}
+                    <button 
+                        onClick={onClose}
+                        className="w-16 h-16 rounded-full bg-slate-800 border-2 border-[#020617] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-lg hover:scale-105 -mt-8 relative z-10"
+                    >
+                        <XMarkIcon className="w-8 h-8" />
+                    </button>
+
+                    <NavButton id="accounts" label="حساب‌ها" icon={CreditCardIcon} />
+                    <NavButton id="tools" label="ابزارها" icon={BriefcaseIcon} />
                 </div>
             </div>
         </div>
