@@ -142,6 +142,12 @@ export interface SocialCircle {
     summaries: { date: string; data: CircleSummaryData }[];
 }
 
+export interface QuizResult {
+    date: string;
+    score: number; // 0-20
+    totalQuestions: number;
+}
+
 export interface MicroCourseDay {
     day: number;
     focus: string;
@@ -160,6 +166,12 @@ export interface MicroCourse {
     progress: number;
     status: 'active' | 'completed';
     createdAt: string;
+    
+    // New LMS features
+    pdfSource?: string; // Base64 encoded PDF
+    chatHistory?: ChatMessage[];
+    quizzes?: QuizResult[];
+    grade?: number; // Average score 0-20
 }
 
 export interface CalendarEvent {
@@ -351,6 +363,7 @@ export interface Book {
     publishedYear?: string;
     tags?: string[];
     lastReadDate?: string;
+    lastScrollPosition?: number;
     notes?: BookNote[];
     vocabulary?: BookVocabulary[];
     contentSource?: string; 

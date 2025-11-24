@@ -8,7 +8,8 @@ import {
     StopIcon, DocumentTextIcon, ArrowUpIcon, PencilIcon, CheckCircleIcon,
     MicrophoneIcon, SpeakerWaveIcon, ScaleIcon, FireIcon, ChartBarIcon,
     CogIcon, SunIcon, MoonIcon, MagnifyingGlassIcon, ChatBubbleOvalLeftEllipsisIcon,
-    QueueListIcon, Squares2X2Icon, ArrowDownIcon, StarIcon, CloudIcon
+    QueueListIcon, Squares2X2Icon, ArrowDownIcon, StarIcon, CloudIcon, TrashIcon,
+    ShareIcon
 } from './icons';
 import { getBookData, saveBookData } from '../storage';
 
@@ -114,7 +115,16 @@ const PREDEFINED_BOOKS_DATA: Record<string, Partial<Book>> = {
         summary: "تغییرات کوچک، نتایج قابل توجه. روشی آسان و ثابت شده برای ایجاد عادت‌های خوب و از بین بردن عادت‌های بد.",
         uiHint: { themeColor: "from-yellow-600 to-yellow-800", coverStyle: "modern", icon: "⚛️" },
         totalPages: 330,
-        contentSource: ATOMIC_HABITS_TEXT
+        contentSource: ATOMIC_HABITS_TEXT,
+        tags: ["Habits", "Psychology", "Self-Improvement", "Systems", "Tiny Gains"],
+        methods: [
+            { id: 'habit-stacking', name: 'انباشت عادت (Habit Stacking)', summary: 'اتصال عادت جدید به یک عادت موجود.', steps: ['عادت فعلی را شناسایی کن', 'فرمول: بعد از [عادت فعلی]، [عادت جدید] را انجام می‌دهم.'] },
+            { id: '2-minute-rule', name: 'قانون ۲ دقیقه', summary: 'شروع عادت باید کمتر از ۲ دقیقه طول بکشد.', steps: ['عادت را به کوچکترین نسخه ممکن تبدیل کن', 'فقط ۲ دقیقه انجامش بده'] }
+        ],
+        applicationIdeas: [
+            { feature: 'Habit Tracker', description: 'ایجاد ردیاب عادت در بخش اهداف', methodRefs: ['habit-stacking'] },
+            { feature: 'Environment Design', description: 'تغییر چیدمان محیط برای حذف نشانه‌های بد', methodRefs: [] }
+        ]
     },
     "Deep Work": {
         title: "کار عمیق",
@@ -284,7 +294,7 @@ const LiveAuthorSession: React.FC<{
             mediaStreamRef.current = stream;
 
             const bookContent = book.contentSource || ATOMIC_HABITS_TEXT;
-            const safeContent = bookContent.substring(0, 5000); // Ensure we don't exceed payload limits
+            const safeContent = bookContent.substring(0, 10000); // Increased context limit
             const persona = book.aiPersona || `You are ${book.author}.`;
 
             const sessionPromise = client.live.connect({
@@ -495,8 +505,7 @@ const BookSpirit: React.FC<{ book: Book; onUpdate: (updatedHistory: ChatMessage[
         if (!userText.trim()) return;
 
         const userMsg: ChatMessage = { role: 'user', text: userText };
-        const newHistory = [...messages, userMsg];
-        setMessages(newHistory);
+        setMessages(prev => [...prev, userMsg, { role: 'model', text: '' }]);
         setInput('');
         setIsLoading(true);
 
@@ -513,27 +522,39 @@ const BookSpirit: React.FC<{ book: Book; onUpdate: (updatedHistory: ChatMessage[
                 """
             `;
             const requestContents: any[] = [];
+            requestContents.push({ role: 'user', parts: [{ text: systemPrompt }] });
             
-            const contextParts: any[] = [{ text: systemPrompt }];
-            requestContents.push({ role: 'user', parts: contextParts });
-            
-            // Send recent history
-            newHistory.slice(-6).forEach(m => requestContents.push({ role: m.role, parts: [{ text: m.text }] }));
+            messages.slice(-6).forEach(m => requestContents.push({ role: m.role, parts: [{ text: m.text }] }));
+            requestContents.push({ role: 'user', parts: [{ text: userText }] });
 
-            const response = await ai.models.generateContent({
+            const result = await ai.models.generateContentStream({
                 model: 'gemini-2.5-flash',
                 contents: requestContents
             });
 
-            const reply = response.text.trim();
-            const updatedHistory = [...newHistory, { role: 'model' as const, text: reply }];
-            setMessages(updatedHistory);
-            onUpdate(updatedHistory);
+            let fullText = '';
+            for await (const chunk of result) {
+                const text = chunk.text;
+                if (text) {
+                    fullText += text;
+                    setMessages(prev => {
+                        const newArr = [...prev];
+                        newArr[newArr.length - 1] = { role: 'model', text: fullText };
+                        return newArr;
+                    });
+                }
+            }
+            
+            const finalHistory = [...messages, userMsg, { role: 'model', text: fullText }];
+            onUpdate(finalHistory);
             
         } catch (e) {
             console.error(e);
-            const errText = "مشکلی در ارتباط پیش آمد. لطفا دوباره بگویید.";
-            setMessages([...newHistory, { role: 'model', text: errText }]);
+            setMessages(prev => {
+                const newArr = [...prev];
+                newArr[newArr.length - 1] = { role: 'model', text: "مشکلی در ارتباط پیش آمد. لطفا دوباره بگویید." };
+                return newArr;
+            });
         } finally {
             setIsLoading(false);
         }
@@ -614,10 +635,22 @@ const BookManuscript: React.FC<{ book: Book; onUpdate: (updates: Partial<Book>) 
     const [showSettings, setShowSettings] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const saveTimeoutRef = useRef<number | null>(null);
     
-    const [fontSize, setFontSize] = useState(16);
-    const [lineHeight, setLineHeight] = useState(1.8);
-    const [theme, setTheme] = useState<'midnight' | 'sepia' | 'day'>('midnight');
+    // Persistent Settings
+    const [fontSize, setFontSize] = useState(() => {
+        const saved = localStorage.getItem('benvis_reader_fontSize');
+        return saved ? parseInt(saved) : 18;
+    });
+    const [lineHeight, setLineHeight] = useState(() => {
+        const saved = localStorage.getItem('benvis_reader_lineHeight');
+        return saved ? parseFloat(saved) : 1.8;
+    });
+    const [theme, setTheme] = useState<'midnight' | 'sepia' | 'day'>(() => {
+        const saved = localStorage.getItem('benvis_reader_theme');
+        return (saved as 'midnight' | 'sepia' | 'day') || 'midnight';
+    });
+    
     const [isSpeaking, setIsSpeaking] = useState(false);
 
     const [selectionMenu, setSelectionMenu] = useState<{x: number, y: number, text: string} | null>(null);
@@ -625,6 +658,11 @@ const BookManuscript: React.FC<{ book: Book; onUpdate: (updates: Partial<Book>) 
     const [generatedHighlight, setGeneratedHighlight] = useState<string | null>(null);
 
     const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
+    // Save settings
+    useEffect(() => localStorage.setItem('benvis_reader_fontSize', fontSize.toString()), [fontSize]);
+    useEffect(() => localStorage.setItem('benvis_reader_lineHeight', lineHeight.toString()), [lineHeight]);
+    useEffect(() => localStorage.setItem('benvis_reader_theme', theme), [theme]);
 
     useEffect(() => {
         if (book.pdfSource) {
@@ -655,10 +693,17 @@ const BookManuscript: React.FC<{ book: Book; onUpdate: (updates: Partial<Book>) 
     }, [book.pdfSource]);
 
     useEffect(() => {
-        if (scrollContainerRef.current && (book as any).lastScrollPosition) {
-            scrollContainerRef.current.scrollTop = (book as any).lastScrollPosition;
+        if (!isEditing && scrollContainerRef.current && book.lastScrollPosition) {
+            scrollContainerRef.current.scrollTop = book.lastScrollPosition;
         }
-    }, []); 
+    }, [isEditing, content]);
+
+    // Cleanup save timeout
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         if (book.contentSource && content !== book.contentSource) {
@@ -668,13 +713,26 @@ const BookManuscript: React.FC<{ book: Book; onUpdate: (updates: Partial<Book>) 
 
     const handleScroll = () => {
         if (!scrollContainerRef.current) return;
-        const scrollTop = scrollContainerRef.current.scrollTop;
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
         
-        const timer = setTimeout(() => {
-            onUpdate({ ...book, lastScrollPosition: scrollTop } as any);
-        }, 1000);
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
         
-        return () => clearTimeout(timer);
+        saveTimeoutRef.current = window.setTimeout(() => {
+            const updates: Partial<Book> = { lastScrollPosition: scrollTop };
+            
+            // Calculate page progress
+            if (!book.pdfSource && book.totalPages && scrollHeight > clientHeight) {
+                const progress = scrollTop / (scrollHeight - clientHeight);
+                const newPage = Math.min(book.totalPages, Math.max(1, Math.floor(progress * book.totalPages) + 1));
+                if (newPage !== book.currentPage) {
+                    updates.currentPage = newPage;
+                }
+            }
+            
+            onUpdate(updates);
+        }, 500);
     };
 
     const handleMouseUp = () => {
@@ -1095,8 +1153,57 @@ const BookStats: React.FC<{ book: Book }> = ({ book }) => {
     );
 }
 
+const BookNotebook: React.FC<{ book: Book; onUpdate: (b: Book) => void }> = ({ book, onUpdate }) => {
+    const highlights = book.highlights || [];
+    
+    const handleDelete = (idx: number) => {
+        const newHighlights = [...highlights];
+        newHighlights.splice(idx, 1);
+        onUpdate({ ...book, highlights: newHighlights });
+    };
+
+    return (
+        <div className="h-full p-6 overflow-y-auto animate-fadeIn scrollbar-hide">
+            <div className="text-center mb-8">
+                 <h3 className="text-2xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+                    <PencilIcon className="w-6 h-6 text-amber-400"/>
+                    دفترچه یادداشت
+                </h3>
+                <p className="text-slate-400 text-sm">نکات و هایلایت‌های ذخیره شده</p>
+            </div>
+
+            {highlights.length === 0 ? (
+                <div className="text-center text-slate-500 mt-10 flex flex-col items-center gap-4">
+                    <DocumentTextIcon className="w-12 h-12 opacity-20"/>
+                    <p>هیچ یادداشتی یافت نشد.</p>
+                    <p className="text-xs opacity-60">متن کتاب را انتخاب کنید تا هایلایت شود.</p>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {highlights.map((h, i) => (
+                        <div key={i} className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl relative group hover:bg-slate-800 transition-colors">
+                            <blockquote className="border-r-2 border-amber-500 pr-3 text-slate-200 text-sm mb-3 leading-relaxed">
+                                "{h.text}"
+                            </blockquote>
+                            {h.note && (
+                                <div className="text-amber-100/80 text-xs bg-amber-900/20 p-3 rounded-lg flex gap-2 items-start">
+                                    <SparklesIcon className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0"/>
+                                    <span>{h.note}</span>
+                                </div>
+                            )}
+                            <button onClick={() => handleDelete(i)} className="absolute top-2 left-2 p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all bg-slate-900/80 rounded-lg backdrop-blur-sm">
+                                <TrashIcon className="w-4 h-4"/>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const SanctuaryReader: React.FC<{ book: Book; onBack: () => void; onUpdate: (b: Book) => void; addXp: (a: number) => void; userData: OnboardingData; onUpdateUserData: (d: OnboardingData) => void }> = ({ book, onBack, onUpdate, addXp, userData, onUpdateUserData }) => {
-    const [activeTab, setActiveTab] = useState<'spirit' | 'scroll' | 'forge' | 'timer' | 'stats'>('scroll');
+    const [activeTab, setActiveTab] = useState<'spirit' | 'scroll' | 'forge' | 'timer' | 'stats' | 'notebook'>('scroll');
     const [hydratedBook, setHydratedBook] = useState<Book>(book);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -1193,6 +1300,7 @@ const SanctuaryReader: React.FC<{ book: Book; onBack: () => void; onUpdate: (b: 
                         {activeTab === 'spirit' && <BookSpirit book={hydratedBook} onUpdate={(h) => onUpdate({...hydratedBook, chatHistory: h})} />}
                         {activeTab === 'forge' && <BookForge book={hydratedBook} userData={userData} onUpdateUserData={onUpdateUserData} />}
                         {activeTab === 'stats' && <BookStats book={hydratedBook} />}
+                        {activeTab === 'notebook' && <BookNotebook book={hydratedBook} onUpdate={handleUpdateBook} />}
                         {activeTab === 'timer' && (
                             <div className="p-6 flex items-center justify-center h-full">
                                 <ReadingSessionTimer book={hydratedBook} onFinish={handleSessionFinish} />
@@ -1217,9 +1325,9 @@ const SanctuaryReader: React.FC<{ book: Book; onBack: () => void; onUpdate: (b: 
                             <ClockIcon className="w-8 h-8"/>
                         </div>
                     </button>
-                    <button onClick={() => setActiveTab('forge')} className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'forge' ? 'text-orange-400 bg-white/5' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <BoltIcon className="w-6 h-6"/>
-                        <span className="text-[10px] font-bold">کوره</span>
+                    <button onClick={() => setActiveTab('notebook')} className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'notebook' ? 'text-orange-400 bg-white/5' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <PencilIcon className="w-6 h-6"/>
+                        <span className="text-[10px] font-bold">دفترچه</span>
                     </button>
                     <button onClick={() => setActiveTab('stats')} className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'stats' ? 'text-emerald-400 bg-white/5' : 'text-slate-500 hover:text-slate-300'}`}>
                         <ChartBarIcon className="w-6 h-6"/>
@@ -1244,7 +1352,7 @@ const BooksView: React.FC<BooksViewProps> = ({ userData, onUpdateUserData, onClo
     const [manualTitle, setManualTitle] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortOption, setSortOption] = useState<'recent' | 'title' | 'progress'>('recent');
+    const [sortOption, setSortOption] = useState<'recent' | 'title' | 'progress' | 'author'>('recent');
 
     const books = userData.books || [];
     const activeBook = books.find(b => b.id === activeBookId);
@@ -1288,6 +1396,7 @@ const BooksView: React.FC<BooksViewProps> = ({ userData, onUpdateUserData, onClo
 
         allBooks.sort((a, b) => {
             if (sortOption === 'title') return a.title.localeCompare(b.title);
+            if (sortOption === 'author') return a.author.localeCompare(b.author);
             if (sortOption === 'progress') {
                 const pA = a.status === 'completed' ? 100 : ((a.currentPage || 0) / (a.totalPages || 1) * 100);
                 const pB = b.status === 'completed' ? 100 : ((b.currentPage || 0) / (b.totalPages || 1) * 100);
@@ -1381,6 +1490,7 @@ const BooksView: React.FC<BooksViewProps> = ({ userData, onUpdateUserData, onClo
                                 <button onClick={() => setSortOption('recent')} className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${sortOption === 'recent' ? 'bg-amber-900/30 border-amber-500/50 text-amber-300' : 'border-white/10 text-slate-400'}`}>اخیر</button>
                                 <button onClick={() => setSortOption('progress')} className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${sortOption === 'progress' ? 'bg-amber-900/30 border-amber-500/50 text-amber-300' : 'border-white/10 text-slate-400'}`}>پیشرفت</button>
                                 <button onClick={() => setSortOption('title')} className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${sortOption === 'title' ? 'bg-amber-900/30 border-amber-500/50 text-amber-300' : 'border-white/10 text-slate-400'}`}>عنوان</button>
+                                <button onClick={() => setSortOption('author')} className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${sortOption === 'author' ? 'bg-amber-900/30 border-amber-500/50 text-amber-300' : 'border-white/10 text-slate-400'}`}>نویسنده</button>
                              </div>
                         </div>
                     </div>

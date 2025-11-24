@@ -31,6 +31,12 @@ export const HeartIcon: React.FC<IconProps> = ({ className, style }) => (
     </svg>
 );
 
+export const SnakeIcon: React.FC<IconProps> = ({ className, style }) => (
+    <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m0-18c-1.657 0-3 1.567-3 3.5S10.343 10 12 10c1.657 0 3 1.567 3 3.5S13.657 17 12 17c-1.657 0-3 1.567-3 3.5M15 6h1" />
+    </svg>
+);
+
 export const FinanceIcon: React.FC<IconProps> = ({ className, style }) => (
   <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.75A.75.75 0 013 4.5h.75m0 0H21m-9 12h5.25m-5.25 0h-7.5" /></svg>
 );
@@ -99,6 +105,12 @@ export const CogIcon: React.FC<IconProps> = ({ className, style }) => (
 
 export const ArrowLeftIcon: React.FC<IconProps> = ({ className, style }) => (
     <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+);
+
+export const ArrowRightIcon: React.FC<IconProps> = ({ className, style }) => (
+    <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </svg>
 );
 
 export const QueueListIcon: React.FC<IconProps> = ({ className, style }) => (
@@ -379,6 +391,18 @@ export const BeakerIcon: React.FC<IconProps> = ({ className, style }) => (
 
 export const EyeIcon: React.FC<IconProps> = ({ className, style }) => (
     <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+);
+
+export const NoSymbolIcon: React.FC<IconProps> = ({ className, style }) => (
+    <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+    </svg>
+);
+
+export const CoffeeIcon: React.FC<IconProps> = ({ className, style }) => (
+    <svg className={className} style={style} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9V9.375c0 1.864 1.511 3.375 3.375 3.375h1.5c1.864 0 3.375-1.511 3.375-3.375V9M9.75 9h7.5M9.75 9H6.375c-1.864 0-3.375 1.511-3.375 3.375v1.5c0 1.864 1.511 3.375 3.375 3.375h.75M17.25 9h3.375c1.864 0 3.375 1.511 3.375 3.375v1.5c0 1.864-1.511 3.375-3.375 3.375h-.75M6 20.25h12" />
+    </svg>
 );
 
 export const goalIcons: Record<string, React.FC<IconProps>> = {

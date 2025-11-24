@@ -23,7 +23,7 @@ const fieldMetadata: Record<string, { label: string; description: string; icon: 
     journalText: { label: 'یادداشت‌های امروز', description: 'محتوای یادداشت‌های شما از امروز به طور خودکار وارد شده است.', icon: PencilIcon },
     sleepHours: { label: 'ساعات خواب', description: 'تعداد ساعاتی که شب گذشته خوابیده‌اید.', icon: MoonIcon },
     habitCompletions: { label: 'وضعیت عادت‌ها', description: 'لیست عادت‌هایی که امروز انجام داده‌اید یا نداده‌اید.', icon: HabitsIcon },
-    activitiesSummary: { label: 'خلاصه فعالیت‌ها', description: 'رویدادهای ثبت شده در تقوim شما برای امروز.', icon: ClockIcon },
+    activitiesSummary: { label: 'خلاصه فعالیت‌ها', description: 'رویدادهای ثبت شده در تقویم شما برای امروز.', icon: ClockIcon },
     activeGoals: { label: 'اهداف فعال', description: 'اهدافی که هنوز در حال تلاش برای رسیدن به آن‌ها هستید.', icon: TargetIcon },
     transactions: { label: 'تراکنش‌های مالی اخیر', description: 'لیست تراکنش‌های مالی شما در ۶۰ روز گذشته.', icon: FinanceIcon },
     budgets: { label: 'بودجه‌ها', description: 'بودجه‌های ماهانه تعریف شده برای دسته‌بندی‌های مختلف.', icon: ReceiptPercentIcon },
@@ -876,7 +876,14 @@ const AiAgentRunner: React.FC<AiAgentRunnerProps> = ({ agent, onBack, userData, 
                     responseSchema: agent.responseSchema,
                 },
             });
-            setResult(JSON.stringify(JSON.parse(response.text), null, 2));
+            
+            let cleanText = response.text.trim();
+            // More robust cleaning for markdown code blocks
+            if (cleanText.includes('```')) {
+                cleanText = cleanText.replace(/```json\s?/, '').replace(/```/, '').replace(/```$/, '');
+            }
+            
+            setResult(JSON.stringify(JSON.parse(cleanText), null, 2));
         } catch (err: any) {
             console.error(`Error running agent ${agent.id}:`, err);
             const errorString = JSON.stringify(err);

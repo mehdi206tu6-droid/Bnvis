@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { OnboardingData, NotificationType, NotificationTiming, DailyReportSetting, NotificationSetting, ThemeName, Habit, TransactionCategory, AudioSettings } from '../types';
-import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon, ShieldCheckIcon, LockClosedIcon, MicrophoneIcon, BoltIcon } from './icons';
+import { UserCircleIcon, TrashIcon, HabitsIcon, PlusIcon, WaterDropIcon, ReadingIcon, WalkingIcon, MeditationIcon, MinusCircleIcon, customHabitIcons, SpeakerWaveIcon, PencilIcon, CheckCircleIcon, SparklesIcon, ShieldCheckIcon, LockClosedIcon, MicrophoneIcon, BoltIcon, ShoppingBagIcon, StarIcon } from './icons';
 import PrivacyVaultView from './PrivacyVaultView';
+import XpShopView from './XpShopView';
 
 interface SettingsViewProps {
     userData: OnboardingData;
@@ -129,6 +130,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
     const [transactionCategories, setTransactionCategories] = useState<TransactionCategory[]>(userData.transactionCategories || []);
     const [newCategory, setNewCategory] = useState('');
     const [isPrivacyVaultOpen, setIsPrivacyVaultOpen] = useState(false);
+    const [isShopOpen, setIsShopOpen] = useState(false);
     const audioContextRef = useRef<AudioContext | null>(null);
 
     const audioSettings = userData.audioSettings || {
@@ -261,7 +263,28 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
      <div className="pb-32 space-y-6">
         {habitModal.isOpen && <HabitModal habitToEdit={habitModal.habitToEdit} currentHabits={userData.habits} onSave={handleSaveHabit} onClose={() => setHabitModal({isOpen: false})} />}
         {isPrivacyVaultOpen && <PrivacyVaultView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsPrivacyVaultOpen(false)} />}
+        {isShopOpen && <XpShopView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setIsShopOpen(false)} />}
         
+        {/* Shop Banner */}
+        <div>
+            <h3 className="text-lg font-semibold text-gray-400 mb-2">جوایز و امتیازات</h3>
+            <button onClick={() => setIsShopOpen(true)} className="w-full bg-gradient-to-r from-yellow-600/20 to-amber-900/20 border border-yellow-500/30 rounded-[var(--radius-md)] p-4 flex items-center justify-between group transition-all hover:shadow-[0_0_20px_rgba(234,179,8,0.1)]">
+                <div className="flex items-center gap-4">
+                     <div className="p-3 bg-yellow-900/30 rounded-lg text-yellow-400 group-hover:text-yellow-300 transition-colors">
+                        <ShoppingBagIcon className="w-8 h-8"/>
+                     </div>
+                    <div className="text-right">
+                        <h4 className="font-bold text-lg text-yellow-100">فروشگاه جوایز</h4>
+                        <p className="text-sm text-yellow-200/60 flex items-center gap-1">
+                            <StarIcon className="w-3 h-3 fill-current"/>
+                            {userData.xp} XP موجود
+                        </p>
+                    </div>
+                </div>
+                <span className="text-yellow-400 font-semibold text-sm group-hover:translate-x-[-4px] transition-transform">ورود &larr;</span>
+            </button>
+        </div>
+
         <div>
             <h3 className="text-lg font-semibold text-gray-400 mb-2">صدا و دستیار صوتی</h3>
             <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 space-y-6">

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OnboardingData, AchievementID, UserGoal, CalendarEvent, Transaction, StandaloneTask } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -7,11 +7,17 @@ import {
     SparklesIcon, CogIcon, TrophyIcon,
     Squares2X2Icon, ChartPieIcon, UserCircleIcon,
     AcademicCapIcon, MicrophoneIcon,
-    MagnifyingGlassIcon, BookOpenIcon,
-    QueueListIcon, CheckCircleIcon,
+    BookOpenIcon,
+    QueueListIcon,
     HealthIcon,
     ShoppingBagIcon,
-    HeartIcon
+    HeartIcon,
+    UserIcon,
+    SunIcon,
+    SnakeIcon,
+    CloudIcon,
+    ChevronRightIcon,
+    ChevronLeftIcon
 } from './icons';
 
 // Import Views
@@ -52,6 +58,78 @@ type ViewState =
     'shop' | 'microCourse' | 'review' | 'nightRoutine' | 
     'eisenhower' | 'timeBlocking' | 'lifeWheel' | 'books' | 'healthWellness';
 
+// Examples for the typewriter effect
+const EXAMPLES = [
+    "جلسه فردا ساعت ۱۰",
+    "خرید شیر و نان",
+    "هدف جدید ورزش",
+    "هزینه ۵۰ تومن اسنپ",
+    "حالم خوب نیست"
+];
+
+const ReadingWidget: React.FC<{ userData: OnboardingData, onClick: () => void }> = ({ userData, onClick }) => {
+    const readingBooks = (userData.books || []).filter(b => b.status === 'reading');
+    
+    // Carousel Logic
+    const [index, setIndex] = useState(0);
+    
+    // Reset index if readingBooks changes length or becomes empty
+    useEffect(() => {
+        if (index >= readingBooks.length && readingBooks.length > 0) {
+            setIndex(0);
+        }
+    }, [readingBooks.length]);
+
+    if (readingBooks.length === 0) {
+        return <GridItem icon={BookOpenIcon} label="کتابخانه" color="text-yellow-400" glow="shadow-yellow-500/50" onClick={onClick} />;
+    }
+
+    const book = readingBooks[index];
+    
+    const nextBook = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIndex((i) => (i + 1) % readingBooks.length);
+    }
+
+    const prevBook = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIndex((i) => (i - 1 + readingBooks.length) % readingBooks.length);
+    }
+
+    return (
+        <div onClick={onClick} className="relative col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-[1.8rem] p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-800/60 transition-all group overflow-hidden shadow-lg">
+             {/* Cover */}
+             <div className={`w-16 h-24 rounded-lg bg-gradient-to-br ${book?.coverColor || 'from-slate-700 to-slate-900'} flex-shrink-0 flex items-center justify-center shadow-md border border-white/5 relative overflow-hidden`}>
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/leather.png')] opacity-20 mix-blend-overlay"></div>
+                <span className="text-2xl z-10 filter drop-shadow-lg">{book?.uiHint?.icon || '📘'}</span>
+             </div>
+             
+             {/* Info */}
+             <div className="flex-grow min-w-0 py-1">
+                 <h4 className="font-bold text-white truncate text-sm mb-0.5">{book?.title}</h4>
+                 <p className="text-xs text-slate-400 truncate mb-3">{book?.author}</p>
+                 
+                 {/* Progress */}
+                 <div className="w-full bg-slate-700/50 h-1.5 rounded-full overflow-hidden mb-1">
+                     <div className="h-full bg-yellow-500 transition-all duration-500" style={{ width: `${book?.totalPages ? ((book.currentPage||0)/book.totalPages)*100 : 0}%` }}></div>
+                 </div>
+                 <p className="text-[10px] text-slate-500 text-right font-mono">{book?.currentPage} / {book?.totalPages}</p>
+             </div>
+
+             {readingBooks.length > 1 && (
+                 <div className="flex flex-col justify-center gap-1 absolute right-2 top-0 bottom-0">
+                     <button onClick={prevBook} className="p-1 bg-black/20 hover:bg-black/40 rounded-full text-white/50 hover:text-white transition-colors z-10">
+                         <ChevronRightIcon className="w-3 h-3 -rotate-90"/>
+                     </button>
+                     <button onClick={nextBook} className="p-1 bg-black/20 hover:bg-black/40 rounded-full text-white/50 hover:text-white transition-colors z-10">
+                         <ChevronLeftIcon className="w-3 h-3 -rotate-90"/>
+                     </button>
+                 </div>
+             )}
+        </div>
+    )
+}
+
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
     userData, onUpdateUserData, addXp, levelUpInfo, onLevelUpSeen, newAchievements, onAchievementsSeen 
 }) => {
@@ -60,6 +138,41 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     const [isProcessing, setIsProcessing] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
+    
+    // Typewriter Effect State
+    const [typewriterText, setTypewriterText] = useState('');
+    const [exampleIndex, setExampleIndex] = useState(0);
+    const [charIndex, setCharIndex] = useState(0);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    useEffect(() => {
+        const currentExample = EXAMPLES[exampleIndex];
+        let typingSpeed = isDeleting ? 50 : 100;
+
+        if (!isDeleting && charIndex === currentExample.length) {
+            // Finished typing, pause before deleting
+            typingSpeed = 2000; 
+        } else if (isDeleting && charIndex === 0) {
+            // Finished deleting, move to next example
+            setIsDeleting(false);
+            setExampleIndex((prev) => (prev + 1) % EXAMPLES.length);
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            if (!isDeleting && charIndex === currentExample.length) {
+                setIsDeleting(true);
+            } else if (isDeleting) {
+                setCharIndex((prev) => prev - 1);
+            } else {
+                setCharIndex((prev) => prev + 1);
+            }
+        }, typingSpeed);
+
+        setTypewriterText(currentExample.substring(0, charIndex));
+
+        return () => clearTimeout(timeout);
+    }, [charIndex, isDeleting, exampleIndex]);
 
     const handleVoiceInput = () => {
         if (!('webkitSpeechRecognition' in window)) {
@@ -219,12 +332,49 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }
     };
 
-    const getGreeting = () => {
+    // --- Dynamic Time & Greeting Logic ---
+    const getTimeContext = () => {
         const hour = new Date().getHours();
-        if (hour < 5) return "شب بخیر";
-        if (hour < 12) return "صبح بخیر";
-        if (hour < 18) return "ظهر بخیر";
-        return "عصر بخیر";
+        if (hour >= 5 && hour < 12) return { 
+            phase: 'morning', 
+            text: 'صبح بخیر', 
+            gradient: 'from-sky-400 via-rose-300 to-amber-200', 
+            shadow: 'shadow-orange-500/40',
+            iconColor: 'text-yellow-100',
+            weatherIcon: SunIcon,
+            weatherLabel: 'صاف',
+            weatherColor: 'text-yellow-400'
+        };
+        if (hour >= 12 && hour < 17) return { 
+            phase: 'noon', 
+            text: 'ظهر بخیر', 
+            gradient: 'from-blue-500 via-sky-400 to-cyan-300', 
+            shadow: 'shadow-sky-500/40',
+            iconColor: 'text-yellow-300',
+            weatherIcon: SunIcon,
+            weatherLabel: 'آفتابی',
+            weatherColor: 'text-orange-400'
+        };
+        if (hour >= 17 && hour < 20) return { 
+            phase: 'afternoon', 
+            text: 'عصر بخیر', 
+            gradient: 'from-indigo-600 via-purple-500 to-pink-500', 
+            shadow: 'shadow-pink-500/40',
+            iconColor: 'text-pink-200',
+            weatherIcon: CloudIcon, // Simulating partly cloudy/sunset
+            weatherLabel: 'نیمه‌ابری',
+            weatherColor: 'text-pink-300'
+        };
+        return { 
+            phase: 'night', 
+            text: 'شب بخیر', 
+            gradient: 'from-slate-900 via-indigo-950 to-black', 
+            shadow: 'shadow-indigo-500/30',
+            iconColor: 'text-slate-200',
+            weatherIcon: MoonIcon,
+            weatherLabel: 'مهتابی',
+            weatherColor: 'text-blue-200'
+        };
     };
 
     const getPersianDate = () => {
@@ -236,65 +386,85 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     };
 
     const { dayName, dayNumber, monthName } = getPersianDate();
+    const timeContext = getTimeContext();
 
     // --- Notification Counters (Badges) ---
     const getGoalCount = () => (userData.goals || []).filter(g => g.progress < 100).length;
-    const getEventCount = () => {
-        const todayStr = new Date().toISOString().split('T')[0];
-        return (userData.calendarEvents || []).filter(e => e.date >= todayStr).length;
-    };
     const getTaskCount = () => (userData.tasks || []).filter(t => !t.completed).length;
-    const getBookCount = () => (userData.books || []).filter(b => b.status === 'reading').length;
 
     // --- Render Main Dashboard ---
     const renderDashboard = () => {
         return (
-            <div className="space-y-6 animate-fadeIn pb-32 px-5 pt-8">
+            <div className="space-y-6 animate-fadeIn pb-32 px-5 pt-6">
                 
                 {/* Header Row */}
-                <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center gap-2.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl px-4 py-2">
-                       <div className="w-6 h-6 bg-indigo-500 rounded-lg flex items-center justify-center shadow-[0_0_10px_rgba(99,102,241,0.5)]">
-                           <span className="text-white font-bold text-sm">+</span>
-                       </div>
-                       <span className="font-black text-white tracking-tight text-lg">Benvis</span>
+                <div className="flex items-center justify-between mb-4">
+                    {/* Left: Profile/XP -> Opens Shop */}
+                    <button onClick={() => setActiveView('shop')} className="w-11 h-11 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-yellow-400 shadow-lg border border-white/10 hover:scale-105 transition-transform">
+                        <UserIcon className="w-5 h-5" />
+                    </button>
+
+                    {/* Center: Title */}
+                    <div className="flex flex-col items-center justify-center">
+                        <h1 className="text-2xl font-black text-white tracking-tight drop-shadow-lg">Benvis</h1>
                     </div>
-                    <button onClick={() => setActiveView('settings')} className="w-11 h-11 rounded-2xl bg-white/5 flex items-center justify-center text-slate-300 hover:text-white border border-white/10 hover:bg-white/10 transition-all">
-                        <CogIcon className="w-6 h-6"/>
+
+                    {/* Right: Settings */}
+                    <button onClick={() => setActiveView('settings')} className="w-11 h-11 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-slate-300 hover:text-white shadow-lg border border-white/10 hover:scale-105 transition-transform">
+                        <CogIcon className="w-5 h-5"/>
                     </button>
                 </div>
 
-                {/* Cards Row */}
-                <div className="grid grid-cols-2 gap-4 h-44">
-                    {/* Greeting Card */}
-                    <div className="bg-gradient-to-br from-[#6366f1] to-[#4f46e5] rounded-[2rem] p-5 relative overflow-hidden flex flex-col justify-center items-center text-center shadow-2xl shadow-indigo-900/30 group">
-                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-                        <div className="relative z-10 flex flex-col items-center">
-                            <div className="mb-3 p-3 bg-white/10 rounded-full border border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.3)] group-hover:scale-110 transition-transform duration-500">
-                                <MoonIcon className="w-10 h-10 text-white" />
-                            </div>
-                            <h2 className="text-2xl font-black text-white tracking-tight">{getGreeting()}</h2>
-                            <p className="text-indigo-100 text-sm mt-1 font-medium opacity-90">{userData.fullName || 'دوست من'}</p>
+                {/* HERO CARDS */}
+                <div className="grid grid-cols-2 gap-4 mb-6 h-44">
+                    
+                    {/* 1. Greeting Card */}
+                    <div className={`relative rounded-[2.5rem] p-6 overflow-hidden shadow-2xl flex flex-col justify-between bg-gradient-to-br ${timeContext.gradient} ${timeContext.shadow} group transition-all duration-700 hover:scale-[1.02]`}>
+                        <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-white/30 rounded-full blur-[40px]"></div>
+                        
+                        <div className="relative z-10 flex justify-end">
+                            {timeContext.phase === 'morning' && <SunIcon className={`w-12 h-12 ${timeContext.iconColor} drop-shadow-lg opacity-90`} />}
+                            {timeContext.phase === 'noon' && <SunIcon className={`w-14 h-14 ${timeContext.iconColor} animate-pulse-slow drop-shadow-[0_0_15px_rgba(255,255,0,0.6)]`} />}
+                            {timeContext.phase === 'afternoon' && (
+                                <div className="relative">
+                                    <SunIcon className="w-12 h-12 text-orange-100 opacity-80 translate-y-2" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-purple-500/50 to-transparent rounded-full blur-sm"></div>
+                                </div>
+                            )}
+                            {timeContext.phase === 'night' && <MoonIcon className={`w-10 h-10 ${timeContext.iconColor} drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]`} />}
+                        </div>
+
+                        <div className="relative z-10">
+                            <h2 className="text-2xl font-black text-white drop-shadow-md mb-1 leading-tight">{timeContext.text}</h2>
+                            <p className="text-sm font-medium text-white/90 truncate">{userData.fullName || 'کاربر عزیز'}</p>
                         </div>
                     </div>
 
-                    {/* Date Card */}
-                    <div className="bg-[#1e293b]/60 backdrop-blur-xl rounded-[2rem] p-5 flex flex-col justify-center items-center text-center shadow-lg border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-full"></div>
-                        <div className="absolute bottom-0 left-0 w-12 h-12 bg-white/5 rounded-tr-full"></div>
-                        
-                        <span className="text-rose-500 font-bold text-xl mb-[-8px] drop-shadow-sm">{dayName}</span>
-                        <span className="text-[5.5rem] font-black text-white leading-none my-0 tracking-tighter scale-110 group-hover:scale-125 transition-transform duration-500">{dayNumber}</span>
-                        <span className="text-slate-400 font-bold text-lg mt-[-5px]">{monthName}</span>
-                    </div>
+                    {/* 2. Date & Weather Card - OPENS CALENDAR */}
+                    <button 
+                        onClick={() => setActiveView('calendar')}
+                        className="relative rounded-[2.5rem] p-6 overflow-hidden shadow-2xl flex flex-col justify-between bg-[#1c1c1e]/80 backdrop-blur-3xl border border-white/10 hover:bg-[#2c2c2e]/80 transition-all duration-300 hover:scale-[1.02] text-right group"
+                    >
+                        <div className="flex justify-between items-start w-full">
+                             <div className="flex flex-col items-center">
+                                <timeContext.weatherIcon className={`w-6 h-6 ${timeContext.weatherColor} mb-1`} />
+                                <span className="text-[10px] font-bold text-slate-400">{timeContext.weatherLabel}</span>
+                             </div>
+                             <span className="text-slate-400 text-xs font-bold bg-white/5 px-3 py-1 rounded-full">{dayName}</span>
+                        </div>
+
+                        <div className="flex flex-col items-end mt-2">
+                            <span className="text-6xl font-black text-white tracking-tighter leading-none group-hover:scale-110 transition-transform origin-bottom-left">{dayNumber}</span>
+                            <span className="text-lg font-medium text-slate-400 mt-1 mr-1">{monthName}</span>
+                        </div>
+                    </button>
                 </div>
 
                 {/* Search Bar */}
                 <div className="relative group z-20">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl opacity-30 group-hover:opacity-60 transition duration-500 blur"></div>
-                    <div className="relative flex items-center bg-[#0f172a] rounded-2xl px-4 py-4 border border-white/10 shadow-xl">
+                    <div className="relative flex items-center bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-4 shadow-lg transition-colors focus-within:bg-white/15 focus-within:border-white/20">
                         <div className="flex items-center gap-3 flex-grow">
-                            <button onClick={handleVoiceInput} className={`transition-all p-2 rounded-xl hover:bg-white/5 ${isListening ? 'text-rose-500 animate-pulse' : 'text-slate-400 hover:text-white'}`}>
+                            <button onClick={handleVoiceInput} className={`transition-all p-2 rounded-xl hover:bg-white/10 ${isListening ? 'text-rose-500 animate-pulse' : 'text-slate-400 hover:text-white'}`}>
                                 <MicrophoneIcon className="w-5 h-5" />
                             </button>
                             <input 
@@ -302,49 +472,48 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                 value={commandInput}
                                 onChange={(e) => setCommandInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleCommandSubmit()}
-                                placeholder={successFeedback ? successFeedback : "بنویس... (مثلا: حالم خوب نیست، جلسه فردا)"}
-                                className={`bg-transparent text-white placeholder-slate-500 outline-none text-base w-full font-medium ${successFeedback ? 'text-green-400' : ''}`}
+                                placeholder={successFeedback ? successFeedback : `بنویس... (مثلا: ${typewriterText})`}
+                                className={`bg-transparent text-white placeholder-slate-500 outline-none text-base w-full font-medium transition-all duration-300 ${successFeedback ? 'text-green-400' : ''}`}
                                 disabled={isProcessing}
                             />
                         </div>
-                        {isProcessing ? <SparklesIcon className="w-5 h-5 text-violet-500 animate-spin" /> : <MagnifyingGlassIcon className="w-6 h-6 text-slate-500" />}
+                        {isProcessing ? (
+                            <SparklesIcon className="w-5 h-5 text-violet-500 animate-spin" />
+                        ) : (
+                            <SparklesIcon className={`w-6 h-6 ${commandInput ? 'text-white animate-pulse' : 'text-slate-600'}`} />
+                        )}
                     </div>
                 </div>
 
-                {/* Main Grid */}
+                {/* Main Grid - 4x3 Layout (12 Items) */}
                 <div className="grid grid-cols-4 gap-x-3 gap-y-5">
-                    <GridItem icon={FinanceIcon} label="مالی" color="text-emerald-400" bg="bg-emerald-500/10" border="border-emerald-500/20" onClick={() => setActiveView('finance')} />
-                    <GridItem icon={CalendarIcon} label="تقویم" color="text-orange-400" bg="bg-orange-500/10" border="border-orange-500/20" onClick={() => setActiveView('calendar')} badge={getEventCount()} />
-                    <GridItem icon={MoonIcon} label="تمرکز" color="text-violet-400" bg="bg-violet-500/10" border="border-violet-500/20" onClick={() => setActiveView('focus')} />
-                    <GridItem icon={TargetIcon} label="اهداف" color="text-blue-400" bg="bg-blue-500/10" border="border-blue-500/20" onClick={() => setActiveView('goals')} badge={getGoalCount()} />
+                    {/* Row 1: Goals, Focus, Reading (Span 2) */}
+                    <GridItem icon={TargetIcon} label="اهداف" color="text-blue-400" glow="shadow-blue-500/50" onClick={() => setActiveView('goals')} badge={getGoalCount()} />
+                    <GridItem icon={MoonIcon} label="تمرکز" color="text-violet-400" glow="shadow-violet-500/50" onClick={() => setActiveView('focus')} />
+                    <ReadingWidget userData={userData} onClick={() => setActiveView('books')} />
                     
-                    <GridItem icon={QueueListIcon} label="زمان" color="text-teal-400" bg="bg-teal-500/10" border="border-teal-500/20" onClick={() => setActiveView('timeBlocking')} badge={getTaskCount()} />
-                    <GridItem icon={Squares2X2Icon} label="اولویت" color="text-amber-400" bg="bg-amber-500/10" border="border-amber-500/20" onClick={() => setActiveView('eisenhower')} />
-                    <GridItem icon={SparklesIcon} label="دستیار" color="text-fuchsia-400" bg="bg-fuchsia-500/10" border="border-fuchsia-500/20" onClick={() => setActiveView('assistant')} />
-                    <GridItem icon={BookOpenIcon} label="کتاب‌باز" color="text-yellow-400" bg="bg-yellow-500/10" border="border-yellow-500/20" onClick={() => setActiveView('books')} badge={getBookCount()} />
+                    {/* Row 2: Finance, Assistant, Eisenhower, Time */}
+                    <GridItem icon={FinanceIcon} label="مالی" color="text-green-400" glow="shadow-green-500/50" onClick={() => setActiveView('finance')} />
+                    <GridItem icon={SparklesIcon} label="دستیار" color="text-fuchsia-400" glow="shadow-fuchsia-500/50" onClick={() => setActiveView('assistant')} />
+                    <GridItem icon={Squares2X2Icon} label="اولویت" color="text-amber-400" glow="shadow-amber-500/50" onClick={() => setActiveView('eisenhower')} />
+                    <GridItem icon={QueueListIcon} label="زمان" color="text-cyan-400" glow="shadow-cyan-500/50" onClick={() => setActiveView('timeBlocking')} badge={getTaskCount()} />
                     
-                    <GridItem icon={HeartIcon} label="کلینیک" color="text-teal-300" bg="bg-teal-500/10" border="border-teal-500/20" onClick={() => setActiveView('healthWellness')} />
-                    <GridItem icon={UserCircleIcon} label="حلقه‌ها" color="text-lime-400" bg="bg-lime-500/10" border="border-lime-500/20" onClick={() => setActiveView('social')} />
-                    <GridItem icon={HealthIcon} label="چرخه" color="text-rose-400" bg="bg-rose-500/10" border="border-rose-500/20" onClick={() => setActiveView('womenHealth')} />
-                    <GridItem icon={ChartPieIcon} label="چرخ" color="text-pink-400" bg="bg-pink-500/10" border="border-pink-500/20" onClick={() => setActiveView('lifeWheel')} />
-
-                    <div className="col-start-1">
-                         <GridItem icon={AcademicCapIcon} label="دوره" color="text-cyan-400" bg="bg-cyan-500/10" border="border-cyan-500/20" onClick={() => setActiveView('microCourse')} />
-                    </div>
-                    <div className="col-start-4">
-                         <GridItem icon={ShoppingBagIcon} label="جایزه" color="text-yellow-300" bg="bg-yellow-500/10" border="border-yellow-500/20" onClick={() => setActiveView('shop')} />
-                    </div>
+                    {/* Row 3: LifeWheel, Women, Social, Health */}
+                    <GridItem icon={ChartPieIcon} label="چرخ" color="text-pink-400" glow="shadow-pink-500/50" onClick={() => setActiveView('lifeWheel')} />
+                    <GridItem icon={HealthIcon} label="چرخه" color="text-rose-400" glow="shadow-rose-500/50" onClick={() => setActiveView('womenHealth')} />
+                    <GridItem icon={UserCircleIcon} label="حلقه‌ها" color="text-lime-400" glow="shadow-lime-500/50" onClick={() => setActiveView('social')} />
+                    <GridItem icon={SnakeIcon} label="کلینیک" color="text-teal-400" glow="shadow-teal-500/50" onClick={() => setActiveView('healthWellness')} />
+                    
+                    {/* Row 4: Extra */}
+                    <GridItem icon={AcademicCapIcon} label="مکتب‌خونه" color="text-indigo-400" glow="shadow-indigo-500/50" onClick={() => setActiveView('microCourse')} />
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="min-h-screen bg-[#020617] text-slate-200 font-[Vazirmatn] relative overflow-hidden selection:bg-violet-500/30">
-             {/* Background Ambient Glows */}
-             <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-indigo-900/20 rounded-full blur-[120px] pointer-events-none"></div>
-             <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none"></div>
-
+        <div className="min-h-screen bg-transparent text-slate-200 font-[Vazirmatn] relative overflow-hidden selection:bg-violet-500/30">
+             
              {levelUpInfo && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl animate-fadeIn" onClick={onLevelUpSeen}>
                     <div className="text-center animate-bounce-in bg-[#1e293b] p-10 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden max-w-sm w-full mx-4">
@@ -368,9 +537,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 {activeView === 'finance' && <FinancialView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
                 {activeView === 'assistant' && <SmartAssistantView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
                 {activeView === 'settings' && (
-                     <div className="p-4 pb-24">
+                     <div className="p-4 pb-24 bg-black min-h-screen">
                         <div className="flex justify-between items-center mb-6">
-                            <button onClick={() => setActiveView('dashboard')} className="flex items-center text-slate-400 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-2xl border border-white/5">
+                            <button onClick={() => setActiveView('dashboard')} className="flex items-center text-slate-400 hover:text-white transition-colors bg-[#1c1c1e] px-4 py-2 rounded-2xl border border-white/5">
                                 <span className="mr-2 font-bold">بازگشت</span>
                             </button>
                             <h2 className="text-xl font-black text-white">تنظیمات</h2>
@@ -394,20 +563,19 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     );
 };
 
-const GridItem: React.FC<{ icon: React.FC<{className?: string}>, label: string, color: string, bg: string, border?: string, onClick: () => void, badge?: number }> = ({ icon: Icon, label, color, bg, border, onClick, badge }) => (
+const GridItem: React.FC<{ icon: React.FC<{className?: string}>, label: string, color: string, glow: string, onClick: () => void, badge?: number }> = ({ icon: Icon, label, color, glow, onClick, badge }) => (
     <button 
         onClick={onClick} 
         className="flex flex-col items-center justify-center gap-2.5 group relative"
     >
         <div className={`
-            w-full aspect-square rounded-[1.5rem] ${bg} ${border ? border : 'border-white/5'} border 
+            w-full aspect-square rounded-[1.8rem] bg-[#1c1c1e]/60 backdrop-blur-xl border border-white/10
             flex items-center justify-center 
             transition-all duration-300 
-            active:scale-95 hover:bg-opacity-40 hover:scale-105 hover:shadow-lg hover:shadow-white/5
-            relative overflow-hidden
+            active:scale-95 hover:bg-[#2c2c2e]/80 hover:border-white/20 hover:scale-105
+            relative overflow-hidden shadow-lg
         `}>
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <Icon className={`w-8 h-8 ${color} drop-shadow-md transition-transform duration-300 group-hover:scale-110`} />
+            <Icon className={`w-7 h-7 ${color} drop-shadow-[0_0_10px_rgba(251,255,255,0.2)] transition-all duration-300 group-hover:scale-110`} />
             
             {/* Notification Badge */}
             {badge && badge > 0 && (
@@ -416,7 +584,7 @@ const GridItem: React.FC<{ icon: React.FC<{className?: string}>, label: string, 
                 </div>
             )}
         </div>
-        <span className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">{label}</span>
+        <span className="text-xs font-bold text-slate-500 group-hover:text-white transition-colors">{label}</span>
     </button>
 );
 

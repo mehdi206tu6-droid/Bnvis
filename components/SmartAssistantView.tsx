@@ -106,8 +106,9 @@ const LiveAssistantSession: React.FC<{
     onUpdateUserData: (data: OnboardingData) => void;
     onClose: () => void;
 }> = ({ userData, onUpdateUserData, onClose }) => {
-    const [status, setStatus] = useState<'connecting' | 'listening' | 'speaking' | 'thinking'>('connecting');
+    const [status, setStatus] = useState<'connecting' | 'listening' | 'speaking' | 'thinking' | 'error'>('connecting');
     const [transcript, setTranscript] = useState<string>("");
+    const [errorMessage, setErrorMessage] = useState<string>("");
     
     const userDataRef = useRef(userData);
     userDataRef.current = userData; 
@@ -124,6 +125,9 @@ const LiveAssistantSession: React.FC<{
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
     const connect = useCallback(async () => {
+        setStatus('connecting');
+        setErrorMessage("");
+        
         try {
             // Initialize dedicated client for this session
             const client = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -139,14 +143,21 @@ const LiveAssistantSession: React.FC<{
             if (inputCtx.state === 'suspended') await inputCtx.resume();
             if (ctx.state === 'suspended') await ctx.resume();
 
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-                sampleRate: 16000,
-                channelCount: 1,
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            }});
-            mediaStreamRef.current = stream;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+                    sampleRate: 16000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }});
+                mediaStreamRef.current = stream;
+            } catch (micError) {
+                console.error("Microphone access denied", micError);
+                setErrorMessage("دسترسی به میکروفون داده نشد.");
+                setStatus('error');
+                return;
+            }
 
             const voiceName = userData.audioSettings?.voice || 'Kore';
 
@@ -172,7 +183,9 @@ const LiveAssistantSession: React.FC<{
                         setStatus('listening');
                         activeSessionRef.current = sessionPromise;
                         
-                        const source = inputCtx.createMediaStreamSource(stream);
+                        if (!inputCtx || !mediaStreamRef.current) return;
+
+                        const source = inputCtx.createMediaStreamSource(mediaStreamRef.current);
                         const processor = inputCtx.createScriptProcessor(4096, 1, 1);
                         
                         sourceRef.current = source;
@@ -303,13 +316,15 @@ const LiveAssistantSession: React.FC<{
                     },
                     onerror: (e) => {
                         console.error("Live session error", e);
-                        setStatus('connecting');
+                        setErrorMessage("خطا در ارتباط با سرور.");
+                        setStatus('error');
                     }
                 }
             });
         } catch (error) {
             console.error("Connection initialization error", error);
-            setStatus('connecting');
+            setErrorMessage("خطا در راه‌اندازی ارتباط.");
+            setStatus('error');
         }
 
     }, [onUpdateUserData, userData.audioSettings]);
@@ -347,7 +362,7 @@ const LiveAssistantSession: React.FC<{
 
     return (
         <div className="fixed inset-0 z-[70] bg-black flex flex-col items-center justify-center animate-fadeIn">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-violet-900/40 via-slate-950 to-black"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-900/40 via-slate-950 to-black"></div>
             
             <div className="absolute top-6 right-6 z-20">
                 <button onClick={onClose} className="p-3 bg-white/10 hover:bg-red-500/20 rounded-full text-white hover:text-red-400 transition-all backdrop-blur-md">
@@ -356,45 +371,51 @@ const LiveAssistantSession: React.FC<{
             </div>
 
             <div className="text-center space-y-12 relative z-10 w-full max-w-md px-6">
-                <div className="relative mx-auto">
-                    {/* Visualizer Rings */}
-                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full border border-violet-500/20 transition-all duration-1000 ${status === 'speaking' ? 'scale-110 opacity-100' : 'scale-90 opacity-50'}`}></div>
-                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full border border-fuchsia-500/20 transition-all duration-1000 delay-100 ${status === 'speaking' ? 'scale-125 opacity-100' : 'scale-95 opacity-50'}`}></div>
-                    
-                    <div className={`w-40 h-40 rounded-full blur-3xl transition-all duration-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 ${
-                        status === 'speaking' ? 'bg-cyan-500 opacity-60 scale-125' :
-                        status === 'listening' ? 'bg-emerald-500 opacity-40 scale-100' :
-                        status === 'thinking' ? 'bg-violet-500 opacity-70 animate-pulse' :
-                        'bg-slate-500 opacity-20'
-                    }`}></div>
-                    
-                    <div className={`relative z-10 w-36 h-36 rounded-full border-4 flex items-center justify-center bg-black/60 backdrop-blur-xl transition-all duration-300 shadow-2xl ${
-                        status === 'speaking' ? 'border-cyan-400 shadow-[0_0_50px_rgba(34,211,238,0.4)]' :
-                        status === 'listening' ? 'border-emerald-400 shadow-[0_0_50px_rgba(52,211,153,0.4)]' :
-                        'border-violet-500 shadow-[0_0_50px_rgba(139,92,246,0.2)]'
-                    } mx-auto`}>
-                        {status === 'listening' && <MicrophoneIcon className="w-14 h-14 text-emerald-400 animate-pulse"/>}
-                        {status === 'speaking' && <BoltIcon className="w-14 h-14 text-cyan-400 animate-pulse"/>}
-                        {status === 'thinking' && <SparklesIcon className="w-14 h-14 text-violet-400 animate-spin"/>}
-                        {status === 'connecting' && <div className="w-14 h-14 border-t-4 border-white rounded-full animate-spin"></div>}
+                {status === 'error' ? (
+                    <div className="bg-red-900/30 border border-red-500/50 rounded-2xl p-6 backdrop-blur-md">
+                        <BoltIcon className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-white mb-2">خطا در ارتباط</h3>
+                        <p className="text-slate-300 mb-6 text-sm">{errorMessage || "مشکلی پیش آمده است. لطفا دوباره تلاش کنید."}</p>
+                        <button onClick={connect} className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg">تلاش مجدد</button>
                     </div>
-                </div>
+                ) : (
+                    <>
+                        <div className="relative mx-auto">
+                            {/* Visualizer Rings */}
+                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full border border-violet-500/20 transition-all duration-1000 ${status === 'speaking' ? 'scale-110 opacity-100' : 'scale-90 opacity-50'}`}></div>
+                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full border border-fuchsia-500/20 transition-all duration-1000 delay-100 ${status === 'speaking' ? 'scale-125 opacity-100' : 'scale-95 opacity-50'}`}></div>
+                            
+                            <div className={`w-40 h-40 rounded-full blur-3xl transition-all duration-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 ${
+                                status === 'speaking' ? 'bg-cyan-500 opacity-60 scale-125' :
+                                status === 'listening' ? 'bg-emerald-500 opacity-40 scale-100' :
+                                status === 'thinking' ? 'bg-violet-500 opacity-70 animate-pulse' :
+                                'bg-slate-500 opacity-20'
+                            }`}></div>
+                            
+                            <div className={`relative z-10 w-36 h-36 rounded-full border-4 flex items-center justify-center bg-black/60 backdrop-blur-xl transition-all duration-300 shadow-2xl ${
+                                status === 'speaking' ? 'border-cyan-400 shadow-[0_0_50px_rgba(34,211,238,0.4)]' :
+                                status === 'listening' ? 'border-emerald-400 shadow-[0_0_50px_rgba(52,211,153,0.4)]' :
+                                'border-violet-500 shadow-[0_0_50px_rgba(139,92,246,0.2)]'
+                            } mx-auto`}>
+                                {status === 'listening' && <MicrophoneIcon className="w-14 h-14 text-emerald-400 animate-pulse"/>}
+                                {status === 'speaking' && <BoltIcon className="w-14 h-14 text-cyan-400 animate-pulse"/>}
+                                {status === 'thinking' && <SparklesIcon className="w-14 h-14 text-violet-400 animate-spin"/>}
+                                {status === 'connecting' && <div className="w-14 h-14 border-t-4 border-white rounded-full animate-spin"></div>}
+                            </div>
+                        </div>
 
-                <div className="space-y-3">
-                    <h2 className="text-3xl font-black text-white tracking-tight">
-                        {status === 'listening' ? 'گوش می‌کنم...' : 
-                         status === 'speaking' ? 'در حال صحبت...' :
-                         status === 'thinking' ? 'در حال پردازش...' : 'اتصال به بنویس'}
-                    </h2>
-                    <p className="text-slate-400 text-base min-h-[24px] px-4 font-medium">
-                        {transcript || (status === 'listening' ? "صحبت کنید..." : " ")}
-                    </p>
-                </div>
-                
-                <div className="flex justify-center gap-4">
-                    <button className="px-6 py-2 bg-white/5 rounded-full text-sm text-slate-400 border border-white/10 backdrop-blur-sm">هدف جدید</button>
-                    <button className="px-6 py-2 bg-white/5 rounded-full text-sm text-slate-400 border border-white/10 backdrop-blur-sm">تسک جدید</button>
-                </div>
+                        <div className="space-y-3">
+                            <h2 className="text-3xl font-black text-white tracking-tight">
+                                {status === 'listening' ? 'گوش می‌کنم...' : 
+                                status === 'speaking' ? 'در حال صحبت...' :
+                                status === 'thinking' ? 'در حال پردازش...' : 'اتصال به بنویس'}
+                            </h2>
+                            <p className="text-slate-400 text-base min-h-[24px] px-4 font-medium">
+                                {transcript || (status === 'listening' ? "صحبت کنید..." : " ")}
+                            </p>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -409,13 +430,14 @@ const ChatBot: React.FC = () => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const chatSessionRef = useRef<Chat | null>(null);
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    // Auto-scroll to bottom when messages change
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages]);
+    }, [messages, isLoading]);
 
     const handleSend = async () => {
         if (!input.trim()) return;
@@ -434,7 +456,14 @@ const ChatBot: React.FC = () => {
             }
 
             const result = await chatSessionRef.current.sendMessage({ message: userMsg.text });
-            const modelMsg: ChatMessage = { role: 'model', text: result.text || '' };
+            let cleanText = result.text || '';
+            // Basic markdown cleanup if needed, though renderer usually handles it.
+            // Removing markdown code blocks if AI wraps plain text response in them erroneously.
+            if (cleanText.startsWith('```') && !cleanText.includes('json')) {
+                 cleanText = cleanText.replace(/```/g, '');
+            }
+
+            const modelMsg: ChatMessage = { role: 'model', text: cleanText };
             setMessages(prev => [...prev, modelMsg]);
         } catch (error) {
             console.error(error);
@@ -446,19 +475,20 @@ const ChatBot: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full relative bg-transparent">
-            <div className="flex-grow overflow-y-auto p-4 space-y-6 pb-28 scrollbar-hide">
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-4 min-h-0">
                 {messages.map((msg, idx) => (
-                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2 animate-fadeIn`}>
                         {msg.role === 'model' && (
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-600 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/30 flex-shrink-0">
                                 <SparklesIcon className="w-4 h-4 text-white" />
                             </div>
                         )}
                         <div 
-                            className={`max-w-[80%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                            className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap ${
                                 msg.role === 'user' 
                                     ? 'bg-violet-600 text-white rounded-br-none' 
-                                    : 'bg-slate-800/80 backdrop-blur-md text-slate-200 rounded-bl-none border border-white/5'
+                                    : 'bg-slate-800/90 backdrop-blur-md text-slate-200 rounded-bl-none border border-white/5'
                             }`}
                         >
                             {msg.text}
@@ -471,7 +501,7 @@ const ChatBot: React.FC = () => {
                     </div>
                 ))}
                 {isLoading && (
-                    <div className="flex justify-start items-end gap-2">
+                    <div className="flex justify-start items-end gap-2 animate-fadeIn">
                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-600 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/30">
                                 <SparklesIcon className="w-4 h-4 text-white" />
                         </div>
@@ -482,24 +512,29 @@ const ChatBot: React.FC = () => {
                         </div>
                     </div>
                 )}
-                <div ref={scrollRef}></div>
+                <div ref={messagesEndRef} className="h-4"></div>
             </div>
 
-            {/* Floating Input Area */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#020617] via-[#020617]/90 to-transparent z-10 pb-6">
-                <div className="glass-panel p-2 flex items-center rounded-2xl bg-slate-900/80 border border-white/10 shadow-2xl">
-                    <input 
-                        type="text" 
+            {/* Fixed Input Area */}
+            <div className="p-3 bg-[#020617] border-t border-white/5 flex-shrink-0 z-20">
+                <div className="flex items-end gap-2 p-2 rounded-2xl bg-slate-900 border border-white/10 shadow-lg">
+                    <textarea 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
                         placeholder="پیام خود را بنویسید..."
-                        className="flex-grow bg-transparent text-white px-4 py-2 outline-none placeholder-slate-500"
+                        className="flex-grow bg-transparent text-white px-3 py-2 outline-none placeholder-slate-500 text-sm max-h-32 min-h-[40px] resize-none scrollbar-hide"
+                        rows={1}
                     />
                     <button 
                         onClick={() => handleSend()}
                         disabled={!input.trim() || isLoading}
-                        className="p-3 bg-violet-600 hover:bg-violet-500 rounded-xl text-white transition-colors disabled:bg-slate-700 disabled:text-slate-500 shadow-lg shadow-violet-900/20"
+                        className="p-3 bg-violet-600 hover:bg-violet-500 rounded-xl text-white transition-colors disabled:bg-slate-700 disabled:text-slate-500 shadow-lg shadow-violet-900/20 flex-shrink-0 mb-0.5"
                     >
                         <ArrowUpIcon className="w-5 h-5" />
                     </button>
@@ -514,7 +549,7 @@ const AgentSelector: React.FC<{ userData: OnboardingData; onUpdateUserData: (dat
 
     if (selectedAgent) {
         return (
-            <div className="h-full overflow-y-auto pb-24">
+            <div className="h-full overflow-y-auto pb-4">
                 <AiAgentRunner 
                     agent={selectedAgent} 
                     onBack={() => setSelectedAgent(null)} 
@@ -526,7 +561,7 @@ const AgentSelector: React.FC<{ userData: OnboardingData; onUpdateUserData: (dat
     }
     
     return (
-        <div className="h-full overflow-y-auto pb-24 px-4 pt-2">
+        <div className="h-full overflow-y-auto pb-4 px-4 pt-2">
              <AiAgentsHub onAgentSelect={setSelectedAgent} />
         </div>
     );
@@ -566,11 +601,19 @@ const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpd
     const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'chat');
     const [isLiveSessionActive, setIsLiveSessionActive] = useState(false);
     
+    const handleTabChange = (id: Tab) => {
+        setActiveTab(id);
+        // Close keyboard on mobile when switching tabs
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+    };
+    
     const NavButton: React.FC<{ id: Tab; label: string; icon: React.FC<{className?: string}> }> = ({ id, label, icon: Icon }) => {
         const isActive = activeTab === id;
         return (
             <button 
-                onClick={() => setActiveTab(id)}
+                onClick={() => handleTabChange(id)}
                 className={`flex flex-col items-center justify-center w-full py-3 gap-1.5 transition-all relative group ${isActive ? 'text-fuchsia-400' : 'text-slate-500 hover:text-slate-300'}`}
             >
                 <div className={`p-2 rounded-xl transition-all duration-300 ${isActive ? 'bg-fuchsia-500/20 -translate-y-3 shadow-lg shadow-fuchsia-900/20 ring-1 ring-fuchsia-500/50' : 'bg-transparent group-hover:bg-white/5'}`}>
@@ -582,7 +625,7 @@ const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpd
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-[#020617] text-slate-200 font-[Vazirmatn] flex flex-col overflow-hidden animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-[#020617] text-slate-200 font-[Vazirmatn] flex flex-col overflow-hidden animate-fadeIn h-[100dvh]">
             {/* Ambient Background */}
             <div className="absolute top-[-20%] right-[-20%] w-[80vw] h-[80vw] bg-fuchsia-900/10 rounded-full blur-[100px] pointer-events-none"></div>
             <div className="absolute bottom-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-violet-900/10 rounded-full blur-[100px] pointer-events-none"></div>
@@ -596,7 +639,7 @@ const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpd
             )}
 
             {/* Header */}
-            <div className="relative z-10 px-6 pt-6 pb-2 flex justify-between items-center border-b border-white/5 bg-[#020617]/50 backdrop-blur-md">
+            <div className="flex-none relative z-10 px-6 pt-6 pb-2 flex justify-between items-center border-b border-white/5 bg-[#020617]/50 backdrop-blur-md">
                 <div>
                     <h2 className="text-2xl font-black text-white tracking-tight">دستیار هوشمند</h2>
                     <p className="text-xs text-fuchsia-500 font-bold uppercase tracking-widest opacity-80">AI Copilot</p>
@@ -606,21 +649,23 @@ const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpd
                 </div>
             </div>
             
-            {/* Main Content */}
-            <div className="flex-grow relative z-10 overflow-hidden">
-                 {activeTab === 'chat' && <ChatBot />}
-                 {activeTab === 'agents' && <AgentSelector userData={userData} onUpdateUserData={onUpdateUserData} />}
-                 {activeTab === 'journal' && (
-                     <div className="h-full overflow-y-auto p-4 pb-32">
-                         <GratitudeJournal />
-                     </div>
-                 )}
-                 {activeTab === 'voice' && <VoiceLauncher onLaunch={() => setIsLiveSessionActive(true)} />}
+            {/* Main Content - Added key for reset on tab switch */}
+            <div className="flex-grow relative z-10 overflow-hidden flex flex-col min-h-0">
+                 <div key={activeTab} className="w-full h-full flex flex-col">
+                     {activeTab === 'chat' && <ChatBot />}
+                     {activeTab === 'agents' && <AgentSelector userData={userData} onUpdateUserData={onUpdateUserData} />}
+                     {activeTab === 'journal' && (
+                         <div className="h-full overflow-y-auto p-4 scrollbar-hide">
+                             <GratitudeJournal />
+                         </div>
+                     )}
+                     {activeTab === 'voice' && <VoiceLauncher onLaunch={() => setIsLiveSessionActive(true)} />}
+                 </div>
             </div>
 
             {/* Bottom Dock Navigation */}
-            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 w-[90%] max-w-lg">
-                <div className="bg-[#1c1c1e]/90 backdrop-blur-xl border border-white/20 rounded-[2rem] p-3 shadow-2xl flex items-center justify-between px-6">
+            <div className="flex-none pb-6 pt-2 bg-[#020617]/90 backdrop-blur-xl border-t border-white/5 z-30">
+                <div className="max-w-lg mx-auto flex items-center justify-between px-6">
                     <NavButton id="chat" label="چت" icon={ChatBubbleOvalLeftEllipsisIcon} />
                     <NavButton id="agents" label="ابزارها" icon={BriefcaseIcon} />
                     

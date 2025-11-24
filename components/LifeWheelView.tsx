@@ -101,12 +101,15 @@ const LifeWheelView: React.FC<LifeWheelViewProps> = ({ userData, onUpdateUserDat
 
     // Calculate Balance Score (Standard Deviation inverse)
     const balanceScore = useMemo(() => {
-        const values = Object.values(scores);
-        const mean = values.reduce((a: number, b: number) => a + b, 0) / values.length;
+        const values = Object.values(scores) as number[];
+        const sum = values.reduce((a: number, b: number) => a + b, 0);
+        const mean = sum / values.length;
+        
+        // Fix arithmetic operations by ensuring types are handled
         const variance = values.reduce((a: number, b: number) => a + Math.pow(b - mean, 2), 0) / values.length;
         const stdDev = Math.sqrt(variance);
+        
         // Score from 0 to 100. Less deviation means better balance.
-        // Max deviation roughly 4.5 (if scores are 1 and 10). 
         const balance = Math.max(0, 100 - (stdDev * 20)); 
         return Math.round(balance);
     }, [scores]);

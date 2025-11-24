@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { OnboardingData, ThemeName } from '../types';
 import { 
@@ -45,7 +44,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     level: 1,
     achievements: [],
     books: [],
-    theme: 'benvis_classic',
+    theme: 'oceanic_deep',
     shopInventory: [],
     socialCircles: [],
     microCourses: [],
