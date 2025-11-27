@@ -286,6 +286,160 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
         </div>
 
         <div>
+            <h3 className="text-lg font-semibold text-gray-400 mb-2">اعلان‌ها</h3>
+            <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] divide-y divide-gray-700">
+                <div className="p-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h4 className="font-semibold">یادآوری وظایف</h4>
+                            <p className="text-sm text-gray-400">قبل از سررسید کارها</p>
+                        </div>
+                        <button onClick={() => handleNotificationChange('tasks', { enabled: !userData.notifications.tasks.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.tasks.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
+                             <div className="w-5 h-5 bg-white rounded-full"></div>
+                        </button>
+                    </div>
+                    {userData.notifications.tasks.enabled && 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50 animate-fadeIn">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">زمان‌بندی</label>
+                                <select value={userData.notifications.tasks.timing} onChange={(e) => handleNotificationChange('tasks', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                    {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                </select>
+                            </div>
+                             <div>
+                                <label className="block text-xs text-gray-400 mb-1">صدا</label>
+                                <div className="flex items-center gap-2">
+                                    <select value={userData.notifications.tasks.sound || 'default'} onChange={(e) => handleNotificationChange('tasks', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                        {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                    <button onClick={() => playSound(userData.notifications.tasks.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500 transition-colors"><SpeakerWaveIcon className="w-5 h-5"/></button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                 <div className="p-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h4 className="font-semibold">گزارش مالی</h4>
+                            <p className="text-sm text-gray-400">خلاصه هزینه‌های هفتگی</p>
+                        </div>
+                        <button onClick={() => handleNotificationChange('reminders', { enabled: !userData.notifications.reminders.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.reminders.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
+                             <div className="w-5 h-5 bg-white rounded-full"></div>
+                        </button>
+                    </div>
+                    {userData.notifications.reminders.enabled && 
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50 animate-fadeIn">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">زمان‌بندی</label>
+                                <select value={userData.notifications.reminders.timing} onChange={(e) => handleNotificationChange('reminders', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                    {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                </select>
+                            </div>
+                             <div>
+                                <label className="block text-xs text-gray-400 mb-1">صدا</label>
+                                <div className="flex items-center gap-2">
+                                    <select value={userData.notifications.reminders.sound || 'default'} onChange={(e) => handleNotificationChange('reminders', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                        {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                    <button onClick={() => playSound(userData.notifications.reminders.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500 transition-colors"><SpeakerWaveIcon className="w-5 h-5"/></button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                 <div className="p-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h4 className="font-semibold">گزارش روزانه</h4>
+                            <p className="text-sm text-gray-400">پیام‌های پیشنهادی و خلاصه روز</p>
+                        </div>
+                         <button onClick={() => handleNotificationChange('daily_report', { enabled: !userData.notifications.daily_report.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.daily_report.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
+                             <div className="w-5 h-5 bg-white rounded-full"></div>
+                        </button>
+                    </div>
+                     {userData.notifications.daily_report.enabled && 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50 animate-fadeIn">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">ساعت ارسال</label>
+                                <input type="time" value={userData.notifications.daily_report.time} onChange={(e) => handleNotificationChange('daily_report', { time: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none"/>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">صدا</label>
+                                <div className="flex items-center gap-2">
+                                    <select value={userData.notifications.daily_report.sound || 'default'} onChange={(e) => handleNotificationChange('daily_report', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                        {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                    <button onClick={() => playSound(userData.notifications.daily_report.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500 transition-colors"><SpeakerWaveIcon className="w-5 h-5"/></button>
+                                </div>
+                            </div>
+                        </div>
+                     }
+                </div>
+                <div className="p-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h4 className="font-semibold">هشدارهای بودجه</h4>
+                            <p className="text-sm text-gray-400">اعلان هنگام نزدیک شدن به سقف بودجه</p>
+                        </div>
+                        <button onClick={() => handleNotificationChange('budget_alerts', { enabled: !userData.notifications.budget_alerts?.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.budget_alerts?.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
+                             <div className="w-5 h-5 bg-white rounded-full"></div>
+                        </button>
+                    </div>
+                     {userData.notifications.budget_alerts?.enabled && 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50 animate-fadeIn">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">زمان‌بندی</label>
+                                <select value={userData.notifications.budget_alerts.timing} onChange={(e) => handleNotificationChange('budget_alerts', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                    {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">صدا</label>
+                                <div className="flex items-center gap-2">
+                                    <select value={userData.notifications.budget_alerts.sound || 'default'} onChange={(e) => handleNotificationChange('budget_alerts', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                        {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                    <button onClick={() => playSound(userData.notifications.budget_alerts.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500 transition-colors"><SpeakerWaveIcon className="w-5 h-5"/></button>
+                                </div>
+                            </div>
+                        </div>
+                     }
+                </div>
+                 <div className="p-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h4 className="font-semibold">هشدار کمبود موجودی</h4>
+                            <p className="text-sm text-gray-400">اعلان وقتی موجودی حساب کم است</p>
+                        </div>
+                         <button onClick={() => handleNotificationChange('low_balance_warnings', { enabled: !userData.notifications.low_balance_warnings?.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.low_balance_warnings?.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
+                             <div className="w-5 h-5 bg-white rounded-full"></div>
+                        </button>
+                    </div>
+                     {userData.notifications.low_balance_warnings?.enabled && 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50 animate-fadeIn">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">زمان‌بندی</label>
+                                <select value={userData.notifications.low_balance_warnings.timing} onChange={(e) => handleNotificationChange('low_balance_warnings', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                    {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">صدا</label>
+                                <div className="flex items-center gap-2">
+                                    <select value={userData.notifications.low_balance_warnings.sound || 'default'} onChange={(e) => handleNotificationChange('low_balance_warnings', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm focus:ring-1 focus:ring-violet-500 outline-none">
+                                        {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                    <button onClick={() => playSound(userData.notifications.low_balance_warnings.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500 transition-colors"><SpeakerWaveIcon className="w-5 h-5"/></button>
+                                </div>
+                            </div>
+                        </div>
+                     }
+                </div>
+            </div>
+        </div>
+
+        <div>
             <h3 className="text-lg font-semibold text-gray-400 mb-2">صدا و دستیار صوتی</h3>
             <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] p-4 space-y-6">
                 {/* Voice Persona Selection */}
@@ -568,131 +722,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ userData, onUpdateUserData 
                             <div className="w-5 h-5 bg-white rounded-full shadow-sm"></div>
                         </button>
                     </div>
-                </div>
-            </div>
-        </div>
-
-
-        <div>
-            <h3 className="text-lg font-semibold text-gray-400 mb-2">اعلان‌ها</h3>
-            <div className="bg-gray-800/50 border border-gray-700 rounded-[var(--radius-md)] divide-y divide-gray-700">
-                <div className="p-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h4 className="font-semibold">یادآوری وظایف</h4>
-                            <p className="text-sm text-gray-400">قبل از سررسید کارها</p>
-                        </div>
-                        <button onClick={() => handleNotificationChange('tasks', { enabled: !userData.notifications.tasks.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.tasks.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
-                             <div className="w-5 h-5 bg-white rounded-full"></div>
-                        </button>
-                    </div>
-                    {userData.notifications.tasks.enabled && 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50">
-                            <select value={userData.notifications.tasks.timing} onChange={(e) => handleNotificationChange('tasks', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                            </select>
-                             <div className="flex items-center gap-2">
-                                <select value={userData.notifications.tasks.sound || 'default'} onChange={(e) => handleNotificationChange('tasks', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                    {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                </select>
-                                <button onClick={() => playSound(userData.notifications.tasks.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500"><SpeakerWaveIcon className="w-5 h-5"/></button>
-                            </div>
-                        </div>
-                    }
-                </div>
-                 <div className="p-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h4 className="font-semibold">گزارش مالی</h4>
-                            <p className="text-sm text-gray-400">خلاصه هزینه‌های هفتگی</p>
-                        </div>
-                        <button onClick={() => handleNotificationChange('reminders', { enabled: !userData.notifications.reminders.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.reminders.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
-                             <div className="w-5 h-5 bg-white rounded-full"></div>
-                        </button>
-                    </div>
-                    {userData.notifications.reminders.enabled && 
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50">
-                            <select value={userData.notifications.reminders.timing} onChange={(e) => handleNotificationChange('reminders', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                            </select>
-                             <div className="flex items-center gap-2">
-                                <select value={userData.notifications.reminders.sound || 'default'} onChange={(e) => handleNotificationChange('reminders', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                    {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                </select>
-                                <button onClick={() => playSound(userData.notifications.reminders.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500"><SpeakerWaveIcon className="w-5 h-5"/></button>
-                            </div>
-                        </div>
-                    }
-                </div>
-                 <div className="p-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h4 className="font-semibold">انگیزه روزانه</h4>
-                            <p className="text-sm text-gray-400">پیام‌های پیشنهادی</p>
-                        </div>
-                         <button onClick={() => handleNotificationChange('daily_report', { enabled: !userData.notifications.daily_report.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.daily_report.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
-                             <div className="w-5 h-5 bg-white rounded-full"></div>
-                        </button>
-                    </div>
-                     {userData.notifications.daily_report.enabled && 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50">
-                            <input type="time" value={userData.notifications.daily_report.time} onChange={(e) => handleNotificationChange('daily_report', { time: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm"/>
-                            <div className="flex items-center gap-2">
-                                <select value={userData.notifications.daily_report.sound || 'default'} onChange={(e) => handleNotificationChange('daily_report', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                    {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                </select>
-                                <button onClick={() => playSound(userData.notifications.daily_report.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500"><SpeakerWaveIcon className="w-5 h-5"/></button>
-                            </div>
-                        </div>
-                     }
-                </div>
-                <div className="p-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h4 className="font-semibold">هشدارهای بودجه</h4>
-                            <p className="text-sm text-gray-400">اعلان هنگام نزدیک شدن به سقف بودجه</p>
-                        </div>
-                        <button onClick={() => handleNotificationChange('budget_alerts', { enabled: !userData.notifications.budget_alerts?.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.budget_alerts?.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
-                             <div className="w-5 h-5 bg-white rounded-full"></div>
-                        </button>
-                    </div>
-                     {userData.notifications.budget_alerts?.enabled && 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50">
-                            <select value={userData.notifications.budget_alerts.timing} onChange={(e) => handleNotificationChange('budget_alerts', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                            </select>
-                            <div className="flex items-center gap-2">
-                                <select value={userData.notifications.budget_alerts.sound || 'default'} onChange={(e) => handleNotificationChange('budget_alerts', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                    {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                </select>
-                                <button onClick={() => playSound(userData.notifications.budget_alerts.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500"><SpeakerWaveIcon className="w-5 h-5"/></button>
-                            </div>
-                        </div>
-                     }
-                </div>
-                 <div className="p-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h4 className="font-semibold">هشدار کمبود موجودی</h4>
-                            <p className="text-sm text-gray-400">اعلان وقتی موجودی حساب کم است</p>
-                        </div>
-                         <button onClick={() => handleNotificationChange('low_balance_warnings', { enabled: !userData.notifications.low_balance_warnings?.enabled })} className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors ${userData.notifications.low_balance_warnings?.enabled ? 'bg-[var(--color-primary-600)] justify-end' : 'bg-gray-600 justify-start'}`}>
-                             <div className="w-5 h-5 bg-white rounded-full"></div>
-                        </button>
-                    </div>
-                     {userData.notifications.low_balance_warnings?.enabled && 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600/50">
-                            <select value={userData.notifications.low_balance_warnings.timing} onChange={(e) => handleNotificationChange('low_balance_warnings', { timing: e.target.value as NotificationTiming })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                {timingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                            </select>
-                            <div className="flex items-center gap-2">
-                                <select value={userData.notifications.low_balance_warnings.sound || 'default'} onChange={(e) => handleNotificationChange('low_balance_warnings', { sound: e.target.value })} className="w-full bg-gray-700/80 border border-gray-600 rounded-md p-2 text-sm">
-                                    {soundOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                </select>
-                                <button onClick={() => playSound(userData.notifications.low_balance_warnings.sound || 'default')} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500"><SpeakerWaveIcon className="w-5 h-5"/></button>
-                            </div>
-                        </div>
-                     }
                 </div>
             </div>
         </div>

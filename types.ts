@@ -40,13 +40,19 @@ export interface AudioSettings {
     };
 }
 
+export type HabitCategory = 'health' | 'productivity' | 'mindfulness' | 'learning' | 'finance' | 'other';
+
 export interface Habit {
     name: string;
     type: 'good' | 'bad';
-    category?: string;
+    category?: HabitCategory | string;
     icon?: string;
     color?: string;
     notification?: NotificationSetting;
+    // New Tracking Fields
+    streak: number;
+    bestStreak: number;
+    history: string[]; // Array of ISO date strings (YYYY-MM-DD)
 }
 
 export interface KeyResult {

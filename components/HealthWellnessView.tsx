@@ -1,25 +1,17 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { OnboardingData, ChatMessage } from '../types';
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+import { OnboardingData, WomenHealthData } from '../types';
+import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } from "@google/genai";
 import { 
-    HealthIcon, BrainIcon, HeartIcon, WaterDropIcon, MoonIcon, 
-    WalkingIcon, FaceSmileIcon, ChatBubbleLeftRightIcon, ArrowLeftIcon,
-    SparklesIcon, ArrowUpIcon, CheckCircleIcon,
-    BoltIcon, SunIcon, MicrophoneIcon, XMarkIcon, FireIcon, LeafIcon,
-    EyeIcon, StopIcon, PlayIcon, ScaleIcon, ChartBarIcon,
-    ChatBubbleOvalLeftEllipsisIcon, SpeakerWaveIcon, UserIcon
+    HealthIcon, BrainIcon, HeartIcon, 
+    ChatBubbleLeftRightIcon, BoltIcon, XMarkIcon, EyeIcon, 
+    PlayIcon, StopIcon, MicrophoneIcon, SpeakerWaveIcon,
+    SparklesIcon, CalendarIcon, UserIcon
 } from './icons';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-interface HealthWellnessViewProps {
-    userData: OnboardingData;
-    onUpdateUserData: (data: OnboardingData) => void;
-    onClose: () => void;
-}
-
-// --- Audio Processing Utilities ---
+// --- UTILS: Audio Processing ---
 function base64ToUint8Array(base64: string): Uint8Array {
     const binaryString = atob(base64);
     const len = binaryString.length;
@@ -45,521 +37,531 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     return btoa(binary);
 }
 
-// --- Configuration ---
+// --- TYPES ---
+type SectionType = 'women' | 'soul' | 'mind' | 'body' | 'therapy';
+
+interface HealthWellnessViewProps {
+    userData: OnboardingData;
+    onUpdateUserData: (data: OnboardingData) => void;
+    onClose: () => void;
+}
+
+// --- FREQUENCIES ---
 const CHAKRAS = [
-    { id: 'crown', name: 'تاج', color: 'bg-violet-500', glow: 'shadow-[0_0_30px_rgba(139,92,246,0.8)]', freq: 963, position: 'top-[2%]' },
-    { id: 'third_eye', name: 'چشم سوم', color: 'bg-indigo-600', glow: 'shadow-[0_0_30px_rgba(79,70,229,0.8)]', freq: 852, position: 'top-[12%]' },
-    { id: 'throat', name: 'گلو', color: 'bg-cyan-400', glow: 'shadow-[0_0_30px_rgba(34,211,238,0.8)]', freq: 741, position: 'top-[22%]' },
-    { id: 'heart', name: 'قلب', color: 'bg-emerald-500', glow: 'shadow-[0_0_30px_rgba(16,185,129,0.8)]', freq: 639, position: 'top-[35%]' },
-    { id: 'solar', name: 'خورشیدی', color: 'bg-yellow-400', glow: 'shadow-[0_0_30px_rgba(250,204,21,0.8)]', freq: 528, position: 'top-[48%]' },
-    { id: 'sacral', name: 'خاجی', color: 'bg-orange-500', glow: 'shadow-[0_0_30px_rgba(249,115,22,0.8)]', freq: 417, position: 'top-[60%]' },
-    { id: 'root', name: 'ریشه', color: 'bg-red-600', glow: 'shadow-[0_0_30px_rgba(220,38,38,0.8)]', freq: 396, position: 'top-[72%]' },
+    { id: 'root', name: 'ریشه', freq: 396, color: 'bg-red-600', desc: 'امنیت' },
+    { id: 'sacral', name: 'خاجی', freq: 417, color: 'bg-orange-500', desc: 'احساس' },
+    { id: 'solar', name: 'خورشیدی', freq: 528, color: 'bg-yellow-400', desc: 'قدرت' },
+    { id: 'heart', name: 'قلب', freq: 639, color: 'bg-emerald-500', desc: 'عشق' },
+    { id: 'throat', name: 'گلو', freq: 741, color: 'bg-cyan-500', desc: 'بیان' },
+    { id: 'third_eye', name: 'چشم سوم', freq: 852, color: 'bg-indigo-600', desc: 'شهود' },
+    { id: 'crown', name: 'تاج', freq: 963, color: 'bg-violet-500', desc: 'آگاهی' },
 ];
 
-const PERSONAS = {
-    therapy: "You are a compassionate therapist. Speak Persian. Be concise, warm, and professional.",
-    energy: "You are a metaphysics expert based on the 'Book of Wisdom' by Harry B. Joseph. Speak Persian. Discuss Energy, Chakras, Aura, and Frequency. Be mystical but practical.",
-    body: "You are a fitness & health coach. Speak Persian. Focus on biology, nutrition, and sleep.",
-    mind: "You are a Zen meditation master. Speak Persian. Focus on breath, mindfulness, and peace."
-};
-
-// --- Live Session Component ---
-const LiveHealthSession: React.FC<{ persona: string; title: string; onClose: () => void }> = ({ persona, title, onClose }) => {
-    const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
-    const [speakingState, setSpeakingState] = useState<'user' | 'ai' | 'silence'>('silence');
+// --- COMPONENT: Live Doctor Avatar ---
+// This component handles the WebSockets, Audio I/O, and Visuals for ONE persona.
+const LiveDoctorSession: React.FC<{
+    persona: string;
+    voiceName: string;
+    systemPrompt: string;
+    tools?: FunctionDeclaration[];
+    onToolCall?: (name: string, args: any) => Promise<any>;
+    isActive: boolean;
+    themeColor: string;
+}> = ({ persona, voiceName, systemPrompt, tools, onToolCall, isActive, themeColor }) => {
+    const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'speaking' | 'processing' | 'error'>('idle');
+    const [audioLevel, setAudioLevel] = useState(0);
     
-    // Audio Context Refs
+    // Refs for Audio
     const audioCtxRef = useRef<AudioContext | null>(null);
     const inputCtxRef = useRef<AudioContext | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const activeSessionRef = useRef<Promise<any> | null>(null);
     const nextStartTimeRef = useRef<number>(0);
-    const sessionRef = useRef<any>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
 
-    const cleanup = () => {
-        if (processorRef.current) {
-            processorRef.current.disconnect();
-            processorRef.current.onaudioprocess = null;
-        }
+    // Cleanup
+    const cleanup = async () => {
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        if (processorRef.current) { processorRef.current.disconnect(); processorRef.current.onaudioprocess = null; }
         if (sourceRef.current) sourceRef.current.disconnect();
-        if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-        if (inputCtxRef.current) inputCtxRef.current.close();
-        if (audioCtxRef.current) audioCtxRef.current.close();
-        sessionRef.current = null;
+        if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(t => t.stop());
+        if (inputCtxRef.current && inputCtxRef.current.state !== 'closed') await inputCtxRef.current.close();
+        if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') await audioCtxRef.current.close();
+        activeSessionRef.current = null;
     };
 
-    useEffect(() => {
-        startSession();
-        return () => cleanup();
-    }, []);
+    // Visualizer
+    const animate = () => {
+        if (!analyserRef.current) return;
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setAudioLevel(average);
+        animationFrameRef.current = requestAnimationFrame(animate);
+    };
 
-    const startSession = async () => {
+    const connect = async () => {
+        await cleanup();
         setStatus('connecting');
+        
         try {
             const client = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
+            // Audio Setup
             const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             audioCtxRef.current = ctx;
-            
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 32;
+            analyserRef.current = analyser;
+            analyser.connect(ctx.destination); // Output route
+
             const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             inputCtxRef.current = inputCtx;
-
+            
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, echoCancellation: true } });
-            streamRef.current = stream;
+            mediaStreamRef.current = stream;
 
             const sessionPromise = client.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 config: {
-                    systemInstruction: persona,
+                    systemInstruction: systemPrompt,
+                    tools: tools ? [{ functionDeclarations: tools }] : undefined,
                     responseModalities: [Modality.AUDIO],
-                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } } }
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } }
                 },
                 callbacks: {
                     onopen: () => {
-                        setStatus('connected');
-                        setSpeakingState('silence');
-                        
+                        setStatus('listening');
+                        activeSessionRef.current = sessionPromise;
+                        animate(); // Start visualizer
+
+                        // Input Pipeline
                         const source = inputCtx.createMediaStreamSource(stream);
                         const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-                        
-                        processor.onaudioprocess = (e) => {
-                            const inputData = e.inputBuffer.getChannelData(0);
-                            let sum = 0;
-                            for(let i=0; i<inputData.length; i++) sum += Math.abs(inputData[i]);
-                            if (sum > 5) setSpeakingState('user'); // Lower threshold for visuals
-                            else if (status === 'connected' && speakingState === 'user') setSpeakingState('silence');
+                        sourceRef.current = source;
+                        processorRef.current = processor;
 
-                            const pcm16 = floatTo16BitPCM(inputData);
-                            const base64 = arrayBufferToBase64(pcm16.buffer);
-                            
-                            sessionPromise.then(session => {
-                                session.sendRealtimeInput({
-                                    media: { mimeType: "audio/pcm;rate=16000", data: base64 }
-                                });
-                            });
+                        processor.onaudioprocess = (e) => {
+                            if (!activeSessionRef.current || inputCtx.state === 'closed') return;
+                            const inputData = e.inputBuffer.getChannelData(0);
+                            const base64 = arrayBufferToBase64(floatTo16BitPCM(inputData).buffer);
+                            sessionPromise.then(s => s.sendRealtimeInput({ media: { mimeType: "audio/pcm;rate=16000", data: base64 } }));
                         };
 
                         source.connect(processor);
                         processor.connect(inputCtx.destination);
-                        
-                        sourceRef.current = source;
-                        processorRef.current = processor;
                     },
                     onmessage: async (msg: LiveServerMessage) => {
+                        // Function Calling Logic
+                        if (msg.toolCall && onToolCall) {
+                            setStatus('processing');
+                            for (const fc of msg.toolCall.functionCalls) {
+                                const result = await onToolCall(fc.name, fc.args);
+                                sessionPromise.then(s => s.sendToolResponse({
+                                    functionResponses: [{ id: fc.id, name: fc.name, response: { result } }]
+                                }));
+                            }
+                            setStatus('listening'); // Return to listening after tool exec
+                        }
+
+                        // Audio Output Logic
                         const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                         if (audioData && audioCtxRef.current) {
-                            setSpeakingState('ai');
-                            const bytes = base64ToUint8Array(audioData);
-                            const int16 = new Int16Array(bytes.buffer);
-                            const float32 = new Float32Array(int16.length);
+                            setStatus('speaking');
+                            const float32 = new Float32Array(new Int16Array(base64ToUint8Array(audioData).buffer).length);
+                            const int16 = new Int16Array(base64ToUint8Array(audioData).buffer);
                             for(let i=0; i<int16.length; i++) float32[i] = int16[i] / 32768.0;
-                            
+
                             const buffer = audioCtxRef.current.createBuffer(1, float32.length, 24000);
                             buffer.copyToChannel(float32, 0);
-                            
                             const source = audioCtxRef.current.createBufferSource();
                             source.buffer = buffer;
-                            source.connect(audioCtxRef.current.destination);
+                            if (analyserRef.current) source.connect(analyserRef.current);
                             
                             const now = audioCtxRef.current.currentTime;
-                            const startTime = Math.max(now, nextStartTimeRef.current);
-                            source.start(startTime);
-                            nextStartTimeRef.current = startTime + buffer.duration;
+                            const start = Math.max(now, nextStartTimeRef.current);
+                            source.start(start);
+                            nextStartTimeRef.current = start + buffer.duration;
                             
                             source.onended = () => {
                                 if (audioCtxRef.current && audioCtxRef.current.currentTime >= nextStartTimeRef.current) {
-                                    setSpeakingState('silence');
+                                    setStatus('listening');
                                 }
                             };
                         }
                     },
                     onclose: () => setStatus('idle'),
-                    onerror: (err) => {
-                        console.error(err);
-                        setStatus('error');
-                    }
+                    onerror: (e) => { console.error(e); setStatus('error'); }
                 }
             });
-            sessionRef.current = sessionPromise;
-
         } catch (e) {
-            console.error("Connection failed", e);
+            console.error(e);
             setStatus('error');
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center animate-fadeIn">
-            <div className={`absolute inset-0 bg-gradient-to-b from-indigo-900/20 to-black pointer-events-none transition-opacity duration-1000 ${speakingState === 'ai' ? 'opacity-100' : 'opacity-50'}`}></div>
-            
-            <div className="relative z-10 flex flex-col items-center w-full max-w-md px-6">
-                <div className="mb-10">
-                    {status === 'connecting' && <div className="px-4 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-xs font-bold animate-pulse">در حال اتصال...</div>}
-                    {status === 'error' && <div className="px-4 py-1 rounded-full bg-red-500/20 text-red-400 text-xs font-bold">خطا در اتصال</div>}
-                    {status === 'connected' && (
-                        <div className={`px-4 py-1 rounded-full text-xs font-bold transition-all ${speakingState === 'ai' ? 'bg-cyan-500/20 text-cyan-400' : speakingState === 'user' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-300'}`}>
-                            {speakingState === 'ai' ? 'در حال صحبت...' : speakingState === 'user' ? 'گوش می‌کنم...' : 'متصل'}
-                        </div>
-                    )}
-                </div>
-
-                <div className="relative w-64 h-64 flex items-center justify-center mb-12">
-                    <div className={`absolute w-40 h-40 rounded-full bg-gradient-to-br transition-all duration-500 ${
-                        status === 'connected' 
-                            ? (speakingState === 'ai' ? 'from-cyan-400 to-blue-600 shadow-[0_0_80px_rgba(34,211,238,0.6)] scale-110' 
-                            : (speakingState === 'user' ? 'from-green-400 to-emerald-600 shadow-[0_0_60px_rgba(52,211,153,0.4)] scale-95' 
-                            : 'from-slate-700 to-slate-900 shadow-[0_0_40px_rgba(255,255,255,0.1)]')) 
-                            : 'from-slate-800 to-black border border-white/10'
-                    }`}></div>
-
-                    {status === 'connected' && (
-                        <>
-                            <div className={`absolute inset-0 rounded-full border border-white/10 animate-ping ${speakingState === 'ai' ? 'opacity-50 duration-[2s]' : 'opacity-0'}`}></div>
-                            <div className={`absolute inset-[-20px] rounded-full border border-white/5 animate-ping ${speakingState === 'ai' ? 'opacity-30 duration-[3s] delay-75' : 'opacity-0'}`}></div>
-                        </>
-                    )}
-
-                    <div className="relative z-10">
-                        <SpeakerWaveIcon className={`w-16 h-16 text-white transition-opacity ${speakingState === 'ai' ? 'opacity-100' : 'opacity-50'}`} />
-                    </div>
-                </div>
-
-                <h2 className="text-3xl font-black text-white mb-2 text-center">{title}</h2>
-                <p className="text-slate-400 text-sm text-center mb-10 max-w-xs mx-auto">
-                    مکالمه صوتی هوشمند و زنده
-                </p>
-
-                <button onClick={onClose} className="p-4 rounded-full bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-900/30 hover:scale-105 transition-all">
-                    <XMarkIcon className="w-8 h-8" />
-                </button>
-            </div>
-        </div>
-    );
-};
-
-// --- Text Chat Component ---
-const SectionChat: React.FC<{ systemPrompt: string; placeholder: string }> = ({ systemPrompt, placeholder }) => {
-    const [messages, setMessages] = useState<ChatMessage[]>([{ role: 'model', text: 'سلام دوست من. من اینجام. چه کمکی از دستم برمیاد؟' }]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const endRef = useRef<HTMLDivElement>(null);
-
-    const send = async () => {
-        if (!input.trim()) return;
-        const userText = input;
-        setMessages(p => [...p, { role: 'user', text: userText }]);
-        setInput('');
-        setLoading(true);
-        try {
-            const res = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: `System: ${systemPrompt}\nUser: ${userText}`
-            });
-            setMessages(p => [...p, { role: 'model', text: res.text.trim() }]);
-        } catch {
-            setMessages(p => [...p, { role: 'model', text: 'متاسفانه ارتباط قطع شد. لطفا دوباره تلاش کنید.' }]);
-        } finally { setLoading(false); }
+    const disconnect = () => {
+        cleanup();
+        setStatus('idle');
     };
 
-    useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+    // Auto-cleanup on unmount or tab switch
+    useEffect(() => {
+        return () => { cleanup(); };
+    }, []);
 
+    // --- VISUAL UI ---
     return (
-        <div className="flex flex-col h-full min-h-0 relative">
-            <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-24 scrollbar-hide">
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
-                        <div className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-md ${m.role === 'user' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-br-none' : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none'}`}>
-                            {m.text}
-                        </div>
-                    </div>
-                ))}
-                {loading && (
-                    <div className="flex justify-start animate-pulse">
-                        <div className="bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-700">
-                            <div className="flex gap-1.5">
-                                <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce"></div>
-                                <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce delay-100"></div>
-                                <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce delay-200"></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                <div ref={endRef}></div>
-            </div>
-            
-            {/* Input Area - Positioned absolutely at bottom of container, above padding */}
-            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent z-20">
-                <div className="flex gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700 p-1.5 rounded-2xl shadow-2xl">
-                    <input 
-                        value={input} 
-                        onChange={e => setInput(e.target.value)} 
-                        onKeyDown={e => e.key === 'Enter' && send()} 
-                        placeholder={placeholder} 
-                        className="flex-grow bg-transparent px-3 text-white outline-none text-sm placeholder-slate-500"
-                    />
-                    <button onClick={send} disabled={loading || !input.trim()} className="p-2.5 bg-violet-600 hover:bg-violet-500 rounded-xl text-white disabled:opacity-50 shadow-lg transition-colors">
-                        <ArrowUpIcon className="w-5 h-5"/>
-                    </button>
+        <div className="flex flex-col items-center justify-center h-full w-full relative overflow-hidden rounded-3xl bg-black/20 backdrop-blur-sm border border-white/5">
+            {/* Background Glow */}
+            <div className={`absolute inset-0 transition-opacity duration-1000 ${status === 'speaking' ? 'opacity-30' : 'opacity-10'} bg-gradient-to-b ${themeColor} to-transparent blur-[80px]`}></div>
+
+            {/* Main Orb Visualizer */}
+            <div className="relative z-10 flex items-center justify-center mb-8">
+                <div 
+                    className={`rounded-full transition-all duration-100 border-4 flex items-center justify-center shadow-[0_0_50px_rgba(255,255,255,0.2)]
+                    ${status === 'idle' ? 'w-32 h-32 border-white/10 bg-white/5' : ''}
+                    ${status === 'connecting' ? 'w-32 h-32 border-white/30 animate-pulse' : ''}
+                    ${status === 'listening' ? 'w-36 h-36 border-emerald-400/50 bg-emerald-900/20 shadow-emerald-500/20' : ''}
+                    ${status === 'speaking' ? 'border-white/80 bg-white/10 shadow-white/40' : ''}
+                    ${status === 'error' ? 'w-32 h-32 border-red-500 bg-red-900/20' : ''}
+                    ${status === 'processing' ? 'w-32 h-32 border-blue-400 animate-spin border-t-transparent' : ''}
+                    `}
+                    style={{
+                        width: status === 'speaking' ? `${140 + audioLevel * 2}px` : undefined,
+                        height: status === 'speaking' ? `${140 + audioLevel * 2}px` : undefined,
+                    }}
+                >
+                    {status === 'idle' && <MicrophoneIcon className="w-10 h-10 text-white/30" />}
+                    {status === 'connecting' && <SparklesIcon className="w-10 h-10 text-white/50 animate-spin" />}
+                    {status === 'listening' && <div className="w-4 h-4 bg-emerald-400 rounded-full animate-ping"></div>}
+                    {status === 'speaking' && <SpeakerWaveIcon className="w-12 h-12 text-white" />}
+                    {status === 'error' && <XMarkIcon className="w-10 h-10 text-red-500" />}
                 </div>
+            </div>
+
+            {/* Persona Info */}
+            <div className="text-center z-10 mb-8">
+                <h3 className="text-2xl font-black text-white tracking-tight drop-shadow-lg">{persona}</h3>
+                <p className="text-xs font-bold text-white/50 uppercase tracking-[0.2em] mt-1">
+                    {status === 'idle' ? 'آماده اتصال' : status === 'listening' ? 'گوش می‌کنم...' : status === 'speaking' ? 'در حال صحبت...' : 'در حال اتصال...'}
+                </p>
+            </div>
+
+            {/* Controls */}
+            <div className="z-20 flex gap-6">
+                {status === 'idle' || status === 'error' ? (
+                    <button 
+                        onClick={connect}
+                        className="px-8 py-4 bg-white text-black rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-xl flex items-center gap-2"
+                    >
+                        <MicrophoneIcon className="w-6 h-6"/>
+                        شروع صحبت
+                    </button>
+                ) : (
+                    <button 
+                        onClick={disconnect}
+                        className="w-16 h-16 bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white border border-red-500/50 rounded-full flex items-center justify-center transition-all shadow-lg"
+                    >
+                        <StopIcon className="w-8 h-8"/>
+                    </button>
+                )}
             </div>
         </div>
     );
 };
 
-// --- SECTIONS ---
+// --- MAIN COMPONENT ---
 
-const EnergySection: React.FC = () => {
-    const [view, setView] = useState<'tools' | 'chat'>('tools');
-    const [activeChakra, setActiveChakra] = useState<string | null>(null);
+export default function HealthWellnessView({ userData, onUpdateUserData, onClose }: HealthWellnessViewProps) {
+    const [activeTab, setActiveTab] = useState<SectionType>('women');
+    const [isPlayingFreq, setIsPlayingFreq] = useState<{id: string, freq: number} | null>(null);
+    
+    // Audio Context for Frequencies
+    const oscRef = useRef<OscillatorNode | null>(null);
+    const gainRef = useRef<GainNode | null>(null);
+    const audioCtxRef = useRef<AudioContext | null>(null);
 
-    if (view === 'chat') return <SectionChat systemPrompt={PERSONAS.energy} placeholder="درباره چاکراها یا انرژی بپرس..." />;
+    // Frequency Player Logic
+    const playFrequency = (freq: number, id: string) => {
+        if (oscRef.current) stopFrequency();
+        
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioCtxRef.current = ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        
+        oscRef.current = osc;
+        gainRef.current = gain;
+        setIsPlayingFreq({ id, freq });
+    };
 
-    return (
-        <div className="h-full overflow-y-auto scrollbar-hide p-4 pb-24">
-            <div className="flex items-center justify-between mb-4 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
-                <button className="flex-1 py-2 text-xs font-bold rounded-lg bg-violet-600 text-white shadow">اسکنر</button>
-                <button onClick={() => setView('chat')} className="flex-1 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors">چت با استاد</button>
+    const stopFrequency = () => {
+        if (oscRef.current) {
+            try {
+                // Fade out to avoid popping
+                const ctx = audioCtxRef.current;
+                if (ctx && gainRef.current) {
+                    gainRef.current.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
+                }
+                setTimeout(() => {
+                    if (oscRef.current) {
+                        oscRef.current.stop();
+                        oscRef.current.disconnect();
+                        oscRef.current = null;
+                    }
+                }, 50);
+            } catch(e) {}
+        }
+        setIsPlayingFreq(null);
+    };
+
+    // --- LIVE HANDLERS ---
+
+    const handleWomenTool = async (name: string, args: any) => {
+        if (name === 'log_period_start') {
+            const date = args.date || new Date().toISOString().split('T')[0];
+            const current = userData.womenHealth || { cycleLogs: [], periodStarts: [], avgCycleLength: 28, partner: { enabled: false, name: '' } };
+            if (!current.periodStarts.includes(date)) {
+                const newStarts = [...current.periodStarts, date].sort().reverse();
+                onUpdateUserData({ ...userData, womenHealth: { ...current, periodStarts: newStarts } });
+                return `قاعدگی برای تاریخ ${date} ثبت شد.`;
+            }
+            return "این تاریخ قبلاً ثبت شده است.";
+        }
+        return "دستور نامشخص";
+    };
+
+    const handleSoulTool = async (name: string, args: any) => {
+        if (name === 'play_frequency') {
+            playFrequency(args.freq, 'ai-command');
+            return `در حال پخش فرکانس ${args.freq} هرتز.`;
+        }
+        if (name === 'stop_frequency') {
+            stopFrequency();
+            return "پخش متوقف شد.";
+        }
+        return "دستور نامشخص";
+    };
+
+    // --- SUB VIEWS ---
+
+    const renderWomen = () => {
+        const healthData = userData.womenHealth || { periodStarts: [], avgCycleLength: 28 };
+        const lastPeriod = healthData.periodStarts[0];
+        const daysSince = lastPeriod ? Math.floor((new Date().getTime() - new Date(lastPeriod).getTime()) / (1000*3600*24)) : 0;
+        const phase = daysSince <= 5 ? 'قاعدگی' : daysSince <= 14 ? 'فولیکولار' : daysSince <= 17 ? 'تخمک‌گذاری' : 'لوتئال';
+
+        return (
+            <div className="h-full flex flex-col lg:flex-row gap-4 p-4">
+                <div className="flex-1 bg-slate-900/40 border border-white/5 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center gap-2 text-pink-400 mb-4">
+                            <HealthIcon className="w-6 h-6"/>
+                            <span className="font-bold text-lg">وضعیت چرخه</span>
+                        </div>
+                        <div className="text-center mt-10">
+                            <div className="inline-block p-1 rounded-full border-4 border-pink-500/30 mb-4">
+                                <div className="w-32 h-32 rounded-full bg-pink-600 flex items-center justify-center text-4xl font-black text-white shadow-[0_0_40px_rgba(236,72,153,0.5)] animate-pulse">
+                                    {daysSince > 0 ? `روز ${daysSince}` : '?'}
+                                </div>
+                            </div>
+                            <h3 className="text-2xl font-bold text-white">{phase}</h3>
+                            <p className="text-slate-400 text-sm mt-2">پیش‌بینی: {phase === 'قاعدگی' ? 'استراحت کن' : phase === 'تخمک‌گذاری' ? 'انرژی بالاست' : 'مراقبت کن'}</p>
+                        </div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-4 backdrop-blur-md border border-white/5">
+                        <p className="text-xs text-slate-300 mb-2 font-bold">آخرین قاعدگی‌ها:</p>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                            {healthData.periodStarts.slice(0,3).map(d => (
+                                <span key={d} className="bg-black/30 px-3 py-1 rounded-lg text-xs font-mono text-pink-300">{d}</span>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="flex-1 h-[400px] lg:h-auto">
+                    <LiveDoctorSession 
+                        persona="دکتر ماما"
+                        voiceName="Kore"
+                        systemPrompt="You are Dr. Mama, an expert gynecologist. Speak Persian. Use tools to log periods. Be caring and scientific."
+                        tools={[{
+                            name: "log_period_start",
+                            description: "Log start of period",
+                            parameters: { type: Type.OBJECT, properties: { date: { type: Type.STRING } }, required: ["date"] }
+                        }]}
+                        onToolCall={handleWomenTool}
+                        isActive={activeTab === 'women'}
+                        themeColor="from-pink-600"
+                    />
+                </div>
             </div>
+        );
+    };
 
-            <div className="relative h-[500px] w-full flex justify-center items-center mt-4">
-                {/* Human Silhouette */}
-                <div className="relative w-48 h-[450px] opacity-90">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-24 bg-slate-800 rounded-[40%] border border-slate-700/50 shadow-inner"></div>
-                    <div className="absolute top-[90px] left-1/2 -translate-x-1/2 w-8 h-10 bg-slate-800 border-x border-slate-700/50"></div>
-                    <div className="absolute top-[120px] left-1/2 -translate-x-1/2 w-36 h-64 bg-slate-800 rounded-[3rem] border border-slate-700/50 shadow-inner"></div>
-                    
-                    {/* Chakras */}
-                    {CHAKRAS.map((c) => (
+    const renderSoul = () => (
+        <div className="h-full flex flex-col lg:flex-row gap-4 p-4">
+            <div className="flex-1 bg-slate-900/40 border border-white/5 rounded-3xl p-6 overflow-y-auto no-scrollbar">
+                <div className="flex items-center gap-2 text-violet-400 mb-6">
+                    <EyeIcon className="w-6 h-6"/>
+                    <span className="font-bold text-lg">فرکانس‌های شفا</span>
+                </div>
+                <div className="space-y-3">
+                    {CHAKRAS.map(c => (
                         <button 
-                            key={c.id}
-                            onClick={() => setActiveChakra(c.id)}
-                            className={`absolute left-1/2 -translate-x-1/2 w-10 h-10 rounded-full transition-all duration-500 z-20 flex items-center justify-center ${c.position} ${activeChakra === c.id ? `${c.color} ${c.glow} scale-125 ring-4 ring-black/50` : 'bg-slate-900/80 border border-slate-600 hover:bg-slate-800 hover:scale-110'}`}
+                            key={c.id} 
+                            onClick={() => isPlayingFreq?.id === c.id ? stopFrequency() : playFrequency(c.freq, c.id)}
+                            className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all group ${isPlayingFreq?.id === c.id ? `${c.color} shadow-lg scale-105` : 'bg-white/5 hover:bg-white/10'}`}
                         >
-                            <div className={`w-3 h-3 rounded-full bg-white/80 ${activeChakra === c.id ? 'animate-ping' : ''}`}></div>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${isPlayingFreq?.id === c.id ? 'bg-white text-black' : `${c.color} text-white`}`}>
+                                    {c.freq}
+                                </div>
+                                <div className="text-right">
+                                    <h4 className={`font-bold ${isPlayingFreq?.id === c.id ? 'text-white' : 'text-slate-200'}`}>{c.name}</h4>
+                                    <p className={`text-xs ${isPlayingFreq?.id === c.id ? 'text-white/80' : 'text-slate-500'}`}>{c.desc}</p>
+                                </div>
+                            </div>
+                            {isPlayingFreq?.id === c.id ? <StopIcon className="w-6 h-6 text-white"/> : <PlayIcon className="w-6 h-6 text-slate-500 group-hover:text-white"/>}
                         </button>
                     ))}
                 </div>
+            </div>
+            <div className="flex-1 h-[400px] lg:h-auto">
+                <LiveDoctorSession 
+                    persona="استاد راهنما"
+                    voiceName="Charon"
+                    systemPrompt="You are a Spiritual Grandmaster. Speak Persian. Use tools to play frequencies for chakras. Guide meditation."
+                    tools={[
+                        {
+                            name: "play_frequency",
+                            description: "Play a specific frequency",
+                            parameters: { type: Type.OBJECT, properties: { freq: { type: Type.NUMBER } }, required: ["freq"] }
+                        },
+                        {
+                            name: "stop_frequency",
+                            description: "Stop playing sound",
+                            parameters: { type: Type.OBJECT, properties: {}, required: [] }
+                        }
+                    ]}
+                    onToolCall={handleSoulTool}
+                    isActive={activeTab === 'soul'}
+                    themeColor="from-violet-600"
+                />
+            </div>
+        </div>
+    );
 
-                {/* Info Card Overlay */}
-                {activeChakra && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-slate-900/95 border border-slate-700 p-5 rounded-3xl backdrop-blur-xl animate-bounce-in shadow-2xl z-30 m-2">
-                        <div className="flex justify-between items-start mb-3">
-                            <h4 className="text-lg font-black text-white flex items-center gap-2">
-                                <SparklesIcon className="w-5 h-5 text-yellow-400"/>
-                                چاکرای {CHAKRAS.find(c => c.id === activeChakra)?.name}
-                            </h4>
-                            <button onClick={() => setActiveChakra(null)} className="text-slate-500 hover:text-white"><XMarkIcon className="w-5 h-5"/></button>
-                        </div>
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="bg-black/40 px-3 py-1 rounded-lg text-xs font-mono text-slate-300 border border-white/5">
-                                {CHAKRAS.find(c => c.id === activeChakra)?.freq} Hz
-                            </div>
-                            <span className="text-xs text-green-400 font-bold bg-green-900/20 px-2 py-1 rounded">متعادل‌سازی</span>
-                        </div>
-                        <button className="w-full py-3 bg-white text-black rounded-xl font-bold hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 shadow-lg">
-                            <PlayIcon className="w-5 h-5"/> پخش فرکانس
-                        </button>
+    const renderMind = () => (
+        <div className="h-full flex flex-col p-4">
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl flex-grow flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <BrainIcon className="w-20 h-20 text-sky-400 mb-6 opacity-80"/>
+                <h2 className="text-3xl font-black text-white mb-2">اتاق امن ذهن</h2>
+                <p className="text-slate-400 max-w-md mx-auto mb-8">با کودک درون، منتقد درونی یا خودِ برترتان صحبت کنید. هوش مصنوعی نقش آن‌ها را بازی می‌کند.</p>
+                
+                <div className="w-full max-w-lg h-[400px]">
+                    <LiveDoctorSession 
+                        persona="روانکاو IFS"
+                        voiceName="Fenrir"
+                        systemPrompt="You are an IFS (Internal Family Systems) therapist. Help the user talk to their parts (Inner Child, Critic). Speak Persian. Be empathetic."
+                        isActive={activeTab === 'mind'}
+                        themeColor="from-sky-600"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderBody = () => (
+        <div className="h-full flex flex-col p-4">
+             <div className="w-full h-full flex flex-col lg:flex-row gap-4">
+                <div className="flex-1 bg-slate-900/40 border border-white/5 rounded-3xl p-6 flex flex-col justify-center items-center text-center">
+                    <BoltIcon className="w-16 h-16 text-orange-400 mb-4"/>
+                    <h3 className="text-2xl font-bold text-white">پزشک عمومی هوشمند</h3>
+                    <p className="text-slate-400 text-sm mt-2">علائم خود را بگویید تا راهنمایی اولیه دریافت کنید.</p>
+                    <div className="mt-6 p-4 bg-red-900/20 border border-red-500/30 rounded-xl text-xs text-red-200">
+                        ⚠️ هشدار: این یک ابزار هوش مصنوعی است و جایگزین پزشک واقعی نیست. در موارد اورژانسی با ۱۱۵ تماس بگیرید.
+                    </div>
+                </div>
+                <div className="flex-1">
+                    <LiveDoctorSession 
+                        persona="پزشک عمومی"
+                        voiceName="Fenrir"
+                        systemPrompt="You are a General Practitioner (MD). Speak Persian. Triage symptoms. Always give a disclaimer. Suggest home remedies for minor issues."
+                        isActive={activeTab === 'body'}
+                        themeColor="from-orange-600"
+                    />
+                </div>
+             </div>
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 bg-[#020617] z-50 font-[Vazirmatn] flex flex-col animate-fadeIn overflow-hidden">
+            {/* Background Ambient Light */}
+            <div className={`absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] rounded-full blur-[120px] pointer-events-none transition-colors duration-1000 ${activeTab === 'women' ? 'bg-pink-900/20' : activeTab === 'soul' ? 'bg-violet-900/20' : activeTab === 'mind' ? 'bg-sky-900/20' : 'bg-orange-900/20'}`}></div>
+
+            {/* Top Navigation Bar */}
+            <div className="flex-none p-6 flex justify-between items-center z-20">
+                <div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">کلینیک جامع</h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em]">Ultra Clinic OS</p>
+                </div>
+                <button onClick={onClose} className="w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white flex items-center justify-center transition-all">
+                    <XMarkIcon className="w-6 h-6"/>
+                </button>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-grow relative z-10 overflow-hidden">
+                {activeTab === 'women' && renderWomen()}
+                {activeTab === 'soul' && renderSoul()}
+                {activeTab === 'mind' && renderMind()}
+                {activeTab === 'body' && renderBody()}
+                {activeTab === 'therapy' && (
+                    <div className="h-full p-4">
+                        <LiveDoctorSession 
+                            persona="تراپیست همدل" 
+                            voiceName="Kore" 
+                            systemPrompt="You are a compassionate therapist. Speak Persian. Listen actively." 
+                            isActive={activeTab === 'therapy'} 
+                            themeColor="from-green-600"
+                        />
                     </div>
                 )}
             </div>
-        </div>
-    );
-};
 
-const BodySection: React.FC = () => {
-    const [view, setView] = useState<'tools' | 'chat'>('tools');
-
-    if (view === 'chat') return <SectionChat systemPrompt={PERSONAS.body} placeholder="سوال ورزشی یا تغذیه‌ای..." />;
-
-    return (
-        <div className="h-full overflow-y-auto scrollbar-hide p-4 pb-24 space-y-6">
-            <div className="flex items-center justify-between mb-2 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
-                <button className="flex-1 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow">آمار</button>
-                <button onClick={() => setView('chat')} className="flex-1 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors">چت با مربی</button>
-            </div>
-
-            <div className="bg-gradient-to-br from-blue-900/40 to-slate-900 border border-blue-500/30 rounded-3xl p-6 relative overflow-hidden shadow-lg">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                <h3 className="text-2xl font-black text-white mb-4 relative z-10">وضعیت جسمانی</h3>
-                
-                <div className="grid grid-cols-2 gap-4 relative z-10">
-                    <div className="bg-black/20 p-4 rounded-2xl backdrop-blur-sm border border-white/5">
-                        <WaterDropIcon className="w-6 h-6 text-cyan-400 mb-2"/>
-                        <span className="text-2xl font-bold text-white">1.2</span>
-                        <span className="text-xs text-slate-400 block">لیتر آب</span>
-                    </div>
-                    <div className="bg-black/20 p-4 rounded-2xl backdrop-blur-sm border border-white/5">
-                        <WalkingIcon className="w-6 h-6 text-emerald-400 mb-2"/>
-                        <span className="text-2xl font-bold text-white">4.5k</span>
-                        <span className="text-xs text-slate-400 block">قدم</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-400 px-2">ابزارها</h4>
-                <button className="w-full bg-slate-800/50 hover:bg-slate-800 border border-slate-700 p-4 rounded-2xl flex items-center gap-4 transition-colors group">
-                    <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-transform">
-                        <ScaleIcon className="w-5 h-5"/>
-                    </div>
-                    <div className="text-right flex-grow">
-                        <h5 className="font-bold text-white">محاسبه BMI</h5>
-                        <p className="text-xs text-slate-400">شاخص توده بدنی</p>
-                    </div>
-                </button>
-                <button className="w-full bg-slate-800/50 hover:bg-slate-800 border border-slate-700 p-4 rounded-2xl flex items-center gap-4 transition-colors group">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-                        <MoonIcon className="w-5 h-5"/>
-                    </div>
-                    <div className="text-right flex-grow">
-                        <h5 className="font-bold text-white">تحلیل خواب</h5>
-                        <p className="text-xs text-slate-400">کیفیت استراحت</p>
-                    </div>
-                </button>
-            </div>
-        </div>
-    );
-};
-
-const MindSection: React.FC = () => {
-    const [view, setView] = useState<'tools' | 'chat'>('tools');
-    const [breathing, setBreathing] = useState(false);
-    const [label, setLabel] = useState('شروع');
-
-    useEffect(() => {
-        if(!breathing) { setLabel('شروع'); return; }
-        let step = 0;
-        const cycle = () => {
-            if(step===0) { setLabel('دم (۴ ثانیه)'); setTimeout(()=>{ step=1; cycle(); }, 4000); }
-            else if(step===1) { setLabel('حبس (۷ ثانیه)'); setTimeout(()=>{ step=2; cycle(); }, 7000); }
-            else { setLabel('بازدم (۸ ثانیه)'); setTimeout(()=>{ step=0; cycle(); }, 8000); }
-        }
-        cycle();
-    }, [breathing]);
-
-    if (view === 'chat') return <SectionChat systemPrompt={PERSONAS.mind} placeholder="ذهنت مشغوله؟ با من حرف بزن..." />;
-
-    return (
-        <div className="h-full flex flex-col p-4 pb-24">
-             <div className="flex items-center justify-between mb-6 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50 flex-shrink-0">
-                <button className="flex-1 py-2 text-xs font-bold rounded-lg bg-teal-600 text-white shadow">تمرین تنفس</button>
-                <button onClick={() => setView('chat')} className="flex-1 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors">چت با استاد</button>
-            </div>
-
-            <div className="flex-grow flex flex-col items-center justify-center">
-                <div className="relative mb-12">
-                    <div className={`w-64 h-64 rounded-full border border-teal-500/30 flex items-center justify-center transition-all duration-[4000ms] ${breathing ? 'scale-110' : 'scale-95'}`}>
-                        <div className={`w-48 h-48 rounded-full bg-teal-500/10 blur-3xl absolute transition-all duration-[4000ms] ${breathing ? 'opacity-100 scale-125' : 'opacity-50 scale-75'}`}></div>
-                        <div className={`w-56 h-56 rounded-full border border-teal-400/50 absolute transition-all duration-[4000ms] ${breathing ? 'scale-105 rotate-90' : 'scale-100 rotate-0'}`}></div>
-                        <button 
-                            onClick={() => setBreathing(!breathing)}
-                            className="relative z-10 w-32 h-32 rounded-full bg-gradient-to-b from-slate-800 to-black border border-slate-700 flex items-center justify-center shadow-2xl hover:scale-105 transition-transform"
-                        >
-                            <span className="text-lg font-black text-teal-100">{label}</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <h3 className="text-2xl font-bold text-white mb-2">تنفس ۴-۷-۸</h3>
-                <p className="text-slate-400 text-sm text-center max-w-xs">
-                    تکنیک باستانی برای کاهش فوری استرس و بازگرداندن آرامش به ذهن.
-                </p>
-            </div>
-        </div>
-    );
-};
-
-const TherapySection: React.FC = () => {
-    return (
-        <div className="h-full flex flex-col">
-            <div className="p-4 pb-2 border-b border-white/5 bg-slate-900/50">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 border border-indigo-500/30">
-                        <HeartIcon className="w-6 h-6"/>
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-white">تراپیست هوشمند</h3>
-                        <p className="text-xs text-slate-400">همیشه آماده شنیدن...</p>
-                    </div>
-                </div>
-            </div>
-            <SectionChat systemPrompt={PERSONAS.therapy} placeholder="هرچه می‌خواهد دل تنگت بگو..." />
-        </div>
-    );
-};
-
-// --- MAIN PAGE LAYOUT ---
-
-export default function HealthWellnessView({ userData, onUpdateUserData, onClose }: HealthWellnessViewProps) {
-    const [activeTab, setActiveTab] = useState<'energy' | 'body' | 'mind' | 'therapy'>('energy');
-    const [liveSession, setLiveSession] = useState<{ active: boolean; persona: string; title: string }>({ active: false, persona: '', title: '' });
-
-    const handleStartLive = () => {
-        const map = {
-            therapy: { p: PERSONAS.therapy, t: 'تراپیست زنده' },
-            mind: { p: PERSONAS.mind, t: 'استاد ذهن' },
-            body: { p: PERSONAS.body, t: 'مربی سلامت' },
-            energy: { p: PERSONAS.energy, t: 'استاد انرژی' }
-        };
-        const cfg = map[activeTab];
-        setLiveSession({ active: true, persona: cfg.p, title: cfg.t });
-    };
-
-    return (
-        <div className="fixed inset-0 bg-[#020617] z-50 flex flex-col font-[Vazirmatn] animate-fadeIn overflow-hidden">
-            {/* Live Overlay */}
-            {liveSession.active && <LiveHealthSession persona={liveSession.persona} title={liveSession.title} onClose={() => setLiveSession({ ...liveSession, active: false })} />}
-
-            {/* Top Header - Fixed */}
-            <div className="flex-none flex justify-between items-center px-6 pt-6 pb-4 bg-[#020617]/95 backdrop-blur-md z-20 border-b border-white/5">
-                <div>
-                    <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-teal-500 tracking-tight">کلینیک جامع</h2>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Holistic OS</p>
-                </div>
-                <div className="flex gap-3">
-                    <button onClick={handleStartLive} className="h-10 px-4 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse flex items-center justify-center gap-2 transition-all text-xs font-bold">
-                        <MicrophoneIcon className="w-4 h-4"/>
-                        تماس زنده
-                    </button>
-                    <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition-all backdrop-blur-md border border-white/10">
-                        <XMarkIcon className="w-5 h-5"/>
-                    </button>
-                </div>
-            </div>
-
-            {/* Main Content - Flexible & Scrollable */}
-            <div className="flex-grow relative overflow-hidden w-full">
-                {/* Background Effects */}
-                <div className="absolute top-[-10%] left-[-20%] w-[300px] h-[300px] bg-teal-900/20 rounded-full blur-[100px] pointer-events-none"></div>
-                <div className="absolute bottom-[10%] right-[-10%] w-[250px] h-[250px] bg-indigo-900/20 rounded-full blur-[80px] pointer-events-none"></div>
-
-                <div className="absolute inset-0">
-                    {activeTab === 'energy' && <EnergySection />}
-                    {activeTab === 'body' && <BodySection />}
-                    {activeTab === 'mind' && <MindSection />}
-                    {activeTab === 'therapy' && <TherapySection />}
-                </div>
-            </div>
-
-            {/* Bottom Dock - Fixed */}
-            <div className="flex-none pb-8 pt-2 flex justify-center bg-gradient-to-t from-[#020617] to-transparent pointer-events-none z-30">
-                <div className="bg-[#1a1a1d]/90 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-2 shadow-2xl flex justify-between items-center px-6 gap-4 pointer-events-auto ring-1 ring-white/5">
+            {/* Bottom Dock Navigation */}
+            <div className="flex-none p-6 flex justify-center z-30">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-full p-2 flex gap-2 shadow-2xl">
                     {[
-                        { id: 'energy', icon: EyeIcon, label: 'انرژی' },
-                        { id: 'body', icon: BoltIcon, label: 'جسم' },
-                        { id: 'mind', icon: BrainIcon, label: 'ذهن' },
-                        { id: 'therapy', icon: ChatBubbleLeftRightIcon, label: 'تراپی' }
+                        { id: 'women', icon: HealthIcon, label: 'زنان', color: 'bg-pink-600' },
+                        { id: 'soul', icon: EyeIcon, label: 'روح', color: 'bg-violet-600' },
+                        { id: 'mind', icon: BrainIcon, label: 'ذهن', color: 'bg-sky-600' },
+                        { id: 'body', icon: BoltIcon, label: 'جسم', color: 'bg-orange-600' },
+                        { id: 'therapy', icon: ChatBubbleLeftRightIcon, label: 'روان', color: 'bg-green-600' }
                     ].map(item => (
                         <button 
                             key={item.id}
-                            onClick={() => setActiveTab(item.id as any)}
-                            className={`flex flex-col items-center gap-1 transition-all duration-300 group ${activeTab === item.id ? '-translate-y-2' : 'hover:-translate-y-1'}`}
+                            onClick={() => { stopFrequency(); setActiveTab(item.id as any); }}
+                            className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 group ${activeTab === item.id ? `${item.color} text-white scale-110 shadow-lg` : 'text-slate-400 hover:bg-white/10'}`}
                         >
-                            <div className={`p-3 rounded-2xl transition-all ${activeTab === item.id ? 'bg-teal-500 text-white shadow-[0_0_20px_rgba(20,184,166,0.5)] scale-110' : 'text-slate-500 hover:text-slate-300'}`}>
-                                <item.icon className="w-6 h-6"/>
-                            </div>
-                            <span className={`text-[10px] font-bold transition-opacity ${activeTab === item.id ? 'text-white opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}>{item.label}</span>
+                            <item.icon className="w-6 h-6"/>
+                            <span className={`absolute -top-10 bg-black/80 text-white text-[10px] px-2 py-1 rounded opacity-0 transition-opacity ${activeTab === item.id ? 'opacity-100' : 'group-hover:opacity-100'}`}>
+                                {item.label}
+                            </span>
                         </button>
                     ))}
                 </div>

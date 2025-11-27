@@ -1,14 +1,28 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { OnboardingData, MicroCourse, MicroCourseDay, QuizResult, ChatMessage } from '../types';
+import { OnboardingData, MicroCourse, QuizResult } from '../types';
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
+import * as pdfjsLib from 'pdfjs-dist';
 import { 
-    AcademicCapIcon, PlusIcon, SparklesIcon, TrashIcon, 
-    CheckCircleIcon, ArrowLeftIcon, LockClosedIcon, DocumentTextIcon,
-    MicrophoneIcon, ArrowUpIcon, StarIcon, XMarkIcon, UserIcon,
-    ChartBarIcon, BookOpenIcon, BoltIcon, SpeakerWaveIcon, ChatBubbleOvalLeftEllipsisIcon,
-    CogIcon, ArrowPathIcon, BeakerIcon, CloudIcon, FlagIcon, Squares2X2Icon, ArrowRightIcon
+    AcademicCapIcon, PlusIcon, SparklesIcon, 
+    CheckCircleIcon, ArrowLeftIcon, XMarkIcon,
+    BoltIcon, SpeakerWaveIcon,
+    ArrowPathIcon, BeakerIcon, FlagIcon, ArrowRightIcon,
+    CommandCommandLineIcon, MoonIcon, DocumentTextIcon, MicrophoneIcon,
+    BookOpenIcon, StopIcon, CloudIcon, DocumentScannerIcon,
+    PencilIcon, TrophyIcon
 } from './icons';
+
+// Initialize PDF Worker Safely
+try {
+    // @ts-ignore
+    const pdfjs = pdfjsLib.default || pdfjsLib;
+    if (pdfjs && pdfjs.GlobalWorkerOptions) {
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+    }
+} catch (e) {
+    console.warn("PDF Worker init failed", e);
+}
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -44,55 +58,135 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     return btoa(binary);
 }
 
-// --- Helper Functions ---
-function calculateAverageGrade(quizzes: QuizResult[]): number {
-    if (quizzes.length === 0) return 0;
-    const total = quizzes.reduce((sum, q) => sum + q.score, 0);
-    return Math.round((total / quizzes.length) * 10) / 10; // Round to 1 decimal
-}
-
-// --- Settings Types ---
-type TeachingMode = 'bilingual' | 'english_only' | 'persian_explain';
-type VoiceOption = 'Fenrir' | 'Kore' | 'Puck' | 'Charon';
-
-const VOICE_OPTIONS: {id: VoiceOption, label: string, desc: string}[] = [
-    { id: 'Fenrir', label: 'استاد (مرد)', desc: 'صدای بم و جدی' },
-    { id: 'Kore', label: 'استاد (زن)', desc: 'صدای آرام و شفاف' },
-    { id: 'Puck', label: 'پرانرژی', desc: 'لحن بازیگوش و سریع' },
-    { id: 'Charon', label: 'عمیق', desc: 'صدای بسیار بم و آرام' },
-];
-
+// --- Constants ---
 const SCHOOL_CATEGORIES = [
-    { id: 'sciences', label: 'علوم تجربی', icon: BeakerIcon, color: 'from-emerald-600 to-teal-800', text: 'text-emerald-100' },
-    { id: 'languages', label: 'زبان‌های خارجی', icon: FlagIcon, color: 'from-blue-600 to-indigo-800', text: 'text-blue-100' },
-    { id: 'humanities', label: 'ادبیات و هنر', icon: BookOpenIcon, color: 'from-rose-600 to-pink-800', text: 'text-rose-100' },
-    { id: 'physics', label: 'فیزیک و ریاضی', icon: BoltIcon, color: 'from-violet-600 to-fuchsia-800', text: 'text-violet-100' },
+    { id: 'konkur', label: 'کنکور و آزمون', icon: TrophyIcon, color: 'from-red-600 to-rose-900', text: 'text-rose-100', border: 'border-rose-500/30' },
+    { id: 'computer', label: 'کامپیوتر و فناوری', icon: CommandCommandLineIcon, color: 'from-cyan-600 to-sky-900', text: 'text-cyan-100', border: 'border-cyan-500/30' },
+    { id: 'languages', label: 'زبان‌های خارجی', icon: FlagIcon, color: 'from-blue-600 to-indigo-900', text: 'text-blue-100', border: 'border-blue-500/30' },
+    { id: 'sciences', label: 'علوم تجربی', icon: BeakerIcon, color: 'from-emerald-600 to-teal-900', text: 'text-emerald-100', border: 'border-emerald-500/30' },
+    { id: 'physics', label: 'ریاضی و فیزیک', icon: BoltIcon, color: 'from-violet-600 to-fuchsia-900', text: 'text-violet-100', border: 'border-violet-500/30' },
+    { id: 'astronomy', label: 'نجوم و فضا', icon: MoonIcon, color: 'from-indigo-600 to-purple-900', text: 'text-indigo-100', border: 'border-indigo-500/30' },
+    { id: 'theology', label: 'کتب آسمانی', icon: BookOpenIcon, color: 'from-amber-600 to-orange-900', text: 'text-amber-100', border: 'border-amber-500/30' },
+    { id: 'humanities', label: 'علوم انسانی', icon: DocumentTextIcon, color: 'from-stone-600 to-stone-900', text: 'text-stone-100', border: 'border-stone-500/30' },
 ];
 
-// --- SUB-COMPONENTS ---
+// --- Components ---
 
-// 0. Live Professor Session
+const QuizModal: React.FC<{ course: MicroCourse; onComplete: (score: number) => void; onClose: () => void }> = ({ course, onComplete, onClose }) => {
+    const [loading, setLoading] = useState(true);
+    const [questions, setQuestions] = useState<{ q: string; options: string[]; answer: number }[]>([]);
+    const [currentQ, setCurrentQ] = useState(0);
+    const [score, setScore] = useState(0);
+    const [finished, setFinished] = useState(false);
+
+    useEffect(() => {
+        const generateQuiz = async () => {
+            const prompt = `Generate a 5-question multiple choice quiz for the course "${course.title}". 
+            Goal: "${course.goal}".
+            Language: Persian.
+            Output JSON: [{ "q": "question text", "options": ["opt1", "opt2", "opt3", "opt4"], "answer": 0 }] (answer index 0-3).`;
+            
+            try {
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: { responseMimeType: "application/json" }
+                });
+                setQuestions(JSON.parse(response.text.trim()));
+            } catch (e) {
+                console.error(e);
+                alert("خطا در تولید آزمون");
+                onClose();
+            } finally {
+                setLoading(false);
+            }
+        };
+        generateQuiz();
+    }, [course]);
+
+    const handleAnswer = (idx: number) => {
+        if (idx === questions[currentQ].answer) setScore(s => s + 1);
+        if (currentQ < questions.length - 1) {
+            setCurrentQ(q => q + 1);
+        } else {
+            setFinished(true);
+        }
+    };
+
+    const finishQuiz = () => {
+        onComplete(score);
+        onClose();
+    };
+
+    if (loading) return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[80]">
+            <div className="text-center">
+                <SparklesIcon className="w-12 h-12 text-indigo-400 animate-spin mx-auto mb-4"/>
+                <p className="text-white font-bold">در حال طراحی سوالات...</p>
+            </div>
+        </div>
+    );
+
+    if (finished) return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[80]">
+            <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center max-w-sm w-full animate-bounce-in">
+                <div className="w-20 h-20 bg-gradient-to-tr from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/40">
+                    <AcademicCapIcon className="w-10 h-10 text-white"/>
+                </div>
+                <h3 className="text-2xl font-black text-white mb-2">نتیجه آزمون</h3>
+                <p className="text-4xl font-black text-indigo-400 mb-4">{score} / {questions.length}</p>
+                <p className="text-slate-400 mb-6 text-sm">
+                    {score === 5 ? "فوق‌العاده! شما مسلط هستید." : score > 2 ? "خوب بود، اما جای پیشرفت دارد." : "نیاز به مرور بیشتر دارید."}
+                </p>
+                <button onClick={finishQuiz} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold">ثبت نتیجه</button>
+            </div>
+        </div>
+    );
+
+    const q = questions[currentQ];
+
+    return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[80] p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md relative">
+                <button onClick={onClose} className="absolute top-4 left-4 text-slate-500 hover:text-white"><XMarkIcon className="w-6 h-6"/></button>
+                <div className="flex justify-between items-center mb-6">
+                    <span className="text-xs font-bold text-indigo-400 bg-indigo-900/30 px-3 py-1 rounded-full">سوال {currentQ + 1} از {questions.length}</span>
+                    <span className="text-xs text-slate-500">آزمون هوشمند</span>
+                </div>
+                
+                <h4 className="text-lg font-bold text-white mb-6 leading-relaxed">{q.q}</h4>
+                
+                <div className="space-y-3">
+                    {q.options.map((opt, idx) => (
+                        <button 
+                            key={idx} 
+                            onClick={() => handleAnswer(idx)}
+                            className="w-full text-right p-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500 transition-all text-sm text-slate-200"
+                        >
+                            {opt}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void }> = ({ course, onClose }) => {
     const [status, setStatus] = useState<'connecting' | 'listening' | 'speaking' | 'thinking' | 'error'>('connecting');
-    
-    // Settings State
-    const [showSettings, setShowSettings] = useState(false);
-    const [teachingMode, setTeachingMode] = useState<TeachingMode>('bilingual');
-    const [voice, setVoice] = useState<VoiceOption>('Fenrir');
-
-    // Transcript State
     const [transcript, setTranscript] = useState<{role: 'user' | 'ai', text: string}[]>([]);
     const [currentTranscript, setCurrentTranscript] = useState('');
+    const [keyTerms, setKeyTerms] = useState<string[]>([]); 
     const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
-    // Refs
+    // Audio Refs
     const audioContextRef = useRef<AudioContext | null>(null);
     const inputContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const nextStartTimeRef = useRef<number>(0);
     const activeSessionRef = useRef<any>(null);
+    const nextStartTimeRef = useRef<number>(0);
 
     // Auto-scroll transcript
     useEffect(() => {
@@ -105,80 +199,62 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
         if (processorRef.current) { processorRef.current.disconnect(); processorRef.current.onaudioprocess = null; }
         if (sourceRef.current) sourceRef.current.disconnect();
         if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(t => t.stop());
-        if (inputContextRef.current) inputContextRef.current.close();
-        if (audioContextRef.current) audioContextRef.current.close();
+        if (inputContextRef.current && inputContextRef.current.state !== 'closed') inputContextRef.current.close();
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close();
         activeSessionRef.current = null;
     };
 
     const connect = useCallback(async () => {
-        cleanupAudio(); // Ensure clean state before connecting
+        cleanupAudio();
         setStatus('connecting');
-        setTranscript([]); // Clear transcript on new connection
+        setTranscript([]);
+        setKeyTerms([]);
 
         try {
             const client = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
             const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             audioContextRef.current = ctx;
-            
             const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             inputContextRef.current = inputCtx;
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, echoCancellation: true } });
             mediaStreamRef.current = stream;
 
-            // Dynamic System Instruction based on Course Type and Settings
-            const titleLower = course.title.toLowerCase();
-            const isLanguageCourse = titleLower.includes('language') || titleLower.includes('زبان') || titleLower.includes('english') || titleLower.includes('french') || titleLower.includes('فرانسه');
-            
-            let instruction = `
-                You are an expert professor teaching the course "${course.title}".
-                Goal of course: "${course.goal}".
-                Tone: Professional, encouraging, patient.
-                You are conducting a live 1-on-1 tutoring session.
-            `;
-
-            if (isLanguageCourse) {
-                if (teachingMode === 'english_only') {
-                    instruction += `
-                    IMPORTANT: IMMERSION MODE.
-                    Speak ONLY in the target language (English/French). Do NOT use Persian/Farsi at all.
-                    If the student struggles, simplify your language, but do not translate.
-                    `;
-                } else if (teachingMode === 'persian_explain') {
-                    instruction += `
-                    IMPORTANT: EXPLANATION MODE.
-                    Explain concepts primarily in Persian (Farsi).
-                    Use the target language only for examples or keywords, then explain them in Persian.
-                    `;
-                } else {
-                    // Bilingual Mode
-                    instruction += `
-                    IMPORTANT: BILINGUAL MODE.
-                    You are a bilingual tutor.
-                    For every concept or sentence you speak in the Target Language, you MUST immediately follow it with the Persian translation.
-                    Format: [Target Language Sentence] -> [Persian Translation].
-                    Example: "Hello, how are you? سلام، حال شما چطور است؟"
-                    Ensure the student sees/hears both.
-                    `;
-                }
-            } else {
-                instruction += `Speak in fluent Persian (Farsi). Keep answers concise for audio conversation.`;
+            // Provide PDF context if available
+            let contextData = "";
+            if (course.pdfSource) {
+                contextData = `Reference Material from PDF: ${course.pdfSource.substring(0, 15000)}...`; 
             }
+
+            const isKonkur = course.title.includes('کنکور') || course.goal.includes('تست');
+            const systemPrompt = isKonkur ? `
+                You are an expert Konkur (Iran University Entrance Exam) counselor and planner.
+                Course: "${course.title}". Goal: "${course.goal}".
+                Role: Guide the student in planning, testing strategies, time management, and reviewing key concepts.
+                Tone: Professional, encouraging, strict on discipline, fluent Persian.
+                You can suggest schedule changes or focus areas.
+                ${contextData ? `Use this material for testing: ${contextData}` : ''}
+            ` : `
+                You are an expert university professor teaching "${course.title}".
+                Goal: "${course.goal}".
+                Tone: Academic, wise, clear, fluent Persian (Farsi).
+                Extract key academic terms from your speech occasionally.
+                Current progress: ${course.progress}%.
+                ${contextData ? `Use this reference material to answer questions accurately: ${contextData}` : ''}
+            `;
 
             const sessionPromise = client.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 config: {
-                    systemInstruction: instruction,
+                    systemInstruction: systemPrompt,
                     responseModalities: [Modality.AUDIO],
-                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: isKonkur ? 'Charon' : 'Fenrir' } } },
                     outputAudioTranscription: {} 
                 },
                 callbacks: {
                     onopen: () => {
                         setStatus('listening');
                         activeSessionRef.current = sessionPromise;
-                        
                         const source = inputCtx.createMediaStreamSource(stream);
                         const processor = inputCtx.createScriptProcessor(4096, 1, 1);
                         sourceRef.current = source;
@@ -197,12 +273,17 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                         processor.connect(inputCtx.destination);
                     },
                     onmessage: async (msg: LiveServerMessage) => {
-                        const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-                        
-                        // Handle Transcription (Subtitles)
                         if (msg.serverContent?.outputTranscription?.text) {
                             const textChunk = msg.serverContent.outputTranscription.text;
                             setCurrentTranscript(prev => prev + textChunk);
+                            
+                            if (textChunk.length > 4 && Math.random() > 0.85) {
+                                const words = textChunk.split(' ');
+                                const keyword = words.sort((a,b) => b.length - a.length)[0];
+                                if (keyword && keyword.length > 4 && !keyTerms.includes(keyword)) {
+                                    setKeyTerms(prev => [...prev.slice(-3), keyword]);
+                                }
+                            }
                         }
                         
                         if (msg.serverContent?.turnComplete) {
@@ -212,6 +293,7 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                             }
                         }
 
+                        const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                         if (audioData && audioContextRef.current) {
                             setStatus('speaking');
                             const bytes = base64ToUint8Array(audioData);
@@ -221,13 +303,13 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                             
                             const buffer = audioContextRef.current.createBuffer(1, float32.length, 24000);
                             buffer.copyToChannel(float32, 0);
-                            
                             const source = audioContextRef.current.createBufferSource();
                             source.buffer = buffer;
                             source.connect(audioContextRef.current.destination);
-                            
+                            const nextTime = nextStartTimeRef.current;
                             const now = audioContextRef.current.currentTime;
-                            const startTime = Math.max(now, nextStartTimeRef.current);
+                            const startTime = Math.max(now, nextTime);
+                            
                             source.start(startTime);
                             nextStartTimeRef.current = startTime + buffer.duration;
                             
@@ -238,23 +320,18 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                             };
                         }
                     },
-                    onclose: () => console.log("Session closed"),
-                    onerror: (e) => {
-                        console.error(e);
-                        setStatus('error');
-                    }
+                    onclose: () => {
+                        console.log("Session closed");
+                        setStatus('connecting');
+                    },
+                    onerror: (e) => { console.error(e); setStatus('error'); }
                 }
             });
         } catch (e) {
             console.error(e);
             setStatus('error');
         }
-    }, [course, teachingMode, voice, currentTranscript]);
-
-    const handleApplySettings = () => {
-        setShowSettings(false);
-        connect(); 
-    };
+    }, [course]);
 
     useEffect(() => {
         connect();
@@ -262,473 +339,270 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
     }, []);
 
     return (
-        <div className="fixed inset-0 z-[100] bg-[#020617] flex flex-col animate-fadeIn font-[Vazirmatn] h-[100dvh] w-full overscroll-none touch-none">
+        <div className="fixed inset-0 z-[100] bg-[#020617] flex flex-col font-[Vazirmatn] overflow-hidden">
+            {/* Ambient Background */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(30,27,75,0.4),transparent_80%)] pointer-events-none"></div>
             
-            {/* TOP BAR CONTROLS - FIXED & VISIBLE */}
-            <div className="absolute top-0 left-0 right-0 z-50 flex justify-between items-center p-4 pt-safe-area bg-gradient-to-b from-black/90 via-black/60 to-transparent pb-10 pointer-events-auto">
-                {/* Exit Button - Right Side (RTL) */}
-                <button 
-                    onClick={onClose} 
-                    className="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700 text-white px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all shadow-lg active:scale-95"
-                >
-                    <ArrowRightIcon className="w-5 h-5"/>
-                    <span className="text-sm font-bold">خروج</span>
-                </button>
-
-                {/* Title Status */}
-                <div className="text-center">
-                    <h3 className="text-white font-bold text-sm shadow-black drop-shadow-md">{course.title}</h3>
-                    <span className="text-[10px] text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full border border-green-500/30 mt-1 inline-block">زنده</span>
-                </div>
-
-                {/* Settings Button - Left Side */}
-                <button 
-                    onClick={() => setShowSettings(true)} 
-                    className="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700 text-white px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all shadow-lg active:scale-95"
-                >
-                    <span className="text-sm font-bold">تنظیمات</span>
-                    <CogIcon className="w-5 h-5"/>
-                </button>
+            {/* Smart Blackboard (Top) */}
+            <div className="absolute top-6 left-4 right-4 flex justify-center gap-3 flex-wrap z-20 pointer-events-none">
+                {keyTerms.map((term, idx) => (
+                    <div key={`${term}-${idx}`} className="bg-black/60 backdrop-blur-md border border-indigo-500/40 text-indigo-200 px-4 py-2 rounded-xl text-sm font-bold shadow-lg animate-bounce-in">
+                        {term}
+                    </div>
+                ))}
             </div>
 
-            {/* Settings Modal */}
-            {showSettings && (
-                <div className="absolute inset-0 z-[110] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-fadeIn">
-                    <div className="bg-slate-900 border border-indigo-500/30 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative">
-                        <button onClick={() => setShowSettings(false)} className="absolute top-4 left-4 p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><XMarkIcon className="w-5 h-5"/></button>
-                        
-                        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                            <CogIcon className="w-6 h-6 text-indigo-400"/>
-                            تنظیمات کلاس
-                        </h3>
-                        
-                        <div className="space-y-6">
-                            <div>
-                                <label className="text-sm text-slate-400 mb-3 block font-bold">شیوه آموزش زبان</label>
-                                <div className="space-y-2">
-                                    <button 
-                                        onClick={() => setTeachingMode('bilingual')}
-                                        className={`w-full p-3 rounded-xl text-right border transition-all ${teachingMode === 'bilingual' ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
-                                    >
-                                        <div className="font-bold text-sm">دوزبانه (Bilingual)</div>
-                                        <div className="text-xs opacity-70">متن و صدا همزمان فارسی و انگلیسی</div>
-                                    </button>
-                                    <button 
-                                        onClick={() => setTeachingMode('english_only')}
-                                        className={`w-full p-3 rounded-xl text-right border transition-all ${teachingMode === 'english_only' ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
-                                    >
-                                        <div className="font-bold text-sm">فقط انگلیسی (Immersion)</div>
-                                        <div className="text-xs opacity-70">غوطه‌وری کامل، بدون فارسی</div>
-                                    </button>
-                                    <button 
-                                        onClick={() => setTeachingMode('persian_explain')}
-                                        className={`w-full p-3 rounded-xl text-right border transition-all ${teachingMode === 'persian_explain' ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
-                                    >
-                                        <div className="font-bold text-sm">توضیحی (فارسی)</div>
-                                        <div className="text-xs opacity-70">رفع اشکال و توضیح به زبان فارسی</div>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-sm text-slate-400 mb-3 block font-bold">انتخاب صدای استاد</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {VOICE_OPTIONS.map(v => (
-                                        <button 
-                                            key={v.id}
-                                            onClick={() => setVoice(v.id)}
-                                            className={`p-3 rounded-xl border text-center transition-all ${voice === v.id ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
-                                        >
-                                            <div className="font-bold text-sm">{v.label}</div>
-                                            <div className="text-[10px] opacity-70">{v.desc}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 mt-8">
-                            <button onClick={() => setShowSettings(false)} className="flex-1 py-3 bg-slate-800 rounded-xl text-slate-400 font-bold hover:bg-slate-700">انصراف</button>
-                            <button onClick={handleApplySettings} className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold shadow-lg shadow-indigo-900/20">
-                                اعمال و اتصال مجدد
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {/* Main Visualizer Area */}
-            <div className="flex-grow flex flex-col items-center justify-center relative w-full overflow-hidden">
-                {/* Background Ambience */}
-                <div className={`absolute inset-0 transition-opacity duration-1000 ${status === 'speaking' ? 'bg-[radial-gradient(circle_at_center,rgba(79,70,229,0.2),transparent_70%)]' : 'bg-black'}`}></div>
+            {/* Main Immersive Center */}
+            <div className="flex-grow relative flex flex-col items-center justify-center">
                 
-                <div className="relative w-64 h-64 flex items-center justify-center mb-12 z-10 mt-10">
+                {/* Visualizer Core */}
+                <div className="relative w-80 h-80 flex items-center justify-center">
                     {/* Ripple Effects */}
-                    {status === 'speaking' && (
-                        <>
-                            <div className="absolute inset-0 rounded-full border border-indigo-500/30 animate-[ping_2s_linear_infinite]"></div>
-                            <div className="absolute inset-0 rounded-full border border-indigo-400/20 animate-[ping_2s_linear_infinite_0.5s]"></div>
-                            <div className="absolute inset-0 rounded-full border border-fuchsia-500/20 animate-[ping_2s_linear_infinite_1s]"></div>
-                        </>
-                    )}
+                    <div className={`absolute inset-0 rounded-full border border-indigo-500/20 transition-all duration-1000 ${status === 'speaking' ? 'scale-150 opacity-0' : 'scale-100 opacity-30'}`}></div>
+                    <div className={`absolute inset-0 rounded-full border border-fuchsia-500/20 transition-all duration-1000 delay-200 ${status === 'speaking' ? 'scale-125 opacity-0' : 'scale-90 opacity-30'}`}></div>
+                    
+                    {/* Core Glow */}
+                    <div className={`absolute inset-10 rounded-full bg-indigo-600/20 blur-3xl transition-all duration-300 ${status === 'speaking' ? 'opacity-80 scale-110' : 'opacity-40 scale-100'}`}></div>
                     
                     {/* Main Circle */}
-                    <div className={`w-40 h-40 rounded-full flex items-center justify-center bg-gradient-to-b from-slate-800 to-black shadow-[0_0_60px_rgba(79,70,229,0.3)] relative z-10 transition-all duration-500 border-4 ${status === 'speaking' ? 'border-indigo-500 scale-110' : (status === 'listening' ? 'border-emerald-500' : 'border-slate-700')}`}>
+                    <div className={`relative z-10 w-40 h-40 rounded-full bg-gradient-to-b from-slate-800 to-black border-4 flex items-center justify-center shadow-2xl transition-all duration-300 ${status === 'speaking' ? 'border-indigo-400 shadow-[0_0_50px_rgba(99,102,241,0.5)]' : 'border-slate-700'}`}>
                         {status === 'speaking' ? (
-                            <SpeakerWaveIcon className="w-16 h-16 text-indigo-400 animate-pulse"/>
+                            <SpeakerWaveIcon className="w-16 h-16 text-indigo-300 animate-pulse"/>
                         ) : status === 'listening' ? (
-                            <MicrophoneIcon className="w-16 h-16 text-emerald-400 animate-bounce"/>
-                        ) : status === 'connecting' ? (
-                            <ArrowPathIcon className="w-16 h-16 text-yellow-400 animate-spin"/>
+                            <MicrophoneIcon className="w-16 h-16 text-emerald-400 animate-pulse"/>
                         ) : (
-                            <BoltIcon className="w-16 h-16 text-slate-500"/>
+                            <div className="w-10 h-10 border-t-2 border-white rounded-full animate-spin"></div>
                         )}
-                    </div>
-                    
-                    {/* Status Label */}
-                    <div className="absolute -bottom-16 w-full flex justify-center">
-                        {status === 'listening' && <div className="text-emerald-400 font-bold text-sm animate-pulse bg-emerald-900/30 px-4 py-1.5 rounded-full border border-emerald-500/30">گوش می‌دهم...</div>}
-                        {status === 'speaking' && <div className="text-indigo-300 font-bold text-sm bg-indigo-900/30 px-4 py-1.5 rounded-full border border-indigo-500/30">استاد صحبت می‌کند...</div>}
-                        {status === 'connecting' && <div className="text-yellow-400 font-bold text-sm animate-pulse">در حال اتصال...</div>}
-                        {status === 'error' && <button onClick={handleApplySettings} className="text-white bg-red-600 px-4 py-2 rounded-full text-sm font-bold shadow-lg">تلاش مجدد</button>}
                     </div>
                 </div>
 
-                {/* Subtitles / Transcript Area */}
-                <div className="absolute bottom-8 w-full px-4 flex flex-col items-center z-40 pointer-events-none">
-                    <div 
-                        ref={transcriptContainerRef}
-                        className="w-full max-w-lg space-y-2 max-h-[30vh] overflow-y-auto scrollbar-hide mask-image-gradient-b pointer-events-auto p-2 bg-black/20 backdrop-blur-sm rounded-2xl border border-white/5"
-                    >
-                        {transcript.map((t, i) => (
-                            <div key={i} className={`text-sm p-3 rounded-2xl shadow-sm backdrop-blur-md border mb-2 transition-all animate-fadeIn ${t.role === 'ai' ? 'bg-indigo-950/80 text-indigo-100 border-indigo-500/30 self-start mr-auto text-left' : 'bg-slate-800/80 text-slate-200 border-white/10 text-right self-end ml-auto'}`}>
-                                <span className="text-[10px] font-bold opacity-60 block mb-1">{t.role === 'ai' ? 'استاد' : 'شما'}</span>
-                                <p className="leading-relaxed whitespace-pre-wrap" dir={t.role === 'ai' ? 'ltr' : 'rtl'}>{t.text}</p>
-                            </div>
-                        ))}
-                        {currentTranscript && (
-                            <div className="text-sm p-3 rounded-2xl shadow-sm backdrop-blur-md bg-indigo-900/70 text-indigo-100 border border-indigo-400/50 animate-pulse self-start mr-auto mb-2 text-left">
-                                <span className="text-[10px] font-bold opacity-60 block mb-1">استاد (در حال صحبت...)</span>
-                                <p className="leading-relaxed whitespace-pre-wrap" dir="ltr">{currentTranscript}</p>
-                            </div>
-                        )}
+                {/* Subtitles / Transcript */}
+                <div className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center gap-3 z-20 max-h-60 overflow-y-auto scrollbar-hide mask-linear-fade" ref={transcriptContainerRef}>
+                    {transcript.slice(-2).map((msg, i) => (
+                        <div key={i} className={`max-w-md p-4 rounded-2xl backdrop-blur-md text-sm leading-relaxed shadow-lg border border-white/5 ${msg.role === 'ai' ? 'bg-indigo-900/40 text-indigo-100 rounded-tl-none' : 'bg-slate-800/60 text-slate-200 rounded-tr-none self-end'}`}>
+                            {msg.text}
+                        </div>
+                    ))}
+                    {currentTranscript && (
+                        <div className="max-w-md p-4 rounded-2xl bg-indigo-900/60 backdrop-blur-md border border-indigo-500/30 text-white text-sm leading-relaxed shadow-lg animate-fadeIn rounded-tl-none">
+                            <span className="animate-pulse">▋</span> {currentTranscript}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Floating Control Dock */}
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-50">
+                <div className="flex items-center gap-4 bg-[#1a1a1d]/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-2xl">
+                    <button onClick={connect} className="p-3 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="اتصال مجدد">
+                        <ArrowPathIcon className="w-5 h-5"/>
+                    </button>
+                    
+                    <div className="h-8 w-[1px] bg-white/10"></div>
+                    
+                    <div className="flex flex-col items-center px-4">
+                        <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-0.5">CLASS LIVE</span>
+                        <span className="text-xs font-bold text-white">{course.title}</span>
                     </div>
+
+                    <div className="h-8 w-[1px] bg-white/10"></div>
+
+                    <button onClick={onClose} className="p-3 rounded-full bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white transition-colors" title="پایان کلاس">
+                        <StopIcon className="w-5 h-5"/>
+                    </button>
                 </div>
             </div>
         </div>
     );
 };
 
-// 1. Course Tutor (Live Chat)
-const CourseTutor: React.FC<{ course: MicroCourse; onUpdateHistory: (history: ChatMessage[]) => void }> = ({ course, onUpdateHistory }) => {
-    const [messages, setMessages] = useState<ChatMessage[]>(course.chatHistory || [{ role: 'model', text: `سلام! من استاد راهنمای دوره «${course.title}» هستم. هر سوالی داری بپرس.` }]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [isLiveMode, setIsLiveMode] = useState(false);
-    const scrollRef = useRef<HTMLDivElement>(null);
+// --- PDF Course Creator Component ---
 
-    useEffect(() => {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isLoading]);
+const PdfCourseGenerator: React.FC<{ onCourseCreated: (course: MicroCourse) => void; onCancel: () => void }> = ({ onCourseCreated, onCancel }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'reading' | 'processing' | 'done'>('idle');
+    const [progress, setProgress] = useState(0);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleSend = async () => {
-        if (!input.trim()) return;
-        const userMsg: ChatMessage = { role: 'user', text: input };
-        const newHistory = [...messages, userMsg];
-        setMessages(newHistory);
-        setInput('');
-        setIsLoading(true);
+    const processFile = async (file: File) => {
+        if (file.type !== 'application/pdf') {
+            alert("لطفا فقط فایل PDF آپلود کنید.");
+            return;
+        }
 
+        setStatus('reading');
         try {
-            let context = `Course Title: ${course.title}\nGoal: ${course.goal}`;
-            if (course.days) {
-                context += `\nSyllabus: ${course.days.map(d => d.lesson).join(', ')}`;
+            const arrayBuffer = await file.arrayBuffer();
+            // @ts-ignore
+            const pdfjs = pdfjsLib.default || pdfjsLib;
+            const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+            
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 30); // Limit pages for MVP to avoid token limits
+            
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map((item: any) => item.str).join(' ');
+                fullText += pageText + '\n';
+                setProgress((i / maxPages) * 50); // First 50% is reading
             }
 
-            const systemPrompt = `
-                You are an expert professor teaching the course "${course.title}".
-                Goal: "${course.goal}".
-                Tone: Academic yet encouraging, fluent Persian.
-                Context: ${context}
-                Answer the student's questions based on the course material.
+            setStatus('processing');
+            
+            // Generate Course with Gemini
+            const prompt = `
+                Analyze this text extracted from a document.
+                Create a structured 7-day micro-course syllabus based on the key concepts.
+                
+                Text Snippet (first 20k chars):
+                ${fullText.substring(0, 20000)}...
+
+                Output JSON structure:
+                {
+                    "courseTitle": "Title based on document",
+                    "goal": "One sentence learning goal",
+                    "days": [
+                        { "day": 1, "focus": "Topic", "lesson": "Short explanation", "challenge": "Actionable task", "reflection": "Deep question" }
+                        ... (7 days)
+                    ]
+                }
+                Language: Persian.
             `;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: [
-                    { role: 'user', parts: [{ text: systemPrompt }] },
-                    ...newHistory.slice(-10).map(m => ({ role: m.role, parts: [{ text: m.text }] }))
-                ]
-            });
-
-            const reply = response.text.trim();
-            const updatedHistory = [...newHistory, { role: 'model' as const, text: reply }];
-            setMessages(updatedHistory);
-            onUpdateHistory(updatedHistory);
-        } catch (e) {
-            setMessages([...newHistory, { role: 'model', text: "متاسفانه مشکلی پیش آمد." }]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-full relative bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
-            {isLiveMode && <LiveProfessorSession course={course} onClose={() => setIsLiveMode(false)} />}
-            
-            {/* Chat Header */}
-            <div className="p-3 border-b border-white/5 bg-slate-900/80 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs text-slate-400 font-bold">استاد آنلاین است</span>
-                </div>
-                <button 
-                    onClick={() => setIsLiveMode(true)}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-lg shadow-indigo-500/20"
-                >
-                    <MicrophoneIcon className="w-3.5 h-3.5"/>
-                    تماس صوتی
-                </button>
-            </div>
-
-            <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-20 scrollbar-hide">
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 rounded-bl-none'}`}>
-                            {m.text}
-                        </div>
-                    </div>
-                ))}
-                {isLoading && <div className="text-slate-500 text-xs animate-pulse p-2">استاد در حال تایپ...</div>}
-                <div ref={scrollRef}></div>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 p-3 bg-slate-900/90 backdrop-blur border-t border-white/10 flex gap-2">
-                <input 
-                    value={input} 
-                    onChange={e => setInput(e.target.value)} 
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder="سوال خود را بپرسید..."
-                    className="flex-grow bg-slate-800 text-white px-3 py-2 rounded-xl text-sm outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                <button onClick={handleSend} disabled={!input.trim() || isLoading} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white disabled:opacity-50 transition-colors"><ArrowUpIcon className="w-5 h-5"/></button>
-            </div>
-        </div>
-    );
-};
-
-// 2. Exam Hall (Quiz)
-const ExamHall: React.FC<{ course: MicroCourse; onCompleteQuiz: (score: number) => void }> = ({ course, onCompleteQuiz }) => {
-    const [status, setStatus] = useState<'start' | 'generating' | 'taking' | 'result'>('start');
-    const [questions, setQuestions] = useState<{q: string, options: string[], answer: number}[]>([]);
-    const [answers, setAnswers] = useState<number[]>([]);
-    const [score, setScore] = useState(0);
-
-    const startExam = async () => {
-        setStatus('generating');
-        const prompt = `
-            Generate a quiz for the course "${course.title}".
-            Goal: ${course.goal}.
-            Create 5 multiple-choice questions in Persian.
-            Format: JSON array of objects: { "q": "Question text", "options": ["A", "B", "C", "D"], "answer": 0-3 (index) }.
-        `;
-        try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
             });
-            const data = JSON.parse(response.text.trim());
-            if (Array.isArray(data) && data.length > 0) {
-                setQuestions(data);
-                setAnswers(new Array(data.length).fill(-1));
-                setStatus('taking');
-            } else {
-                alert("خطا در تولید آزمون.");
-                setStatus('start');
-            }
-        } catch (e) {
-            console.error(e);
-            setStatus('start');
-            alert("خطا در ارتباط.");
+
+            setProgress(100);
+            const result = JSON.parse(response.text.trim());
+
+            const newCourse: MicroCourse = {
+                id: `pdf-course-${Date.now()}`,
+                title: result.courseTitle,
+                goal: result.goal,
+                days: result.days.map((d: any) => ({ ...d, completed: false })),
+                progress: 0,
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                chatHistory: [],
+                quizzes: [],
+                // Store extracted text for Live Professor context
+                pdfSource: fullText.substring(0, 50000) // Store reasonable amount for context
+            };
+
+            onCourseCreated(newCourse);
+            setStatus('done');
+
+        } catch (error) {
+            console.error("PDF Processing Error:", error);
+            alert("خطا در پردازش فایل. لطفا دوباره تلاش کنید.");
+            setStatus('idle');
+            setProgress(0);
         }
     };
 
-    const submitExam = () => {
-        let correct = 0;
-        questions.forEach((q, i) => {
-            if (answers[i] === q.answer) correct++;
-        });
-        // Score out of 20
-        const finalScore = Math.round((correct / questions.length) * 20);
-        setScore(finalScore);
-        setStatus('result');
-        onCompleteQuiz(finalScore);
-    };
-
-    if (status === 'start') {
-        return (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mb-6 border border-slate-700">
-                    <DocumentTextIcon className="w-10 h-10 text-slate-400"/>
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">سالن امتحانات</h3>
-                <p className="text-slate-400 mb-8 text-sm max-w-xs">آیا آماده‌اید دانش خود را در این درس محک بزنید؟ نمره قبولی ۱۰ است.</p>
-                <button onClick={startExam} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/30 transition-all hover:scale-105">
-                    شروع آزمون
-                </button>
-            </div>
-        );
-    }
-
-    if (status === 'generating') {
-        return (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-                <SparklesIcon className="w-12 h-12 text-indigo-400 animate-spin mb-4"/>
-                <p className="text-slate-300 animate-pulse">در حال طراحی سوالات...</p>
-            </div>
-        );
-    }
-
-    if (status === 'result') {
-        return (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 animate-fadeIn">
-                <div className={`w-32 h-32 rounded-full flex items-center justify-center border-8 mb-6 ${score >= 10 ? 'border-green-500 text-green-400 bg-green-900/20' : 'border-red-500 text-red-400 bg-red-900/20'}`}>
-                    <span className="text-5xl font-black">{score}</span>
-                </div>
-                <h3 className="text-2xl font-bold text-white mb-2">نتیجه آزمون</h3>
-                <p className={`text-lg font-bold mb-8 ${score >= 10 ? 'text-green-400' : 'text-red-400'}`}>
-                    {score >= 10 ? 'تبریک! قبول شدید' : 'نیاز به تلاش بیشتر'}
-                </p>
-                <button onClick={() => setStatus('start')} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white transition-colors">بازگشت</button>
-            </div>
-        );
-    }
-
     return (
-        <div className="h-full overflow-y-auto p-4 pb-20 scrollbar-hide">
-            <div className="space-y-6">
-                {questions.map((q, i) => (
-                    <div key={i} className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700">
-                        <div className="flex gap-3 mb-4">
-                            <span className="bg-indigo-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0">{i+1}</span>
-                            <p className="font-bold text-white text-sm leading-relaxed">{q.q}</p>
-                        </div>
-                        <div className="space-y-2">
-                            {q.options.map((opt, optIdx) => (
-                                <button 
-                                    key={optIdx}
-                                    onClick={() => {
-                                        const newAnswers = [...answers];
-                                        newAnswers[i] = optIdx;
-                                        setAnswers(newAnswers);
-                                    }}
-                                    className={`w-full text-right p-3 rounded-xl text-sm border transition-all ${answers[i] === optIdx ? 'bg-indigo-600 border-indigo-500 text-white shadow-md' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'}`}
-                                >
-                                    {opt}
-                                </button>
-                            ))}
-                        </div>
+        <div className="flex flex-col items-center justify-center h-full p-8">
+            <div className="text-center mb-8">
+                <h3 className="text-2xl font-black text-white mb-2">تبدیل کتاب به کلاس درس</h3>
+                <p className="text-slate-400 text-sm">فایل PDF خود را رها کنید تا هوش مصنوعی آن را تدریس کند.</p>
+            </div>
+
+            <div 
+                className={`
+                    w-full max-w-md aspect-square rounded-[2rem] border-4 border-dashed flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative overflow-hidden
+                    ${isDragging ? 'border-indigo-400 bg-indigo-900/20 scale-105' : 'border-slate-700 bg-slate-800/30 hover:bg-slate-800/50 hover:border-indigo-500/50'}
+                `}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => { 
+                    e.preventDefault(); 
+                    setIsDragging(false); 
+                    if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); 
+                }}
+                onClick={() => fileInputRef.current?.click()}
+            >
+                <input type="file" ref={fileInputRef} accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} />
+                
+                {status === 'idle' && (
+                    <>
+                        <DocumentScannerIcon className="w-20 h-20 text-slate-500 mb-4"/>
+                        <span className="text-slate-300 font-bold">اینجا رها کنید</span>
+                        <span className="text-slate-500 text-xs mt-2">PDF (Max 30MB)</span>
+                    </>
+                )}
+
+                {status === 'reading' && (
+                    <div className="flex flex-col items-center">
+                        <DocumentTextIcon className="w-20 h-20 text-indigo-400 animate-bounce"/>
+                        <span className="text-indigo-300 font-bold mt-4">در حال خواندن صفحات...</span>
                     </div>
-                ))}
-                <button 
-                    onClick={submitExam} 
-                    disabled={answers.includes(-1)}
-                    className="w-full py-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold shadow-lg shadow-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all"
-                >
-                    ثبت نهایی پاسخ‌نامه
-                </button>
+                )}
+
+                {status === 'processing' && (
+                    <div className="flex flex-col items-center">
+                        <SparklesIcon className="w-20 h-20 text-fuchsia-400 animate-spin"/>
+                        <span className="text-fuchsia-300 font-bold mt-4">طراحی سیلابس درسی...</span>
+                    </div>
+                )}
+
+                {(status === 'reading' || status === 'processing') && (
+                    <div className="absolute bottom-0 left-0 right-0 h-2 bg-slate-700">
+                        <div className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                    </div>
+                )}
             </div>
+
+            <button onClick={onCancel} className="mt-8 text-slate-500 hover:text-white transition-colors">بازگشت</button>
         </div>
     );
 };
 
-// 3. Report Card
-const ReportCard: React.FC<{ quizzes: QuizResult[] }> = ({ quizzes }) => {
-    const average = calculateAverageGrade(quizzes);
-    
-    return (
-        <div className="h-full p-6 overflow-y-auto">
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-3xl p-8 text-center mb-8 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                <p className="text-slate-400 text-sm mb-2 font-bold uppercase tracking-widest">معدل کل</p>
-                <div className="text-6xl font-black text-white mb-4 tracking-tighter">{average}</div>
-                <div className="flex justify-center gap-1">
-                    {[1,2,3,4,5].map(star => (
-                        <StarIcon key={star} className={`w-6 h-6 ${star <= Math.round(average/4) ? 'text-yellow-400 fill-current drop-shadow-lg' : 'text-slate-700'}`}/>
-                    ))}
-                </div>
-            </div>
-            
-            <h4 className="font-bold text-slate-300 mb-4 px-2 flex items-center gap-2">
-                <ChartBarIcon className="w-5 h-5"/>
-                کارنامه عملکرد
-            </h4>
-            
-            {quizzes.length === 0 ? (
-                <div className="text-center text-slate-500 text-sm py-10 border-2 border-dashed border-slate-800 rounded-2xl">
-                    هنوز در هیچ آزمونی شرکت نکرده‌اید.
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {quizzes.map((q, i) => (
-                        <div key={i} className="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800 hover:border-slate-700 transition-colors">
-                            <span className="text-slate-400 text-xs font-mono">{new Date(q.date).toLocaleDateString('fa-IR')}</span>
-                            <div className="flex items-center gap-3">
-                                <span className="text-slate-500 text-xs font-bold">نمره:</span>
-                                <span className={`font-black text-lg ${q.score >= 10 ? 'text-green-400' : 'text-red-400'}`}>{q.score}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
-
-// --- MAIN VIEW ---
+// --- Main View ---
 
 const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUserData, onClose }) => {
     const [courses, setCourses] = useState<MicroCourse[]>(userData.microCourses || []);
     const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-    const [activeCategory, setActiveCategory] = useState<string | null>(null); // New: For School OS Navigation
+    const [activeCategory, setActiveCategory] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [isPdfMode, setIsPdfMode] = useState(false);
     const [newCourseGoal, setNewCourseGoal] = useState('');
-    const [activeTab, setActiveTab] = useState<'syllabus' | 'class' | 'exam' | 'report'>('syllabus');
-    const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [activeTab, setActiveTab] = useState<'syllabus' | 'class' | 'quiz'>('syllabus');
 
     const activeCourse = courses.find(c => c.id === activeCourseId);
+
+    const getCoursesByCategory = (catId: string) => {
+        // Static categorization mapping based on ID patterns or keywords
+        // This is a simplification for the demo. Real app needs better categorization.
+        return courses.filter(c => {
+            if (catId === 'konkur') return c.title.includes('کنکور') || c.goal.includes('آزمون') || c.id.startsWith('course-konkur');
+            if (catId === 'computer') return c.id.startsWith('course-comp');
+            if (catId === 'languages') return c.id.startsWith('course-lang');
+            if (catId === 'theology') return c.id.startsWith('course-theo');
+            if (catId === 'astronomy') return c.id.startsWith('course-astro');
+            if (catId === 'physics') return c.id.startsWith('course-phys') || c.id.startsWith('course-math');
+            if (catId === 'sciences') return c.id.startsWith('course-sci') || c.id.startsWith('course-bio') || c.id.startsWith('course-chem');
+            if (catId === 'humanities') return c.id.startsWith('course-human') || c.id.startsWith('course-lit') || c.id.startsWith('course-art') || c.id.startsWith('course-phil') || c.id.startsWith('course-hist');
+            
+            // Fallback for user generated courses
+            return true;
+        });
+    };
 
     const handleCreateCourse = async () => {
         if (!newCourseGoal.trim()) return;
         setIsGenerating(true);
-
-        let pdfBase64 = undefined;
-        if (pdfFile) {
-            const reader = new FileReader();
-            pdfBase64 = await new Promise<string>((resolve) => {
-                reader.onload = (e) => {
-                    const res = e.target?.result as string;
-                    resolve(res.split(',')[1]); // remove prefix
-                };
-                reader.readAsDataURL(pdfFile);
-            });
-        }
-
-        const prompt = `
-            Generate a 7-day syllabus for a course on: "${newCourseGoal}".
-            If PDF is provided, use it as context.
-            Output JSON: { "courseTitle": string, "days": [{ "day": 1, "focus": string, "lesson": string (short), "challenge": string, "reflection": string }] }
-            Language: Persian.
-        `;
-
+        const prompt = `Generate a 7-day syllabus for a micro-course on: "${newCourseGoal}". Output JSON: { "courseTitle": string, "days": [{ "day": 1, "focus": string, "lesson": string, "challenge": string, "reflection": string }] }. Language: Persian.`;
         try {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
             });
-            
             const result = JSON.parse(response.text.trim());
             const newCourse: MicroCourse = {
                 id: `course-${Date.now()}`,
@@ -738,138 +612,147 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                 progress: 0,
                 status: 'active',
                 createdAt: new Date().toISOString(),
-                pdfSource: pdfBase64,
                 chatHistory: [],
                 quizzes: []
             };
-
             const updated = [...courses, newCourse];
             setCourses(updated);
             onUpdateUserData({ ...userData, microCourses: updated });
             setIsCreating(false);
             setNewCourseGoal('');
-            setPdfFile(null);
             setActiveCourseId(newCourse.id);
-        } catch (e) {
-            alert("خطا در ساخت دوره.");
-        } finally {
-            setIsGenerating(false);
+        } catch (e) { alert("خطا در ساخت دوره."); } finally { setIsGenerating(false); }
+    };
+
+    const handlePdfCourseCreated = (newCourse: MicroCourse) => {
+        // Ensure PDF courses are marked if for Konkur
+        if (newCourse.title.includes('کنکور') || newCourse.title.includes('آزمون')) {
+            newCourse.id = 'course-konkur-' + newCourse.id; // Tagging via ID hack for category sorting
         }
-    };
-
-    const updateCourse = (updated: MicroCourse) => {
-        const newCourses = courses.map(c => c.id === updated.id ? updated : c);
-        setCourses(newCourses);
-        onUpdateUserData({ ...userData, microCourses: newCourses });
-    };
-
-    const handleDayToggle = (dayNum: number) => {
-        if (!activeCourse) return;
-        const newDays = activeCourse.days.map(d => d.day === dayNum ? { ...d, completed: !d.completed } : d);
-        const progress = Math.round((newDays.filter(d => d.completed).length / newDays.length) * 100);
-        updateCourse({ ...activeCourse, days: newDays, progress });
+        const updated = [...courses, newCourse];
+        setCourses(updated);
+        onUpdateUserData({ ...userData, microCourses: updated });
+        setIsPdfMode(false);
+        setActiveCourseId(newCourse.id);
     };
 
     const handleQuizComplete = (score: number) => {
         if (!activeCourse) return;
-        const newQuiz: QuizResult = { date: new Date().toISOString(), score, totalQuestions: 5 };
-        const newQuizzes = [newQuiz, ...(activeCourse.quizzes || [])];
-        updateCourse({ ...activeCourse, quizzes: newQuizzes });
+        const newResult: QuizResult = { date: new Date().toISOString(), score, totalQuestions: 5 };
+        const updatedCourse = { ...activeCourse, quizzes: [...(activeCourse.quizzes || []), newResult] };
+        // Simple XP logic
+        const newXp = (userData.xp || 0) + (score * 20); 
+        
+        const updatedCourses = courses.map(c => c.id === activeCourse.id ? updatedCourse : c);
+        setCourses(updatedCourses);
+        onUpdateUserData({ ...userData, microCourses: updatedCourses, xp: newXp });
+        setActiveTab('syllabus');
     };
 
-    const handleDeleteCourse = (id: string) => {
-        if(confirm("حذف دوره؟")) {
-            const filtered = courses.filter(c => c.id !== id);
-            setCourses(filtered);
-            onUpdateUserData({ ...userData, microCourses: filtered });
-            if (activeCourseId === id) setActiveCourseId(null);
-        }
-    };
+    // --- Screens ---
 
-    // --- Navigation Helpers ---
-    const getCoursesByCategory = (catId: string) => {
-        if (catId === 'sciences') return courses.filter(c => c.title.includes('فیزیک') || c.title.includes('شیمی') || c.title.includes('زیست'));
-        if (catId === 'languages') return courses.filter(c => c.title.includes('زبان') || c.title.includes('انگلیسی') || c.title.includes('فرانسه'));
-        if (catId === 'humanities') return courses.filter(c => c.title.includes('ادبیات') || c.title.includes('هنر') || c.title.includes('تاریخ'));
-        if (catId === 'physics') return courses.filter(c => c.title.includes('فیزیک') || c.title.includes('ریاضی'));
-        return courses; // Fallback
-    };
-
-    // --- Render ---
-
-    const renderSchoolHome = () => (
-        <div className="space-y-6 p-4 animate-fadeIn pb-20">
-            <div className="flex justify-between items-center mb-4">
+    const renderHome = () => (
+        <div className="flex-grow overflow-y-auto p-6 pb-32 scrollbar-hide">
+            <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h2 className="text-2xl font-black text-white tracking-tight">مکتب‌خونه هوشمند</h2>
-                    <p className="text-xs text-indigo-400 font-bold mt-1 tracking-widest uppercase">SCHOOL OS v2.0</p>
+                    <h2 className="text-3xl font-black text-white tracking-tight">دانشگاه بنویس</h2>
+                    <p className="text-xs text-indigo-400 font-bold mt-1 uppercase tracking-widest">School OS</p>
                 </div>
-                <button onClick={onClose} className="p-2 rounded-full bg-slate-800/50 text-slate-400 hover:text-white transition-colors border border-slate-700"><XMarkIcon className="w-6 h-6"/></button>
             </div>
 
-            {/* Categories Grid */}
-            <div className="grid grid-cols-1 gap-4">
-                {SCHOOL_CATEGORIES.map(cat => (
-                    <button 
-                        key={cat.id} 
-                        onClick={() => setActiveCategory(cat.id)}
-                        className="group relative h-32 rounded-3xl overflow-hidden text-right p-6 transition-transform hover:scale-[1.02] shadow-lg"
-                    >
-                        <div className={`absolute inset-0 bg-gradient-to-r ${cat.color} opacity-20 group-hover:opacity-30 transition-opacity`}></div>
-                        <div className="absolute inset-0 border border-white/10 rounded-3xl"></div>
-                        
-                        <div className="relative z-10 flex justify-between items-center h-full">
-                            <div>
-                                <h3 className={`text-2xl font-bold text-white mb-1`}>{cat.label}</h3>
-                                <p className={`text-xs ${cat.text} font-bold opacity-80`}>{getCoursesByCategory(cat.id).length} کلاس فعال</p>
+            {/* PDF Upload Banner */}
+            <button 
+                onClick={() => setIsPdfMode(true)}
+                className="w-full mb-6 p-5 bg-gradient-to-r from-indigo-900/60 to-violet-900/60 border border-indigo-500/30 rounded-[2rem] flex items-center justify-between group hover:scale-[1.02] transition-transform shadow-lg"
+            >
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/10 rounded-xl text-indigo-300">
+                        <CloudIcon className="w-8 h-8"/>
+                    </div>
+                    <div className="text-right">
+                        <h3 className="font-bold text-white text-lg">آپلود جزوه / کتاب</h3>
+                        <p className="text-xs text-slate-300">تبدیل PDF به کلاس درس تعاملی (مناسب کنکور)</p>
+                    </div>
+                </div>
+                <div className="bg-indigo-600 p-2 rounded-full">
+                    <ArrowLeftIcon className="w-5 h-5 text-white rotate-180"/>
+                </div>
+            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {SCHOOL_CATEGORIES.map(cat => {
+                    const count = getCoursesByCategory(cat.id).length;
+                    return (
+                        <button 
+                            key={cat.id} 
+                            onClick={() => setActiveCategory(cat.id)}
+                            className={`relative p-6 rounded-[2rem] overflow-hidden text-right group border bg-slate-900 ${cat.border} hover:border-opacity-100 transition-all hover:scale-[1.02] h-40`}
+                        >
+                            <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+                            <div className="relative z-10 flex flex-col justify-between h-full">
+                                <div className="flex justify-between items-start">
+                                    <cat.icon className={`w-10 h-10 ${cat.text} opacity-80`} />
+                                    <span className="text-xs font-bold bg-white/5 px-2 py-1 rounded-lg text-slate-300">{count} دوره</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">{cat.label}</h3>
+                                    <p className="text-start text-[10px] text-slate-400 mt-1">ورود به دانشکده &larr;</p>
+                                </div>
                             </div>
-                            <cat.icon className={`w-16 h-16 ${cat.text} opacity-50 group-hover:scale-110 transition-transform duration-500`} />
-                        </div>
-                    </button>
-                ))}
-                
-                <button onClick={() => setIsCreating(true)} className="w-full py-6 border-2 border-dashed border-slate-700 rounded-3xl text-slate-400 font-bold flex flex-col items-center justify-center gap-2 hover:bg-slate-800/50 hover:text-white transition-colors">
-                    <PlusIcon className="w-8 h-8"/>
-                    تاسیس دوره جدید
-                </button>
+                        </button>
+                    );
+                })}
             </div>
+            
+            <button 
+                onClick={() => setIsCreating(true)}
+                className="w-full mt-6 py-4 border-2 border-dashed border-slate-700 rounded-[2rem] text-slate-400 font-bold hover:bg-slate-800 hover:text-white hover:border-indigo-500 transition-all flex items-center justify-center gap-2"
+            >
+                <PlusIcon className="w-6 h-6"/>
+                تاسیس دوره جدید (موضوعی)
+            </button>
         </div>
     );
 
-    const renderCategoryView = () => {
-        const category = SCHOOL_CATEGORIES.find(c => c.id === activeCategory);
-        const categoryCourses = getCoursesByCategory(activeCategory || '');
+    const renderCategory = () => {
+        const cat = SCHOOL_CATEGORIES.find(c => c.id === activeCategory);
+        const list = getCoursesByCategory(activeCategory || '');
 
         return (
-            <div className="h-full flex flex-col animate-fadeIn">
-                {/* Header */}
-                <div className="flex items-center gap-4 p-4 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
-                    <button onClick={() => setActiveCategory(null)} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors text-slate-300"><ArrowLeftIcon className="w-5 h-5"/></button>
-                    <div>
-                        <h2 className="text-xl font-bold text-white">{category?.label}</h2>
-                        <p className="text-xs text-slate-400 font-medium">{categoryCourses.length} درس</p>
-                    </div>
+            <div className="flex flex-col h-full">
+                <div className="p-6 border-b border-white/5 bg-slate-900/50 flex items-center gap-4 sticky top-0 z-20 backdrop-blur-md">
+                    <button onClick={() => setActiveCategory(null)} className="p-2 bg-slate-800 rounded-xl text-slate-400 hover:text-white"><ArrowRightIcon className="w-5 h-5 rotate-180"/></button>
+                    <h2 className="text-xl font-black text-white">{cat?.label}</h2>
                 </div>
+                <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-32">
+                    {activeCategory === 'konkur' && (
+                        <div className="bg-rose-900/20 border border-rose-500/20 p-4 rounded-2xl flex items-center gap-4 mb-4">
+                            <div className="p-3 bg-rose-500 rounded-full text-white animate-pulse">
+                                <TrophyIcon className="w-6 h-6"/>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-rose-200">مشاوره هوشمند کنکور</h3>
+                                <p className="text-xs text-rose-300">برای دریافت برنامه ریزی درسی، وارد یک دوره شوید و تماس زنده بگیرید.</p>
+                            </div>
+                        </div>
+                    )}
 
-                {/* Course List */}
-                <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-20 scrollbar-hide">
-                    {categoryCourses.length === 0 ? (
-                        <div className="text-center py-10 text-slate-500">
-                            <p>هنوز کلاسی در این دانشکده وجود ندارد.</p>
+                    {list.length === 0 ? (
+                        <div className="text-center py-20 opacity-50">
+                            <BeakerIcon className="w-16 h-16 mx-auto mb-4 text-slate-600"/>
+                            <p>هنوز درسی در این دانشکده نیست.</p>
                         </div>
                     ) : (
-                        categoryCourses.map(c => (
-                            <div key={c.id} onClick={() => setActiveCourseId(c.id)} className="bg-slate-800/40 border border-slate-700/50 p-5 rounded-2xl cursor-pointer hover:bg-slate-800 hover:border-indigo-500/50 transition-all relative group shadow-lg flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-gradient-to-br ${category?.color} shadow-inner`}>
-                                    {c.title.includes('فیزیک') ? '⚛️' : c.title.includes('شیمی') ? '🧪' : c.title.includes('زیست') ? '🧬' : c.title.includes('فرانسه') ? '🇫🇷' : c.title.includes('انگلیسی') ? '🇬🇧' : '📚'}
-                                </div>
-                                <div className="flex-grow">
+                        list.map(c => (
+                            <div key={c.id} onClick={() => setActiveCourseId(c.id)} className="bg-slate-800/50 border border-slate-700 p-5 rounded-2xl cursor-pointer hover:bg-slate-800 transition-all group">
+                                <div className="flex justify-between items-start mb-3">
                                     <h3 className="font-bold text-white text-lg">{c.title}</h3>
-                                    <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden mt-2">
-                                        <div className="bg-indigo-500 h-full transition-all duration-500" style={{ width: `${c.progress}%` }}></div>
-                                    </div>
+                                    <ArrowLeftIcon className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors"/>
                                 </div>
-                                <span className="text-xs font-mono text-slate-400">{c.progress}%</span>
+                                <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-indigo-500 h-full" style={{ width: `${c.progress}%` }}></div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-2 text-right">{c.progress}% تکمیل شده</p>
                             </div>
                         ))
                     )}
@@ -878,134 +761,102 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
         );
     };
 
-    const renderActiveCourse = () => {
+    const renderCourse = () => {
         if (!activeCourse) return null;
+        if (activeTab === 'class') return <LiveProfessorSession course={activeCourse} onClose={() => setActiveTab('syllabus')} />;
+        if (activeTab === 'quiz') return <QuizModal course={activeCourse} onComplete={handleQuizComplete} onClose={() => setActiveTab('syllabus')} />;
+
+        const isKonkur = activeCourse.id.includes('konkur') || activeCourse.title.includes('کنکور');
+
         return (
-            <div className="absolute inset-0 flex flex-col animate-fadeIn bg-[#0b0c15] overflow-hidden">
-                {/* Header */}
-                <div className="flex-none flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md z-10">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setActiveCourseId(null)} className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"><ArrowLeftIcon className="w-5 h-5"/></button>
-                        <div>
-                            <h2 className="text-lg font-black text-white tracking-tight">{activeCourse.title}</h2>
-                            <span className="text-[10px] bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/20">در حال برگزاری</span>
-                        </div>
-                    </div>
-                    <button onClick={() => handleDeleteCourse(activeCourse.id)} className="p-2 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"><TrashIcon className="w-5 h-5"/></button>
+            <div className="flex flex-col h-full">
+                <div className="p-6 border-b border-white/5 bg-slate-900/50 flex items-center justify-between sticky top-0 z-20 backdrop-blur-md">
+                    <button onClick={() => setActiveCourseId(null)} className="p-2 bg-slate-800 rounded-xl text-slate-400 hover:text-white"><ArrowRightIcon className="w-5 h-5 rotate-180"/></button>
+                    <h2 className="text-lg font-black text-white truncate max-w-[200px]">{activeCourse.title}</h2>
+                    <div className="w-9"></div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-grow overflow-hidden relative">
-                    {activeTab === 'syllabus' && (
-                        <div className="h-full overflow-y-auto p-4 space-y-4 scrollbar-hide pb-24">
-                            <div className="bg-gradient-to-br from-indigo-900/20 to-slate-900 p-6 rounded-3xl border border-indigo-500/30 mb-6 text-center">
-                                <div className="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-indigo-500/30 rotate-3">
-                                    <AcademicCapIcon className="w-8 h-8 text-white"/>
+                <div className="flex-grow overflow-y-auto p-4 pb-32 space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-900/30 to-slate-900 border border-indigo-500/20 p-6 rounded-[2rem] text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30 rotate-3 relative z-10">
+                            <AcademicCapIcon className="w-8 h-8 text-white"/>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2 relative z-10">هدف دوره</h3>
+                        <p className="text-sm text-indigo-200 relative z-10">{activeCourse.goal}</p>
+                        
+                        <div className="mt-4 flex justify-center gap-2 relative z-10">
+                            <button onClick={() => setActiveTab('quiz')} className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-2">
+                                <PencilIcon className="w-4 h-4"/> آزمون مهارت
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {activeCourse.days.map(day => (
+                            <div key={day.day} className="bg-slate-800/40 border border-slate-700 p-5 rounded-2xl group hover:border-indigo-500/30 transition-colors">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-bold bg-white/5 px-3 py-1 rounded-lg text-indigo-300">جلسه {day.day}</span>
+                                    <CheckCircleIcon className={`w-5 h-5 ${day.completed ? 'text-green-500' : 'text-slate-600'}`}/>
                                 </div>
-                                <h3 className="text-xl font-bold text-white mb-2">هدف دوره</h3>
-                                <p className="text-sm text-indigo-200">{activeCourse.goal}</p>
+                                <h4 className="font-bold text-white mb-1">{day.lesson}</h4>
+                                <p className="text-sm text-slate-400">{day.focus}</p>
                             </div>
-
-                            {activeCourse.days.map(day => (
-                                <div key={day.day} className={`p-5 rounded-2xl border transition-all duration-300 ${day.completed ? 'bg-green-900/10 border-green-500/30' : 'bg-slate-800/40 border-slate-700 hover:border-slate-600'}`}>
-                                    <div className="flex justify-between items-start mb-3">
-                                        <span className="text-xs font-bold text-indigo-400 bg-indigo-900/20 px-2.5 py-1 rounded-lg border border-indigo-500/20">جلسه {day.day}</span>
-                                        <button onClick={() => handleDayToggle(day.day)} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${day.completed ? 'bg-green-500 border-green-500 text-white' : 'border-slate-600 hover:border-green-500'}`}>
-                                            {day.completed && <CheckCircleIcon className="w-4 h-4"/>}
-                                        </button>
-                                    </div>
-                                    <h4 className="font-bold text-white mb-2 text-base">{day.lesson}</h4>
-                                    <p className="text-xs text-slate-400 mb-4 leading-relaxed">{day.focus}</p>
-                                    
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <div className="bg-black/30 p-3 rounded-xl text-xs text-slate-300 border border-white/5">
-                                            <strong className="text-orange-400 block mb-1">🔥 چالش:</strong>
-                                            {day.challenge}
-                                        </div>
-                                        <div className="bg-black/30 p-3 rounded-xl text-xs text-slate-300 border border-white/5">
-                                            <strong className="text-blue-400 block mb-1">🤔 تأمل:</strong>
-                                            {day.reflection}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {activeTab === 'class' && <CourseTutor course={activeCourse} onUpdateHistory={(h) => updateCourse({...activeCourse, chatHistory: h})} />}
-                    {activeTab === 'exam' && <ExamHall course={activeCourse} onCompleteQuiz={handleQuizComplete} />}
-                    {activeTab === 'report' && <ReportCard quizzes={activeCourse.quizzes || []} />}
+                        ))}
+                    </div>
                 </div>
 
-                {/* Bottom Dock Navigation */}
-                <div className="flex-none p-4 bg-[#0b0c15]/90 backdrop-blur-xl border-t border-white/10 z-20 absolute bottom-0 left-0 right-0">
-                    <div className="flex justify-around items-center bg-slate-800/80 p-1.5 rounded-2xl shadow-2xl border border-white/5">
-                        <button onClick={() => setActiveTab('syllabus')} className={`flex-1 py-2.5 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'syllabus' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <Squares2X2Icon className="w-5 h-5"/>
-                            <span className="text-[9px] font-bold">برنامه</span>
-                        </button>
-                        <button onClick={() => setActiveTab('class')} className={`flex-1 py-2.5 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'class' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <UserIcon className="w-5 h-5"/>
-                            <span className="text-[9px] font-bold">استاد</span>
-                        </button>
-                        <button onClick={() => setActiveTab('exam')} className={`flex-1 py-2.5 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'exam' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <DocumentTextIcon className="w-5 h-5"/>
-                            <span className="text-[9px] font-bold">آزمون</span>
-                        </button>
-                        <button onClick={() => setActiveTab('report')} className={`flex-1 py-2.5 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab === 'report' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <ChartBarIcon className="w-5 h-5"/>
-                            <span className="text-[9px] font-bold">کارنامه</span>
-                        </button>
-                    </div>
+                {/* Floating Action Button for Class */}
+                <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-30 w-max">
+                    <button 
+                        onClick={() => setActiveTab('class')}
+                        className={`flex items-center gap-3 text-white px-8 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-all border-4 border-[#020617] ${isKonkur ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/40' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/40'}`}
+                    >
+                        <MicrophoneIcon className="w-6 h-6"/>
+                        {isKonkur ? 'مشاوره و تدریس زنده' : 'شروع کلاس زنده'}
+                    </button>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="fixed inset-0 bg-[#050505] z-50 flex flex-col font-[Vazirmatn] animate-fadeIn overflow-hidden h-[100dvh] overscroll-none">
-            {/* Ambient Background */}
+        <div className="fixed inset-0 z-50 bg-[#020617] font-[Vazirmatn] flex flex-col animate-fadeIn overflow-hidden">
+            {/* Background */}
             <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none"></div>
             
-            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full h-full flex flex-col shadow-2xl relative overflow-hidden z-10">
-                {activeCourseId ? renderActiveCourse() : (
-                    isCreating ? (
-                        <div className="p-6 h-full flex flex-col">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-black text-white">تاسیس دوره جدید</h2>
-                                <p className="text-slate-400 text-sm mt-2">موضوع دوره را مشخص کنید یا یک فایل PDF (کتاب درسی) آپلود کنید تا برنامه آموزشی برای شما ساخته شود.</p>
-                            </div>
-                            
-                            <div className="space-y-4 flex-grow">
-                                <input 
-                                    type="text" 
-                                    value={newCourseGoal}
-                                    onChange={e => setNewCourseGoal(e.target.value)}
-                                    placeholder="عنوان یا هدف دوره (مثلا: یادگیری پایتون مقدماتی)"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
-                                
-                                <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:bg-slate-800/50 transition-colors cursor-pointer relative">
-                                    <input type="file" accept=".pdf" onChange={e => setPdfFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer"/>
-                                    <DocumentTextIcon className="w-10 h-10 text-slate-500 mx-auto mb-2"/>
-                                    <p className="text-slate-300 font-bold">{pdfFile ? pdfFile.name : 'آپلود PDF (اختیاری)'}</p>
-                                    <p className="text-xs text-slate-500 mt-1">برای ساخت دقیق‌تر سرفصل‌ها</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 mt-4">
-                                <button onClick={() => setIsCreating(false)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-slate-400 hover:text-white">لغو</button>
-                                <button onClick={handleCreateCourse} disabled={!newCourseGoal.trim() || isGenerating} className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-white shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 disabled:opacity-50">
-                                    {isGenerating ? <SparklesIcon className="w-5 h-5 animate-spin"/> : <AcademicCapIcon className="w-5 h-5"/>}
-                                    {isGenerating ? 'در حال ساخت دانشکده...' : 'ساخت دوره'}
-                                </button>
-                            </div>
+            {/* Content Container - Ensures Scrolling */}
+            <div className="relative z-10 w-full h-full flex flex-col min-h-0">
+                {isPdfMode ? (
+                    <PdfCourseGenerator onCourseCreated={handlePdfCourseCreated} onCancel={() => setIsPdfMode(false)} />
+                ) : isCreating ? (
+                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                        <h2 className="text-2xl font-black text-white mb-6">چه چیزی می‌خواهید یاد بگیرید؟</h2>
+                        <input 
+                            type="text" 
+                            value={newCourseGoal}
+                            onChange={e => setNewCourseGoal(e.target.value)}
+                            placeholder="مثلا: مبانی فیزیک کوانتوم"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-4 text-white text-center mb-6 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                        <div className="flex gap-4 w-full">
+                            <button onClick={() => setIsCreating(false)} className="flex-1 py-3 bg-slate-700 rounded-xl font-bold text-slate-300">لغو</button>
+                            <button onClick={handleCreateCourse} disabled={isGenerating} className="flex-[2] py-3 bg-indigo-600 rounded-xl font-bold text-white flex items-center justify-center gap-2">
+                                {isGenerating ? <SparklesIcon className="w-5 h-5 animate-spin"/> : "ساخت دوره"}
+                            </button>
                         </div>
-                    ) : (
-                        activeCategory ? renderCategoryView() : renderSchoolHome()
-                    )
-                )}
+                    </div>
+                ) : activeCourseId ? renderCourse() : activeCategory ? renderCategory() : renderHome()}
             </div>
+
+            {/* Bottom Dock (Only on main pages, not inside live class or specialized modes) */}
+            {!isCreating && !isPdfMode && !activeCourseId && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-40">
+                    <button onClick={onClose} className="w-16 h-16 rounded-full bg-slate-800 border-4 border-[#020617] text-slate-400 hover:text-white flex items-center justify-center shadow-lg hover:scale-105 transition-all">
+                        <XMarkIcon className="w-8 h-8"/>
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { OnboardingData } from '../types';
-import { TargetIcon, HabitsIcon, StarIcon } from './icons';
+import { TargetIcon, HabitsIcon, StarIcon, CheckCircleIcon } from './icons';
 
 const StatCard: React.FC<{ icon: React.FC<{ className?: string }>, value: string | number, label: string, color: string }> = ({ icon: Icon, value, label, color }) => (
     <div className="bg-slate-700/60 p-3 rounded-[var(--radius-md)] flex items-center gap-3">
@@ -25,6 +25,8 @@ const CircularProgress: React.FC<{ percentage: number, level: number }> = ({ per
     // Safely handle NaN or Infinite percentage
     const safePercentage = (isNaN(percentage) || !isFinite(percentage)) ? 0 : Math.min(100, Math.max(0, percentage));
     const strokeDashoffset = circumference - (safePercentage / 100) * circumference;
+    
+    const isComplete = safePercentage === 100;
 
     return (
         <div className="relative w-32 h-32 flex-shrink-0">
@@ -34,9 +36,22 @@ const CircularProgress: React.FC<{ percentage: number, level: number }> = ({ per
                 viewBox={`0 0 ${radius*2} ${radius*2}`}
                 className="transform -rotate-90"
             >
+                <defs>
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#8b5cf6" />
+                        <stop offset="100%" stopColor="#d946ef" />
+                    </linearGradient>
+                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>
                 <circle
                     stroke="currentColor"
-                    className="text-slate-700"
+                    className="text-slate-800"
                     fill="transparent"
                     strokeWidth={stroke}
                     r={normalizedRadius}
@@ -44,20 +59,29 @@ const CircularProgress: React.FC<{ percentage: number, level: number }> = ({ per
                     cy={radius}
                 />
                 <circle
-                    stroke="currentColor"
-                    className="text-violet-500"
+                    stroke="url(#progressGradient)"
                     fill="transparent"
                     strokeWidth={stroke}
                     strokeDasharray={circumference + ' ' + circumference}
-                    style={{ strokeDashoffset, strokeLinecap: 'round', transition: 'stroke-dashoffset 0.5s ease' }}
+                    style={{ strokeDashoffset, strokeLinecap: 'round', transition: 'stroke-dashoffset 1s ease-out' }}
                     r={normalizedRadius}
                     cx={radius}
                     cy={radius}
+                    filter={isComplete ? "url(#glow)" : ""}
                 />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                 <span className="text-xs text-slate-400">سطح</span>
-                 <span className="font-bold text-3xl text-white">{level}</span>
+                 {isComplete ? (
+                     <div className="flex flex-col items-center animate-bounce-in">
+                         <CheckCircleIcon className="w-8 h-8 text-yellow-400 mb-1" />
+                         <span className="text-xs font-bold text-yellow-100">تکمیل شد</span>
+                     </div>
+                 ) : (
+                     <>
+                        <span className="text-xs text-slate-400">سطح</span>
+                        <span className="font-bold text-3xl text-white">{level}</span>
+                     </>
+                 )}
             </div>
         </div>
     );
@@ -105,10 +129,10 @@ const StatsSummaryWidget: React.FC<{ userData: OnboardingData }> = ({ userData }
              <div className="flex items-center gap-6">
                 <CircularProgress percentage={xpProgress} level={currentLevel} />
                 <div className="space-y-1">
-                     <h3 className="font-bold text-xl text-white">وضعیت کلی</h3>
-                     <p className="text-sm text-slate-400">{currentXp} / {xpForNextLevel} XP</p>
-                     <div className="h-1.5 w-32 bg-slate-700 rounded-full overflow-hidden mt-1">
-                         <div className="h-full bg-violet-500" style={{ width: `${Math.min(100, Math.max(0, xpProgress))}%` }}></div>
+                     <p className="text-sm text-slate-400 font-mono">{currentXp} / {xpForNextLevel} XP</p>
+                     <div className="h-1.5 w-32 bg-slate-700 rounded-full overflow-hidden mt-1 relative">
+                         <div className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, xpProgress))}%` }}></div>
+                         {xpProgress >= 100 && <div className="absolute inset-0 bg-white/30 animate-pulse"></div>}
                      </div>
                 </div>
              </div>

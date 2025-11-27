@@ -1,18 +1,15 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { GoogleGenAI, Chat, LiveServerMessage, FunctionDeclaration, Type, Modality } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } from "@google/genai";
 import { 
-    ChatMessage, OnboardingData, Agent, UserGoal, StandaloneTask, Transaction 
+    ChatMessage, OnboardingData, Agent, StandaloneTask, Transaction, CalendarEvent 
 } from '../types';
+import { agents } from '../lib/agents';
 import { 
-    SparklesIcon, MicrophoneIcon, StopIcon, BriefcaseIcon,
-    VideoCameraIcon, ArrowUpIcon, BookOpenIcon, BoltIcon, XMarkIcon,
-    ChatBubbleOvalLeftEllipsisIcon, UserIcon, PaperAirplaneIcon,
-    Square2StackIcon, CommandCommandLineIcon,
-    ArrowLeftIcon
+    SparklesIcon, MicrophoneIcon, XMarkIcon,
+    ArrowUpIcon, BriefcaseIcon, SpeakerWaveIcon,
+    CogIcon, AdjustmentsHorizontalIcon, CheckCircleIcon
 } from './icons';
-import GratitudeJournal from './GratitudeJournal';
-import AiAgentsHub from './AiAgentsHub';
 import AiAgentRunner from './AiAgentRunner';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -21,11 +18,54 @@ const BENVIS_SYSTEM_PROMPT = `
 You are Benvis, an advanced AI Life Operating System Assistant.
 Your goal is to help the user organize their life, achieve goals, build habits, and maintain wellness.
 Tone: Professional yet friendly, encouraging, and insightful.
-Language: You are fluent in Persian (Farsi). Always reply in Persian unless asked otherwise.
+Language: You are fluent in Persian (Farsi). Always reply in Persian.
 Keep responses concise and actionable.
 `;
 
-// --- Audio Utilities for Live API ---
+// --- Tools Definition for Live API ---
+
+const tools: FunctionDeclaration[] = [
+    {
+        name: "create_task",
+        description: "Create a new task or to-do item for the user.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING, description: "The title of the task" },
+                urgent: { type: Type.BOOLEAN, description: "Is this task urgent?" }
+            },
+            required: ["title"]
+        }
+    },
+    {
+        name: "create_transaction",
+        description: "Log a financial transaction (expense or income).",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                description: { type: Type.STRING, description: "What was purchased or source of income" },
+                amount: { type: Type.NUMBER, description: "The amount in Tomans" },
+                type: { type: Type.STRING, enum: ["expense", "income"], description: "Type of transaction" }
+            },
+            required: ["description", "amount", "type"]
+        }
+    },
+    {
+        name: "create_calendar_event",
+        description: "Add an event to the user's calendar.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING, description: "Title of the event" },
+                time: { type: Type.STRING, description: "Time of event in HH:MM format (optional)" },
+                date: { type: Type.STRING, description: "Date in YYYY-MM-DD format (optional, default to today)" }
+            },
+            required: ["title"]
+        }
+    }
+];
+
+// --- Audio Utilities ---
 
 function base64ToUint8Array(base64: string): Uint8Array {
     const binaryString = atob(base64);
@@ -56,468 +96,491 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     return btoa(binary);
 }
 
-// --- Tool Definitions for Live API ---
+// --- Live Session Component ---
 
-const tools: FunctionDeclaration[] = [
-    {
-        name: "create_goal",
-        description: "Create a new life goal or project for the user.",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                title: { type: Type.STRING, description: "The title of the goal" },
-                description: { type: Type.STRING, description: "A brief description" },
-            },
-            required: ["title"]
-        }
-    },
-    {
-        name: "create_task",
-        description: "Add a new todo task to the user's list.",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                title: { type: Type.STRING, description: "The task description" },
-                urgent: { type: Type.BOOLEAN, description: "Is it urgent?" },
-                important: { type: Type.BOOLEAN, description: "Is it important?" },
-            },
-            required: ["title"]
-        }
-    },
-    {
-        name: "log_transaction",
-        description: "Log a financial transaction (expense or income).",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                amount: { type: Type.NUMBER, description: "Amount in Tomans" },
-                description: { type: Type.STRING, description: "What was it for?" },
-                type: { type: Type.STRING, enum: ["income", "expense"] }
-            },
-            required: ["amount", "type"]
-        }
-    }
-];
-
-// --- Live Assistant Component ---
-
-const LiveAssistantSession: React.FC<{
+const LiveSessionOverlay: React.FC<{
+    onClose: () => void;
     userData: OnboardingData;
     onUpdateUserData: (data: OnboardingData) => void;
-    onClose: () => void;
-}> = ({ userData, onUpdateUserData, onClose }) => {
+}> = ({ onClose, userData, onUpdateUserData }) => {
     const [status, setStatus] = useState<'connecting' | 'listening' | 'speaking' | 'thinking' | 'error'>('connecting');
-    const [transcript, setTranscript] = useState<string>("");
-    const [errorMessage, setErrorMessage] = useState<string>("");
+    const [visualizerData, setVisualizerData] = useState<number[]>(new Array(5).fill(10));
+    const [activeVoice, setActiveVoice] = useState(userData.audioSettings?.voice || 'Kore');
+    const [showSettings, setShowSettings] = useState(false);
+    const [executedAction, setExecutedAction] = useState<string | null>(null);
     
-    const userDataRef = useRef(userData);
-    userDataRef.current = userData; 
-    
-    const nextStartTimeRef = useRef<number>(0);
-    const audioQueueRef = useRef<AudioBufferSourceNode[]>([]);
-    const activeSessionRef = useRef<any>(null);
-    
-    // Refs for cleanup
+    // Audio Contexts
     const audioContextRef = useRef<AudioContext | null>(null);
     const inputContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const nextStartTimeRef = useRef<number>(0);
+    const activeSessionRef = useRef<any>(null);
 
-    const connect = useCallback(async () => {
-        setStatus('connecting');
-        setErrorMessage("");
+    const cleanup = () => {
+        if (processorRef.current) { 
+            processorRef.current.disconnect(); 
+            processorRef.current.onaudioprocess = null; 
+            processorRef.current = null; 
+        }
+        if (sourceRef.current) { 
+            sourceRef.current.disconnect(); 
+            sourceRef.current = null; 
+        }
+        if (mediaStreamRef.current) { 
+            mediaStreamRef.current.getTracks().forEach(t => t.stop()); 
+            mediaStreamRef.current = null; 
+        }
         
-        try {
-            // Initialize dedicated client for this session
-            const client = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (inputContextRef.current && inputContextRef.current.state !== 'closed') {
+            inputContextRef.current.close().catch(console.warn);
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(console.warn);
+        }
+        inputContextRef.current = null;
+        audioContextRef.current = null;
+        activeSessionRef.current = null;
+    };
 
-            // Setup Audio Output
+    useEffect(() => {
+        startSession();
+        return () => cleanup();
+    }, [activeVoice]); 
+
+    // Simple visualizer simulation based on status
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (status === 'listening' || status === 'speaking') {
+                setVisualizerData(prev => prev.map(() => Math.random() * 100));
+            } else {
+                setVisualizerData(new Array(5).fill(10));
+            }
+        }, 100);
+        return () => clearInterval(interval);
+    }, [status]);
+
+    const startSession = async () => {
+        cleanup(); // Ensure clean start
+        setStatus('connecting');
+        try {
+            const client = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             audioContextRef.current = ctx;
-
-            // Setup Audio Input
             const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             inputContextRef.current = inputCtx;
-            
-            if (inputCtx.state === 'suspended') await inputCtx.resume();
-            if (ctx.state === 'suspended') await ctx.resume();
 
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-                    sampleRate: 16000,
-                    channelCount: 1,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }});
-                mediaStreamRef.current = stream;
-            } catch (micError) {
-                console.error("Microphone access denied", micError);
-                setErrorMessage("دسترسی به میکروفون داده نشد.");
-                setStatus('error');
-                return;
-            }
-
-            const voiceName = userData.audioSettings?.voice || 'Kore';
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, echoCancellation: true } });
+            mediaStreamRef.current = stream;
 
             const sessionPromise = client.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 config: {
                     tools: [{ functionDeclarations: tools }],
-                    systemInstruction: `
-                        You are Benvis Live, a wise, deep-thinking life architect.
-                        Your voice is calm, professional, and warm.
-                        You help the user organize their thoughts, projects, and life.
-                        If the user wants to add a goal, task, or transaction, use the provided tools.
-                        Always speak in Persian (Farsi).
-                        Keep responses concise for voice conversation, but thoughtful.
-                    `,
+                    systemInstruction: BENVIS_SYSTEM_PROMPT + "\nBe a helpful voice assistant. You can execute commands like creating tasks, transactions, and events. When a tool is used, confirm shortly.",
                     responseModalities: [Modality.AUDIO],
-                    speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } }
-                    }
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeVoice } } }
                 },
                 callbacks: {
                     onopen: () => {
                         setStatus('listening');
                         activeSessionRef.current = sessionPromise;
-                        
-                        if (!inputCtx || !mediaStreamRef.current) return;
-
-                        const source = inputCtx.createMediaStreamSource(mediaStreamRef.current);
+                        const source = inputCtx.createMediaStreamSource(stream);
                         const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-                        
                         sourceRef.current = source;
                         processorRef.current = processor;
                         
                         processor.onaudioprocess = (e) => {
-                            // Safety check: only send if session is active and context is running
                             if (!activeSessionRef.current || inputCtx.state === 'closed') return;
-
                             const inputData = e.inputBuffer.getChannelData(0);
                             const pcm16 = floatTo16BitPCM(inputData);
                             const base64 = arrayBufferToBase64(pcm16.buffer);
-                            
                             sessionPromise.then(session => {
-                                session.sendRealtimeInput({
-                                    media: {
-                                        mimeType: "audio/pcm;rate=16000",
-                                        data: base64
-                                    }
-                                });
-                            }).catch(err => {
-                                console.warn("Send input failed", err);
+                                session.sendRealtimeInput({ media: { mimeType: "audio/pcm;rate=16000", data: base64 } });
                             });
                         };
-                        
                         source.connect(processor);
                         processor.connect(inputCtx.destination);
                     },
                     onmessage: async (msg: LiveServerMessage) => {
-                        const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-                        if (audioData) {
-                            setStatus('speaking');
-                            // Access ref directly to avoid closure staleness, though checking 'ctx' existence is key
-                            if (!audioContextRef.current || audioContextRef.current.state === 'closed') return;
+                        // Handle Tool Calls
+                        if (msg.toolCall) {
+                            for (const fc of msg.toolCall.functionCalls) {
+                                let result: any = { result: "ok" };
+                                
+                                if (fc.name === 'create_task') {
+                                    const task: StandaloneTask = {
+                                        id: `task-${Date.now()}`,
+                                        title: fc.args.title as string,
+                                        urgent: !!fc.args.urgent,
+                                        important: false,
+                                        completed: false
+                                    };
+                                    onUpdateUserData({ ...userData, tasks: [...(userData.tasks || []), task] });
+                                    setExecutedAction(`تسک ایجاد شد: ${fc.args.title}`);
+                                } else if (fc.name === 'create_transaction') {
+                                    const tx: Transaction = {
+                                        id: `tx-${Date.now()}`,
+                                        type: (fc.args.type as any) || 'expense',
+                                        amount: Number(fc.args.amount),
+                                        description: fc.args.description as string,
+                                        date: new Date().toISOString().split('T')[0],
+                                        categoryId: 'default',
+                                        accountId: 'default'
+                                    };
+                                    onUpdateUserData({ ...userData, transactions: [...(userData.transactions || []), tx] });
+                                    setExecutedAction(`تراکنش ثبت شد: ${fc.args.amount}`);
+                                } else if (fc.name === 'create_calendar_event') {
+                                    const evt: CalendarEvent = {
+                                        id: `evt-${Date.now()}`,
+                                        date: (fc.args.date as string) || new Date().toISOString().split('T')[0],
+                                        time: fc.args.time as string,
+                                        text: fc.args.title as string
+                                    };
+                                    onUpdateUserData({ ...userData, calendarEvents: [...(userData.calendarEvents || []), evt] });
+                                    setExecutedAction(`رویداد ثبت شد: ${fc.args.title}`);
+                                }
 
-                            const bytes = base64ToUint8Array(audioData);
-                            const int16Data = new Int16Array(bytes.buffer);
-                            const float32Data = new Float32Array(int16Data.length);
-                            for(let i=0; i<int16Data.length; i++) {
-                                float32Data[i] = int16Data[i] / 32768.0;
+                                sessionPromise.then(session => {
+                                    session.sendToolResponse({
+                                        functionResponses: [{
+                                            id: fc.id,
+                                            name: fc.name,
+                                            response: result
+                                        }]
+                                    });
+                                });
+                                
+                                setTimeout(() => setExecutedAction(null), 3000);
                             }
+                        }
 
-                            const audioBuffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000);
-                            audioBuffer.copyToChannel(float32Data, 0);
-
+                        const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                        if (audioData && audioContextRef.current) {
+                            setStatus('speaking');
+                            const bytes = base64ToUint8Array(audioData);
+                            const int16 = new Int16Array(bytes.buffer);
+                            const float32 = new Float32Array(int16.length);
+                            for(let i=0; i<int16.length; i++) float32[i] = int16[i] / 32768.0;
+                            
+                            const buffer = audioContextRef.current.createBuffer(1, float32.length, 24000);
+                            buffer.copyToChannel(float32, 0);
                             const source = audioContextRef.current.createBufferSource();
-                            source.buffer = audioBuffer;
+                            source.buffer = buffer;
                             source.connect(audioContextRef.current.destination);
-                            
-                            const currentTime = audioContextRef.current.currentTime;
-                            const startTime = Math.max(currentTime, nextStartTimeRef.current);
+                            const now = audioContextRef.current.currentTime;
+                            const startTime = Math.max(now, nextStartTimeRef.current);
                             source.start(startTime);
-                            nextStartTimeRef.current = startTime + audioBuffer.duration;
-                            
+                            nextStartTimeRef.current = startTime + buffer.duration;
                             source.onended = () => {
                                 if (audioContextRef.current && audioContextRef.current.currentTime >= nextStartTimeRef.current) {
                                     setStatus('listening');
                                 }
                             };
-                            
-                            audioQueueRef.current.push(source);
-                        }
-
-                        if (msg.toolCall) {
-                            setStatus('thinking');
-                            const functionResponses: any[] = [];
-                            
-                            for (const fc of msg.toolCall.functionCalls) {
-                                const args = fc.args as any;
-                                const currentData = userDataRef.current;
-                                const newData = { ...currentData };
-
-                                if (fc.name === 'create_goal') {
-                                    const newGoal: UserGoal = {
-                                        id: `goal-live-${Date.now()}`,
-                                        title: args.title,
-                                        description: args.description,
-                                        type: 'simple',
-                                        icon: 'Target',
-                                        progress: 0,
-                                        progressHistory: [{ date: new Date().toISOString().split('T')[0], progress: 0 }]
-                                    };
-                                    newData.goals = [...(newData.goals || []), newGoal];
-                                    setTranscript(`هدف جدید: ${args.title}`);
-                                } else if (fc.name === 'create_task') {
-                                    const newTask: StandaloneTask = {
-                                        id: `task-live-${Date.now()}`,
-                                        title: args.title,
-                                        urgent: !!args.urgent,
-                                        important: !!args.important,
-                                        completed: false
-                                    };
-                                    newData.tasks = [...(newData.tasks || []), newTask];
-                                    setTranscript(`تسک جدید: ${args.title}`);
-                                } else if (fc.name === 'log_transaction') {
-                                    const newTx: Transaction = {
-                                        id: `tx-live-${Date.now()}`,
-                                        amount: args.amount,
-                                        description: args.description,
-                                        type: args.type,
-                                        date: new Date().toISOString().split('T')[0],
-                                        categoryId: 'default',
-                                        accountId: newData.financialAccounts?.[0]?.id || 'default'
-                                    };
-                                    newData.transactions = [...(newData.transactions || []), newTx];
-                                    setTranscript(`تراکنش: ${args.amount} تومان`);
-                                }
-
-                                onUpdateUserData(newData);
-                                userDataRef.current = newData;
-
-                                functionResponses.push({
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result: "Action performed successfully." }
-                                });
-                            }
-
-                            sessionPromise.then(session => {
-                                session.sendToolResponse({
-                                    functionResponses: functionResponses
-                                });
-                            });
                         }
                     },
-                    onclose: () => {
-                        console.log("Live session closed");
-                    },
-                    onerror: (e) => {
-                        console.error("Live session error", e);
-                        setErrorMessage("خطا در ارتباط با سرور.");
-                        setStatus('error');
-                    }
+                    onclose: () => setStatus('error'),
+                    onerror: (e) => { console.error(e); setStatus('error'); }
                 }
             });
-        } catch (error) {
-            console.error("Connection initialization error", error);
-            setErrorMessage("خطا در راه‌اندازی ارتباط.");
+        } catch (e) {
+            console.error(e);
             setStatus('error');
         }
-
-    }, [onUpdateUserData, userData.audioSettings]);
-
-    useEffect(() => {
-        connect();
-
-        // Cleanup function
-        return () => {
-            // Stop audio processing
-            if (processorRef.current && inputContextRef.current) {
-                processorRef.current.disconnect();
-                processorRef.current.onaudioprocess = null;
-            }
-            if (sourceRef.current) {
-                sourceRef.current.disconnect();
-            }
-            
-            // Stop media tracks
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            }
-
-            // Close audio contexts
-            if (inputContextRef.current && inputContextRef.current.state !== 'closed') {
-                inputContextRef.current.close();
-            }
-            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                audioContextRef.current.close();
-            }
-            
-            activeSessionRef.current = null;
-        };
-    }, [connect]);
+    };
 
     return (
-        <div className="fixed inset-0 z-[70] bg-black flex flex-col items-center justify-center animate-fadeIn">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-900/40 via-slate-950 to-black"></div>
-            
-            <div className="absolute top-6 right-6 z-20">
-                <button onClick={onClose} className="p-3 bg-white/10 hover:bg-red-500/20 rounded-full text-white hover:text-red-400 transition-all backdrop-blur-md">
-                    <XMarkIcon className="w-6 h-6"/>
-                </button>
-            </div>
+        <div className="fixed inset-0 z-[100] bg-[#000000] flex flex-col items-center justify-center animate-fadeIn font-[Vazirmatn]">
+            {/* Abstract Background */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#1e1b4b_0%,#000000_70%)]"></div>
+            <div className="absolute top-0 left-0 w-full h-full opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
 
-            <div className="text-center space-y-12 relative z-10 w-full max-w-md px-6">
-                {status === 'error' ? (
-                    <div className="bg-red-900/30 border border-red-500/50 rounded-2xl p-6 backdrop-blur-md">
-                        <BoltIcon className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-white mb-2">خطا در ارتباط</h3>
-                        <p className="text-slate-300 mb-6 text-sm">{errorMessage || "مشکلی پیش آمده است. لطفا دوباره تلاش کنید."}</p>
-                        <button onClick={connect} className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg">تلاش مجدد</button>
+            <div className="relative z-10 flex flex-col items-center w-full max-w-md px-8 h-full justify-between py-8">
+                
+                {/* Top Bar */}
+                <div className="w-full flex justify-between items-start mt-4">
+                    <button onClick={() => setShowSettings(!showSettings)} className="p-3 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-colors border border-white/5">
+                        <CogIcon className="w-6 h-6 text-slate-300"/>
+                    </button>
+                    
+                    {executedAction && (
+                        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-green-500/20 border border-green-500/50 text-green-300 px-4 py-2 rounded-xl backdrop-blur-md animate-bounce-in flex items-center gap-2 text-sm font-bold">
+                            <CheckCircleIcon className="w-5 h-5"/>
+                            {executedAction}
+                        </div>
+                    )}
+                </div>
+
+                {/* Settings Modal inside Live View */}
+                {showSettings && (
+                    <div className="absolute top-20 w-[90%] bg-[#1a1a1d]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 z-50 shadow-2xl animate-fadeIn">
+                        <h3 className="text-white font-bold mb-4 text-sm flex items-center gap-2">
+                            <AdjustmentsHorizontalIcon className="w-4 h-4"/> تنظیمات صدا
+                        </h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { id: 'Kore', label: 'Kore (زن)' },
+                                { id: 'Fenrir', label: 'Fenrir (مرد)' },
+                                { id: 'Puck', label: 'Puck (شاد)' },
+                                { id: 'Charon', label: 'Charon (بم)' }
+                            ].map(v => (
+                                <button 
+                                    key={v.id}
+                                    onClick={() => { setActiveVoice(v.id); setShowSettings(false); }}
+                                    className={`p-3 rounded-xl text-xs font-bold transition-all ${activeVoice === v.id ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                                >
+                                    {v.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                ) : (
-                    <>
-                        <div className="relative mx-auto">
-                            {/* Visualizer Rings */}
-                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full border border-violet-500/20 transition-all duration-1000 ${status === 'speaking' ? 'scale-110 opacity-100' : 'scale-90 opacity-50'}`}></div>
-                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full border border-fuchsia-500/20 transition-all duration-1000 delay-100 ${status === 'speaking' ? 'scale-125 opacity-100' : 'scale-95 opacity-50'}`}></div>
-                            
-                            <div className={`w-40 h-40 rounded-full blur-3xl transition-all duration-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 ${
-                                status === 'speaking' ? 'bg-cyan-500 opacity-60 scale-125' :
-                                status === 'listening' ? 'bg-emerald-500 opacity-40 scale-100' :
-                                status === 'thinking' ? 'bg-violet-500 opacity-70 animate-pulse' :
-                                'bg-slate-500 opacity-20'
-                            }`}></div>
-                            
-                            <div className={`relative z-10 w-36 h-36 rounded-full border-4 flex items-center justify-center bg-black/60 backdrop-blur-xl transition-all duration-300 shadow-2xl ${
-                                status === 'speaking' ? 'border-cyan-400 shadow-[0_0_50px_rgba(34,211,238,0.4)]' :
-                                status === 'listening' ? 'border-emerald-400 shadow-[0_0_50px_rgba(52,211,153,0.4)]' :
-                                'border-violet-500 shadow-[0_0_50px_rgba(139,92,246,0.2)]'
-                            } mx-auto`}>
-                                {status === 'listening' && <MicrophoneIcon className="w-14 h-14 text-emerald-400 animate-pulse"/>}
-                                {status === 'speaking' && <BoltIcon className="w-14 h-14 text-cyan-400 animate-pulse"/>}
-                                {status === 'thinking' && <SparklesIcon className="w-14 h-14 text-violet-400 animate-spin"/>}
-                                {status === 'connecting' && <div className="w-14 h-14 border-t-4 border-white rounded-full animate-spin"></div>}
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <h2 className="text-3xl font-black text-white tracking-tight">
-                                {status === 'listening' ? 'گوش می‌کنم...' : 
-                                status === 'speaking' ? 'در حال صحبت...' :
-                                status === 'thinking' ? 'در حال پردازش...' : 'اتصال به بنویس'}
-                            </h2>
-                            <p className="text-slate-400 text-base min-h-[24px] px-4 font-medium">
-                                {transcript || (status === 'listening' ? "صحبت کنید..." : " ")}
-                            </p>
-                        </div>
-                    </>
                 )}
+
+                {/* Main Visualizer */}
+                <div className="relative w-full flex-grow flex items-center justify-center">
+                    {/* Glow Rings */}
+                    <div className={`absolute rounded-full border border-violet-500/30 transition-all duration-1000 ${status === 'speaking' ? 'w-80 h-80 opacity-0' : 'w-60 h-60 opacity-50'}`}></div>
+                    <div className={`absolute rounded-full border border-fuchsia-500/30 transition-all duration-1000 delay-100 ${status === 'speaking' ? 'w-72 h-72 opacity-0' : 'w-52 h-52 opacity-50'}`}></div>
+                    
+                    {/* Core Orb */}
+                    <div className={`relative z-10 w-48 h-48 rounded-full bg-gradient-to-b from-slate-800 to-black flex items-center justify-center shadow-2xl transition-all duration-300 ${status === 'speaking' ? 'shadow-[0_0_80px_rgba(139,92,246,0.6)] border-4 border-violet-400 scale-110' : 'border-2 border-white/10'}`}>
+                        {status === 'speaking' ? (
+                            <div className="flex gap-1.5 items-center h-12">
+                                {visualizerData.map((h, i) => (
+                                    <div key={i} className="w-2 bg-violet-400 rounded-full transition-all duration-75" style={{ height: `${Math.max(15, h * 1.5)}%` }}></div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-2">
+                                <MicrophoneIcon className={`w-16 h-16 transition-colors ${status === 'listening' ? 'text-emerald-400 animate-pulse' : 'text-slate-600'}`}/>
+                                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                                    {status === 'connecting' ? 'Connecting...' : status === 'listening' ? 'Listening' : 'Active'}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Bottom Controls (Fixed Layout) */}
+                <div className="w-full pb-8 pt-4">
+                    <div className="flex items-center justify-center gap-6">
+                        <button 
+                            onClick={onClose}
+                            className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-[0_0_40px_rgba(220,38,38,0.5)] flex items-center justify-center transition-transform hover:scale-105"
+                        >
+                            <XMarkIcon className="w-8 h-8"/>
+                        </button>
+                    </div>
+                    <p className="text-center text-slate-500 text-xs mt-6">برای انجام کارها، فقط دستور دهید.</p>
+                </div>
             </div>
         </div>
     );
 };
 
-// --- Chat Component (Text) ---
+// --- Main View ---
 
-const ChatBot: React.FC = () => {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { role: 'model', text: 'سلام دوست من! من اینجام تا ذهنت رو منظم کنم. چه خبری داری؟' }
-    ]);
+interface SmartAssistantViewProps {
+    userData: OnboardingData;
+    onUpdateUserData: (data: OnboardingData) => void;
+    onClose: () => void;
+}
+
+const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpdateUserData, onClose }) => {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const chatSessionRef = useRef<Chat | null>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [isLive, setIsLive] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [showAgents, setShowAgents] = useState(false);
+    const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll to bottom when messages change
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        if (scrollRef.current) {
+            scrollRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages, isLoading]);
+    }, [messages, isProcessing]);
 
-    const handleSend = async () => {
-        if (!input.trim()) return;
+    const handleSend = async (text: string = input) => {
+        if (!text.trim()) return;
         
-        const userMsg: ChatMessage = { role: 'user', text: input };
+        const userMsg: ChatMessage = { role: 'user', text };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
-        setIsLoading(true);
+        setIsProcessing(true);
 
         try {
-            if (!chatSessionRef.current) {
-                chatSessionRef.current = ai.chats.create({
-                    model: 'gemini-2.5-flash',
-                    config: { systemInstruction: BENVIS_SYSTEM_PROMPT }
-                });
-            }
+            const chat = ai.chats.create({
+                model: 'gemini-2.5-flash',
+                config: { systemInstruction: BENVIS_SYSTEM_PROMPT }
+            });
 
-            const result = await chatSessionRef.current.sendMessage({ message: userMsg.text });
-            let cleanText = result.text || '';
-            // Basic markdown cleanup if needed, though renderer usually handles it.
-            // Removing markdown code blocks if AI wraps plain text response in them erroneously.
-            if (cleanText.startsWith('```') && !cleanText.includes('json')) {
-                 cleanText = cleanText.replace(/```/g, '');
+            const result = await chat.sendMessageStream({ message: text });
+            
+            let fullText = '';
+            setMessages(prev => [...prev, { role: 'model', text: '' }]);
+            
+            for await (const chunk of result) {
+                if (chunk.text) {
+                    fullText += chunk.text;
+                    setMessages(prev => {
+                        const newMsgs = [...prev];
+                        newMsgs[newMsgs.length - 1] = { role: 'model', text: fullText };
+                        return newMsgs;
+                    });
+                }
             }
-
-            const modelMsg: ChatMessage = { role: 'model', text: cleanText };
-            setMessages(prev => [...prev, modelMsg]);
-        } catch (error) {
-            console.error(error);
-            setMessages(prev => [...prev, { role: 'model', text: 'متاسفانه مشکلی پیش آمد. لطفا دوباره تلاش کنید.' }]);
+        } catch (e) {
+            console.error(e);
+            setMessages(prev => [...prev, { role: 'model', text: "متاسفانه ارتباط برقرار نشد. لطفا دوباره تلاش کنید." }]);
         } finally {
-            setIsLoading(false);
+            setIsProcessing(false);
         }
     };
 
+    const handleAgentSelect = (agent: Agent) => {
+        setActiveAgent(agent);
+        setShowAgents(false);
+    };
+
+    if (activeAgent) {
+        return (
+            <div className="fixed inset-0 z-50 bg-[#020617] flex flex-col">
+                <AiAgentRunner 
+                    agent={activeAgent} 
+                    onBack={() => setActiveAgent(null)} 
+                    userData={userData} 
+                    onUpdateUserData={onUpdateUserData} 
+                />
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-col h-full relative bg-transparent">
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-4 min-h-0">
-                {messages.map((msg, idx) => (
-                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2 animate-fadeIn`}>
-                        {msg.role === 'model' && (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-600 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/30 flex-shrink-0">
-                                <SparklesIcon className="w-4 h-4 text-white" />
-                            </div>
-                        )}
-                        <div 
-                            className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap ${
-                                msg.role === 'user' 
-                                    ? 'bg-violet-600 text-white rounded-br-none' 
-                                    : 'bg-slate-800/90 backdrop-blur-md text-slate-200 rounded-bl-none border border-white/5'
-                            }`}
-                        >
-                            {msg.text}
-                        </div>
-                        {msg.role === 'user' && (
-                            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center flex-shrink-0">
-                                <UserIcon className="w-4 h-4 text-slate-400" />
-                            </div>
-                        )}
+        <div className="fixed inset-0 z-50 bg-[#020617] text-slate-200 font-[Vazirmatn] flex flex-col overflow-hidden animate-fadeIn">
+            {isLive && <LiveSessionOverlay onClose={() => setIsLive(false)} userData={userData} onUpdateUserData={onUpdateUserData} />}
+
+            {/* Background Ambience */}
+            <div className="absolute top-[-20%] right-[-20%] w-[80vw] h-[80vw] bg-fuchsia-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+            <div className="absolute bottom-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-violet-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+            {/* Header - Fixed */}
+            <div className="flex-none px-6 pt-6 pb-4 flex justify-between items-center bg-[#020617]/90 backdrop-blur-md z-20 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-900/40">
+                        <SparklesIcon className="w-6 h-6 text-white"/>
                     </div>
-                ))}
-                {isLoading && (
-                    <div className="flex justify-start items-end gap-2 animate-fadeIn">
-                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-600 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/30">
-                                <SparklesIcon className="w-4 h-4 text-white" />
+                    <div>
+                        <h2 className="text-xl font-black text-white tracking-tight">نکسوس</h2>
+                        <p className="text-[10px] text-violet-400 font-bold uppercase tracking-[0.2em]">AI COMMAND</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setShowAgents(!showAgents)}
+                    className={`p-2.5 rounded-xl border transition-all ${showAgents ? 'bg-violet-600 text-white border-violet-500' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+                >
+                    <BriefcaseIcon className="w-5 h-5"/>
+                </button>
+            </div>
+
+            {/* Chat Area - Scrollable */}
+            <div className="flex-grow overflow-y-auto p-4 space-y-6 pb-4 scrollbar-hide relative">
+                {messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center opacity-0 animate-fadeIn" style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}>
+                        <div className="relative mb-8">
+                            <div className="absolute inset-0 bg-violet-600/20 blur-3xl rounded-full"></div>
+                            <SparklesIcon className="w-16 h-16 text-violet-400 relative z-10 opacity-80" />
                         </div>
-                         <div className="bg-slate-800/60 p-4 rounded-2xl rounded-bl-none border border-white/5 flex items-center gap-2">
-                            <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
-                            <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                            <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                        <h3 className="text-2xl font-black text-white mb-2 tracking-tight">آماده‌ام، فرمانده</h3>
+                        <p className="text-sm text-slate-400 max-w-xs mx-auto mb-8 leading-relaxed">
+                            می‌توانید تایپ کنید یا برای اجرای دستورات (مثل ساخت تسک یا تراکنش) تماس زنده بگیرید.
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+                            {[
+                                "برنامه‌ریزی امروز",
+                                "تحلیل وضعیت خواب",
+                                "ایده برای شام سالم",
+                                "یک نکته روانشناسی"
+                            ].map((suggestion, idx) => (
+                                <button 
+                                    key={idx}
+                                    onClick={() => handleSend(suggestion)}
+                                    className="p-3 bg-slate-800/40 hover:bg-slate-700/60 border border-white/5 rounded-xl text-xs text-slate-300 transition-colors text-right backdrop-blur-sm"
+                                >
+                                    {suggestion}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    messages.map((msg, idx) => (
+                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
+                            <div className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed shadow-lg ${
+                                msg.role === 'user' 
+                                    ? 'bg-gradient-to-br from-violet-600 to-indigo-700 text-white rounded-br-none' 
+                                    : 'bg-slate-800/80 backdrop-blur border border-white/5 text-slate-200 rounded-bl-none'
+                            }`}>
+                                <div className="whitespace-pre-wrap markdown-body">
+                                    {msg.text}
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+                {isProcessing && (
+                    <div className="flex justify-start animate-fadeIn">
+                        <div className="bg-slate-800/80 backdrop-blur border border-white/5 p-4 rounded-2xl rounded-bl-none flex gap-1.5">
+                            <div className="w-2 h-2 bg-violet-400 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-violet-400 rounded-full animate-bounce delay-75"></div>
+                            <div className="w-2 h-2 bg-violet-400 rounded-full animate-bounce delay-150"></div>
                         </div>
                     </div>
                 )}
-                <div ref={messagesEndRef} className="h-4"></div>
+                <div ref={scrollRef} className="h-4"></div>
             </div>
 
-            {/* Fixed Input Area */}
-            <div className="p-3 bg-[#020617] border-t border-white/5 flex-shrink-0 z-20">
-                <div className="flex items-end gap-2 p-2 rounded-2xl bg-slate-900 border border-white/10 shadow-lg">
+            {/* Bottom Dock (Fixed) */}
+            <div className="flex-none p-4 bg-[#020617]/95 backdrop-blur-xl border-t border-white/5 z-30">
+                
+                {/* Agents Sheet (Pop-up) */}
+                {showAgents && (
+                    <div className="absolute bottom-full left-0 right-0 mx-4 mb-2 bg-[#1a1a1d] border border-white/10 rounded-2xl p-3 shadow-2xl animate-bounce-in overflow-hidden max-h-[60vh] flex flex-col z-40">
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">ابزارهای هوشمند</span>
+                            <button onClick={() => setShowAgents(false)}><XMarkIcon className="w-4 h-4 text-slate-500"/></button>
+                        </div>
+                        <div className="overflow-y-auto scrollbar-hide space-y-1">
+                            {agents.map(agent => (
+                                <button 
+                                    key={agent.id}
+                                    onClick={() => handleAgentSelect(agent)}
+                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white transition-colors text-right"
+                                >
+                                    <div className="p-2 bg-slate-800 rounded-lg text-violet-400">
+                                        <agent.icon className="w-5 h-5"/>
+                                    </div>
+                                    <div>
+                                        <span className="block text-sm font-bold">{agent.title}</span>
+                                        <span className="block text-[10px] text-slate-500">{agent.description}</span>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Main Input Bar */}
+                <div className="flex items-end gap-2 bg-[#1e1e22] border border-white/10 p-2 rounded-[1.5rem] shadow-2xl relative">
+                    
+                    <button 
+                        onClick={onClose}
+                        className="p-3.5 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all flex-shrink-0"
+                    >
+                        <XMarkIcon className="w-5 h-5"/>
+                    </button>
+
                     <textarea 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -528,157 +591,25 @@ const ChatBot: React.FC = () => {
                             }
                         }}
                         placeholder="پیام خود را بنویسید..."
-                        className="flex-grow bg-transparent text-white px-3 py-2 outline-none placeholder-slate-500 text-sm max-h-32 min-h-[40px] resize-none scrollbar-hide"
                         rows={1}
+                        className="flex-grow bg-transparent text-white px-2 py-3.5 outline-none text-sm placeholder-slate-500 max-h-32 resize-none scrollbar-hide font-medium"
                     />
-                    <button 
-                        onClick={() => handleSend()}
-                        disabled={!input.trim() || isLoading}
-                        className="p-3 bg-violet-600 hover:bg-violet-500 rounded-xl text-white transition-colors disabled:bg-slate-700 disabled:text-slate-500 shadow-lg shadow-violet-900/20 flex-shrink-0 mb-0.5"
-                    >
-                        <ArrowUpIcon className="w-5 h-5" />
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
-const AgentSelector: React.FC<{ userData: OnboardingData; onUpdateUserData: (data: OnboardingData) => void }> = ({ userData, onUpdateUserData }) => {
-    const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-
-    if (selectedAgent) {
-        return (
-            <div className="h-full overflow-y-auto pb-4">
-                <AiAgentRunner 
-                    agent={selectedAgent} 
-                    onBack={() => setSelectedAgent(null)} 
-                    userData={userData} 
-                    onUpdateUserData={onUpdateUserData} 
-                />
-            </div>
-        );
-    }
-    
-    return (
-        <div className="h-full overflow-y-auto pb-4 px-4 pt-2">
-             <AiAgentsHub onAgentSelect={setSelectedAgent} />
-        </div>
-    );
-};
-
-const VoiceLauncher: React.FC<{ onLaunch: () => void }> = ({ onLaunch }) => {
-    return (
-        <div className="h-full flex flex-col items-center justify-center p-6 text-center pb-20">
-            <div className="relative group cursor-pointer" onClick={onLaunch}>
-                <div className="absolute inset-0 bg-violet-600 rounded-full blur-[60px] opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
-                <div className="w-48 h-48 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center shadow-2xl relative z-10 group-hover:scale-105 transition-transform duration-300 group-hover:border-violet-500/50">
-                    <MicrophoneIcon className="w-20 h-20 text-violet-400 group-hover:text-white transition-colors" />
-                </div>
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-violet-600 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                    شروع صحبت
-                </div>
-            </div>
-            <h3 className="text-2xl font-bold text-white mt-10 mb-2">دستیار صوتی زنده</h3>
-            <p className="text-slate-400 max-w-xs mx-auto leading-relaxed">
-                برای برنامه‌ریزی، ثبت تراکنش یا فقط درد و دل کردن، با من صحبت کن. من همیشه آماده شنیدن هستم.
-            </p>
-        </div>
-    );
-};
-
-interface SmartAssistantViewProps {
-  userData: OnboardingData;
-  onUpdateUserData: (data: OnboardingData) => void;
-  initialTab?: string;
-  initialJournalText?: string;
-  onClose: () => void;
-}
-
-type Tab = 'chat' | 'agents' | 'journal' | 'voice';
-
-const SmartAssistantView: React.FC<SmartAssistantViewProps> = ({ userData, onUpdateUserData, initialTab, onClose }) => {
-    const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'chat');
-    const [isLiveSessionActive, setIsLiveSessionActive] = useState(false);
-    
-    const handleTabChange = (id: Tab) => {
-        setActiveTab(id);
-        // Close keyboard on mobile when switching tabs
-        if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
-        }
-    };
-    
-    const NavButton: React.FC<{ id: Tab; label: string; icon: React.FC<{className?: string}> }> = ({ id, label, icon: Icon }) => {
-        const isActive = activeTab === id;
-        return (
-            <button 
-                onClick={() => handleTabChange(id)}
-                className={`flex flex-col items-center justify-center w-full py-3 gap-1.5 transition-all relative group ${isActive ? 'text-fuchsia-400' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-                <div className={`p-2 rounded-xl transition-all duration-300 ${isActive ? 'bg-fuchsia-500/20 -translate-y-3 shadow-lg shadow-fuchsia-900/20 ring-1 ring-fuchsia-500/50' : 'bg-transparent group-hover:bg-white/5'}`}>
-                    <Icon className={`w-7 h-7 ${isActive ? 'fill-current' : ''}`} />
-                </div>
-                <span className={`text-xs font-bold absolute bottom-1 transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{label}</span>
-            </button>
-        );
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 bg-[#020617] text-slate-200 font-[Vazirmatn] flex flex-col overflow-hidden animate-fadeIn h-[100dvh]">
-            {/* Ambient Background */}
-            <div className="absolute top-[-20%] right-[-20%] w-[80vw] h-[80vw] bg-fuchsia-900/10 rounded-full blur-[100px] pointer-events-none"></div>
-            <div className="absolute bottom-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-violet-900/10 rounded-full blur-[100px] pointer-events-none"></div>
-
-            {isLiveSessionActive && (
-                <LiveAssistantSession 
-                    userData={userData} 
-                    onUpdateUserData={onUpdateUserData} 
-                    onClose={() => setIsLiveSessionActive(false)} 
-                />
-            )}
-
-            {/* Header */}
-            <div className="flex-none relative z-10 px-6 pt-6 pb-2 flex justify-between items-center border-b border-white/5 bg-[#020617]/50 backdrop-blur-md">
-                <div>
-                    <h2 className="text-2xl font-black text-white tracking-tight">دستیار هوشمند</h2>
-                    <p className="text-xs text-fuchsia-500 font-bold uppercase tracking-widest opacity-80">AI Copilot</p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 shadow-lg">
-                    <SparklesIcon className="w-5 h-5 text-fuchsia-400"/>
-                </div>
-            </div>
-            
-            {/* Main Content - Added key for reset on tab switch */}
-            <div className="flex-grow relative z-10 overflow-hidden flex flex-col min-h-0">
-                 <div key={activeTab} className="w-full h-full flex flex-col">
-                     {activeTab === 'chat' && <ChatBot />}
-                     {activeTab === 'agents' && <AgentSelector userData={userData} onUpdateUserData={onUpdateUserData} />}
-                     {activeTab === 'journal' && (
-                         <div className="h-full overflow-y-auto p-4 scrollbar-hide">
-                             <GratitudeJournal />
-                         </div>
-                     )}
-                     {activeTab === 'voice' && <VoiceLauncher onLaunch={() => setIsLiveSessionActive(true)} />}
-                 </div>
-            </div>
-
-            {/* Bottom Dock Navigation */}
-            <div className="flex-none pb-6 pt-2 bg-[#020617]/90 backdrop-blur-xl border-t border-white/5 z-30">
-                <div className="max-w-lg mx-auto flex items-center justify-between px-6">
-                    <NavButton id="chat" label="چت" icon={ChatBubbleOvalLeftEllipsisIcon} />
-                    <NavButton id="agents" label="ابزارها" icon={BriefcaseIcon} />
-                    
-                    {/* Center Home Button */}
-                    <button 
-                        onClick={onClose}
-                        className="w-16 h-16 rounded-full bg-slate-800 border-2 border-[#020617] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-lg hover:scale-105 -mt-8 relative z-10"
-                    >
-                        <XMarkIcon className="w-8 h-8" />
-                    </button>
-
-                    <NavButton id="journal" label="ژورنال" icon={BookOpenIcon} />
-                    <NavButton id="voice" label="زنده" icon={BoltIcon} />
+                    {input.trim() ? (
+                        <button 
+                            onClick={() => handleSend()}
+                            className="p-3.5 bg-violet-600 hover:bg-violet-500 rounded-full text-white shadow-lg shadow-violet-900/20 transition-all flex-shrink-0"
+                        >
+                            <ArrowUpIcon className="w-5 h-5"/>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => setIsLive(true)}
+                            className="p-3.5 bg-red-600 hover:bg-red-500 rounded-full text-white shadow-lg shadow-red-900/30 transition-all flex-shrink-0 animate-pulse"
+                        >
+                            <MicrophoneIcon className="w-5 h-5"/>
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

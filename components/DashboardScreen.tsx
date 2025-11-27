@@ -17,7 +17,12 @@ import {
     SnakeIcon,
     CloudIcon,
     ChevronRightIcon,
-    ChevronLeftIcon
+    ChevronLeftIcon,
+    HabitsIcon,
+    BoltIcon,
+    EyeIcon,
+    CheckCircleIcon,
+    PencilIcon
 } from './icons';
 
 // Import Views
@@ -38,6 +43,7 @@ import TimeBlockingView from './TimeBlockingView';
 import LifeWheelView from './LifeWheelView';
 import BooksView from './BooksView';
 import HealthWellnessView from './HealthWellnessView';
+import HabitTrackerView from './HabitTrackerView';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -56,7 +62,7 @@ type ViewState =
     'dashboard' | 'goals' | 'focus' | 'calendar' | 'finance' | 
     'assistant' | 'settings' | 'womenHealth' | 'social' | 
     'shop' | 'microCourse' | 'review' | 'nightRoutine' | 
-    'eisenhower' | 'timeBlocking' | 'lifeWheel' | 'books' | 'healthWellness';
+    'eisenhower' | 'timeBlocking' | 'lifeWheel' | 'books' | 'healthWellness' | 'habits';
 
 // Examples for the typewriter effect
 const EXAMPLES = [
@@ -100,8 +106,14 @@ const ReadingWidget: React.FC<{ userData: OnboardingData, onClick: () => void }>
         <div onClick={onClick} className="relative col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-[1.8rem] p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-800/60 transition-all group overflow-hidden shadow-lg">
              {/* Cover */}
              <div className={`w-16 h-24 rounded-lg bg-gradient-to-br ${book?.coverColor || 'from-slate-700 to-slate-900'} flex-shrink-0 flex items-center justify-center shadow-md border border-white/5 relative overflow-hidden`}>
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/leather.png')] opacity-20 mix-blend-overlay"></div>
-                <span className="text-2xl z-10 filter drop-shadow-lg">{book?.uiHint?.icon || '📘'}</span>
+                {book?.coverImage ? (
+                    <img src={book.coverImage} alt={book.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                ) : (
+                    <>
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/leather.png')] opacity-20 mix-blend-overlay"></div>
+                        <span className="text-2xl z-10 filter drop-shadow-lg">{book?.uiHint?.icon || '📘'}</span>
+                    </>
+                )}
              </div>
              
              {/* Info */}
@@ -391,7 +403,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     // --- Notification Counters (Badges) ---
     const getGoalCount = () => (userData.goals || []).filter(g => g.progress < 100).length;
     const getTaskCount = () => (userData.tasks || []).filter(t => !t.completed).length;
-
+    
     // --- Render Main Dashboard ---
     const renderDashboard = () => {
         return (
@@ -419,7 +431,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 <div className="grid grid-cols-2 gap-4 mb-6 h-44">
                     
                     {/* 1. Greeting Card */}
-                    <div className={`relative rounded-[2.5rem] p-6 overflow-hidden shadow-2xl flex flex-col justify-between bg-gradient-to-br ${timeContext.gradient} ${timeContext.shadow} group transition-all duration-700 hover:scale-[1.02]`}>
+                    <div 
+                        className={`relative rounded-[2.5rem] p-6 overflow-hidden shadow-2xl flex flex-col justify-between bg-gradient-to-br ${timeContext.gradient} ${timeContext.shadow} group transition-all duration-700 hover:scale-[1.02]`}
+                    >
                         <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-white/30 rounded-full blur-[40px]"></div>
                         
                         <div className="relative z-10 flex justify-end">
@@ -492,19 +506,19 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <GridItem icon={MoonIcon} label="تمرکز" color="text-violet-400" glow="shadow-violet-500/50" onClick={() => setActiveView('focus')} />
                     <ReadingWidget userData={userData} onClick={() => setActiveView('books')} />
                     
-                    {/* Row 2: Finance, Assistant, Eisenhower, Time */}
+                    {/* Row 2: Assistant (Reverted to Standard), Finance, Eisenhower */}
+                    <GridItem icon={SparklesIcon} label="دستیار هوشمند" color="text-fuchsia-400" glow="shadow-fuchsia-500/50" onClick={() => setActiveView('assistant')} />
                     <GridItem icon={FinanceIcon} label="مالی" color="text-green-400" glow="shadow-green-500/50" onClick={() => setActiveView('finance')} />
-                    <GridItem icon={SparklesIcon} label="دستیار" color="text-fuchsia-400" glow="shadow-fuchsia-500/50" onClick={() => setActiveView('assistant')} />
                     <GridItem icon={Squares2X2Icon} label="اولویت" color="text-amber-400" glow="shadow-amber-500/50" onClick={() => setActiveView('eisenhower')} />
+                    
+                    {/* Row 3: Time, LifeWheel, Habits, Social */}
                     <GridItem icon={QueueListIcon} label="زمان" color="text-cyan-400" glow="shadow-cyan-500/50" onClick={() => setActiveView('timeBlocking')} badge={getTaskCount()} />
-                    
-                    {/* Row 3: LifeWheel, Women, Social, Health */}
                     <GridItem icon={ChartPieIcon} label="چرخ" color="text-pink-400" glow="shadow-pink-500/50" onClick={() => setActiveView('lifeWheel')} />
-                    <GridItem icon={HealthIcon} label="چرخه" color="text-rose-400" glow="shadow-rose-500/50" onClick={() => setActiveView('womenHealth')} />
+                    <GridItem icon={HabitsIcon} label="عادت‌ها" color="text-emerald-400" glow="shadow-emerald-500/50" onClick={() => setActiveView('habits')} />
                     <GridItem icon={UserCircleIcon} label="حلقه‌ها" color="text-lime-400" glow="shadow-lime-500/50" onClick={() => setActiveView('social')} />
-                    <GridItem icon={SnakeIcon} label="کلینیک" color="text-teal-400" glow="shadow-teal-500/50" onClick={() => setActiveView('healthWellness')} />
                     
-                    {/* Row 4: Extra */}
+                    {/* Row 4: Health, School */}
+                    <GridItem icon={SnakeIcon} label="کلینیک" color="text-teal-400" glow="shadow-teal-500/50" onClick={() => setActiveView('healthWellness')} />
                     <GridItem icon={AcademicCapIcon} label="مکتب‌خونه" color="text-indigo-400" glow="shadow-indigo-500/50" onClick={() => setActiveView('microCourse')} />
                 </div>
             </div>
@@ -558,6 +572,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 {activeView === 'lifeWheel' && <LifeWheelView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
                 {activeView === 'books' && <BooksView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} addXp={addXp} />}
                 {activeView === 'healthWellness' && <HealthWellnessView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} />}
+                {activeView === 'habits' && <HabitTrackerView userData={userData} onUpdateUserData={onUpdateUserData} onClose={() => setActiveView('dashboard')} addXp={addXp} />}
             </div>
         </div>
     );
