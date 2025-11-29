@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { OnboardingData, MicroCourse, QuizResult } from '../types';
+import { OnboardingData, MicroCourse, QuizResult, ChatMessage } from '../types';
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import * as pdfjsLib from 'pdfjs-dist';
 import { 
@@ -10,14 +10,15 @@ import {
     ArrowPathIcon, BeakerIcon, FlagIcon, ArrowRightIcon,
     CommandCommandLineIcon, MoonIcon, DocumentTextIcon, MicrophoneIcon,
     BookOpenIcon, StopIcon, CloudIcon, DocumentScannerIcon,
-    PencilIcon, TrophyIcon
+    PencilIcon, TrophyIcon, ChatBubbleOvalLeftEllipsisIcon, ArrowUpIcon,
+    BriefcaseIcon, HeartIcon
 } from './icons';
 
 // Initialize PDF Worker Safely
 try {
     // @ts-ignore
     const pdfjs = pdfjsLib.default || pdfjsLib;
-    if (pdfjs && pdfjs.GlobalWorkerOptions) {
+    if (pdfjs && !pdfjs.GlobalWorkerOptions.workerSrc) {
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
     }
 } catch (e) {
@@ -58,19 +59,116 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     return btoa(binary);
 }
 
-// --- Constants ---
+// --- Constants (The 6 Celestial Metas) ---
 const SCHOOL_CATEGORIES = [
-    { id: 'konkur', label: 'کنکور و آزمون', icon: TrophyIcon, color: 'from-red-600 to-rose-900', text: 'text-rose-100', border: 'border-rose-500/30' },
-    { id: 'computer', label: 'کامپیوتر و فناوری', icon: CommandCommandLineIcon, color: 'from-cyan-600 to-sky-900', text: 'text-cyan-100', border: 'border-cyan-500/30' },
-    { id: 'languages', label: 'زبان‌های خارجی', icon: FlagIcon, color: 'from-blue-600 to-indigo-900', text: 'text-blue-100', border: 'border-blue-500/30' },
-    { id: 'sciences', label: 'علوم تجربی', icon: BeakerIcon, color: 'from-emerald-600 to-teal-900', text: 'text-emerald-100', border: 'border-emerald-500/30' },
-    { id: 'physics', label: 'ریاضی و فیزیک', icon: BoltIcon, color: 'from-violet-600 to-fuchsia-900', text: 'text-violet-100', border: 'border-violet-500/30' },
-    { id: 'astronomy', label: 'نجوم و فضا', icon: MoonIcon, color: 'from-indigo-600 to-purple-900', text: 'text-indigo-100', border: 'border-indigo-500/30' },
-    { id: 'theology', label: 'کتب آسمانی', icon: BookOpenIcon, color: 'from-amber-600 to-orange-900', text: 'text-amber-100', border: 'border-amber-500/30' },
-    { id: 'humanities', label: 'علوم انسانی', icon: DocumentTextIcon, color: 'from-stone-600 to-stone-900', text: 'text-stone-100', border: 'border-stone-500/30' },
+    { id: 'school', label: 'تحصیلات و علوم', icon: AcademicCapIcon, color: 'from-blue-600 to-indigo-900', text: 'text-blue-100', border: 'border-blue-500/30' },
+    { id: 'tech', label: 'تکنولوژی و مهندسی', icon: CommandCommandLineIcon, color: 'from-violet-600 to-fuchsia-900', text: 'text-violet-100', border: 'border-violet-500/30' },
+    { id: 'lang', label: 'زبان‌های خارجی', icon: FlagIcon, color: 'from-rose-600 to-red-900', text: 'text-rose-100', border: 'border-rose-500/30' },
+    { id: 'business', label: 'فنی و کسب‌وکار', icon: BriefcaseIcon, color: 'from-emerald-600 to-teal-900', text: 'text-emerald-100', border: 'border-emerald-500/30' },
+    { id: 'art', label: 'هنر و ادبیات', icon: PencilIcon, color: 'from-amber-600 to-orange-900', text: 'text-amber-100', border: 'border-amber-500/30' },
+    { id: 'lifestyle', label: 'سبک زندگی و سلامت', icon: HeartIcon, color: 'from-cyan-600 to-sky-900', text: 'text-cyan-100', border: 'border-cyan-500/30' },
 ];
 
 // --- Components ---
+
+const CourseTutorChat: React.FC<{ course: MicroCourse; onUpdateChat: (history: ChatMessage[]) => void }> = ({ course, onUpdateChat }) => {
+    const [messages, setMessages] = useState<ChatMessage[]>(course.chatHistory || []);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, isLoading]);
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        const userMsg: ChatMessage = { role: 'user', text: input };
+        const newHistory = [...messages, userMsg];
+        setMessages(newHistory);
+        setInput('');
+        setIsLoading(true);
+
+        try {
+            const context = course.pdfSource ? `Context from course material: ${course.pdfSource.substring(0, 10000)}...` : '';
+            const systemPrompt = `
+                You are an expert tutor for the course "${course.title}".
+                Goal: "${course.goal}".
+                ${context}
+                Your role is to answer student questions, clarify concepts, and provide examples based on the course material.
+                Be concise, encouraging, and educational. Speak Persian.
+            `;
+
+            const contents = [
+                ...messages.slice(-10).map(m => ({ role: m.role === 'model' ? 'model' : 'user', parts: [{ text: m.text }] })),
+                { role: 'user', parts: [{ text: input }] }
+            ];
+
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: contents,
+                config: { systemInstruction: systemPrompt }
+            });
+
+            const responseText = result.text;
+            const aiMsg: ChatMessage = { role: 'model', text: responseText };
+            const finalHistory = [...newHistory, aiMsg];
+            
+            setMessages(finalHistory);
+            onUpdateChat(finalHistory);
+
+        } catch (e) {
+            console.error(e);
+            setMessages(prev => [...prev, { role: 'model', text: "متاسفانه مشکلی پیش آمد. لطفا دوباره تلاش کنید." }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-[#020617]">
+            <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-20 scrollbar-hide">
+                {messages.length === 0 && (
+                    <div className="text-center py-10 opacity-50">
+                        <AcademicCapIcon className="w-16 h-16 mx-auto mb-4"/>
+                        <p>سوالات درسی خود را بپرسید...</p>
+                    </div>
+                )}
+                {messages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 rounded-bl-none'}`}>
+                            {msg.text}
+                        </div>
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="flex justify-start">
+                        <div className="bg-slate-800 p-3 rounded-2xl rounded-bl-none flex gap-1">
+                            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
+                            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-100"></span>
+                            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-200"></span>
+                        </div>
+                    </div>
+                )}
+                <div ref={scrollRef}></div>
+            </div>
+            <div className="p-3 bg-[#020617]/90 backdrop-blur-md border-t border-white/10 absolute bottom-0 left-0 right-0">
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 p-2 rounded-xl">
+                    <input 
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                        className="flex-grow bg-transparent text-white text-sm outline-none px-2 placeholder-slate-500"
+                        placeholder="سوال از استاد..."
+                    />
+                    <button onClick={handleSend} disabled={!input.trim() || isLoading} className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-50">
+                        <ArrowUpIcon className="w-5 h-5"/>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const QuizModal: React.FC<{ course: MicroCourse; onComplete: (score: number) => void; onClose: () => void }> = ({ course, onComplete, onClose }) => {
     const [loading, setLoading] = useState(true);
@@ -81,8 +179,10 @@ const QuizModal: React.FC<{ course: MicroCourse; onComplete: (score: number) => 
 
     useEffect(() => {
         const generateQuiz = async () => {
+            const context = course.pdfSource ? `Based on this material: ${course.pdfSource.substring(0, 10000)}...` : '';
             const prompt = `Generate a 5-question multiple choice quiz for the course "${course.title}". 
             Goal: "${course.goal}".
+            ${context}
             Language: Persian.
             Output JSON: [{ "q": "question text", "options": ["opt1", "opt2", "opt3", "opt4"], "answer": 0 }] (answer index 0-3).`;
             
@@ -154,7 +254,7 @@ const QuizModal: React.FC<{ course: MicroCourse; onComplete: (score: number) => 
                     <span className="text-xs text-slate-500">آزمون هوشمند</span>
                 </div>
                 
-                <h4 className="text-lg font-bold text-white mb-6 leading-relaxed">{q.q}</h4>
+                <h4 className="text-lg font-bold text-white mb-6 leading-relaxed text-right">{q.q}</h4>
                 
                 <div className="space-y-3">
                     {q.options.map((opt, idx) => (
@@ -173,10 +273,9 @@ const QuizModal: React.FC<{ course: MicroCourse; onComplete: (score: number) => 
 };
 
 const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void }> = ({ course, onClose }) => {
-    const [status, setStatus] = useState<'connecting' | 'listening' | 'speaking' | 'thinking' | 'error'>('connecting');
+    const [status, setStatus] = useState<'connecting' | 'listening' | 'speaking' | 'error'>('connecting');
     const [transcript, setTranscript] = useState<{role: 'user' | 'ai', text: string}[]>([]);
     const [currentTranscript, setCurrentTranscript] = useState('');
-    const [keyTerms, setKeyTerms] = useState<string[]>([]); 
     const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
     // Audio Refs
@@ -188,7 +287,6 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
     const activeSessionRef = useRef<any>(null);
     const nextStartTimeRef = useRef<number>(0);
 
-    // Auto-scroll transcript
     useEffect(() => {
         if (transcriptContainerRef.current) {
             transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight;
@@ -208,7 +306,6 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
         cleanupAudio();
         setStatus('connecting');
         setTranscript([]);
-        setKeyTerms([]);
 
         try {
             const client = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -220,27 +317,11 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, echoCancellation: true } });
             mediaStreamRef.current = stream;
 
-            // Provide PDF context if available
-            let contextData = "";
-            if (course.pdfSource) {
-                contextData = `Reference Material from PDF: ${course.pdfSource.substring(0, 15000)}...`; 
-            }
-
-            const isKonkur = course.title.includes('کنکور') || course.goal.includes('تست');
-            const systemPrompt = isKonkur ? `
-                You are an expert Konkur (Iran University Entrance Exam) counselor and planner.
-                Course: "${course.title}". Goal: "${course.goal}".
-                Role: Guide the student in planning, testing strategies, time management, and reviewing key concepts.
-                Tone: Professional, encouraging, strict on discipline, fluent Persian.
-                You can suggest schedule changes or focus areas.
-                ${contextData ? `Use this material for testing: ${contextData}` : ''}
-            ` : `
+            const systemPrompt = `
                 You are an expert university professor teaching "${course.title}".
                 Goal: "${course.goal}".
                 Tone: Academic, wise, clear, fluent Persian (Farsi).
-                Extract key academic terms from your speech occasionally.
-                Current progress: ${course.progress}%.
-                ${contextData ? `Use this reference material to answer questions accurately: ${contextData}` : ''}
+                Explain concepts simply but deeply.
             `;
 
             const sessionPromise = client.live.connect({
@@ -248,7 +329,7 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                 config: {
                     systemInstruction: systemPrompt,
                     responseModalities: [Modality.AUDIO],
-                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: isKonkur ? 'Charon' : 'Fenrir' } } },
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } } },
                     outputAudioTranscription: {} 
                 },
                 callbacks: {
@@ -274,16 +355,7 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                     },
                     onmessage: async (msg: LiveServerMessage) => {
                         if (msg.serverContent?.outputTranscription?.text) {
-                            const textChunk = msg.serverContent.outputTranscription.text;
-                            setCurrentTranscript(prev => prev + textChunk);
-                            
-                            if (textChunk.length > 4 && Math.random() > 0.85) {
-                                const words = textChunk.split(' ');
-                                const keyword = words.sort((a,b) => b.length - a.length)[0];
-                                if (keyword && keyword.length > 4 && !keyTerms.includes(keyword)) {
-                                    setKeyTerms(prev => [...prev.slice(-3), keyword]);
-                                }
-                            }
+                            setCurrentTranscript(prev => prev + msg.serverContent.outputTranscription.text);
                         }
                         
                         if (msg.serverContent?.turnComplete) {
@@ -306,10 +378,9 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                             const source = audioContextRef.current.createBufferSource();
                             source.buffer = buffer;
                             source.connect(audioContextRef.current.destination);
-                            const nextTime = nextStartTimeRef.current;
-                            const now = audioContextRef.current.currentTime;
-                            const startTime = Math.max(now, nextTime);
                             
+                            const now = audioContextRef.current.currentTime;
+                            const startTime = Math.max(now, nextStartTimeRef.current);
                             source.start(startTime);
                             nextStartTimeRef.current = startTime + buffer.duration;
                             
@@ -320,10 +391,7 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                             };
                         }
                     },
-                    onclose: () => {
-                        console.log("Session closed");
-                        setStatus('connecting');
-                    },
+                    onclose: () => setStatus('connecting'),
                     onerror: (e) => { console.error(e); setStatus('error'); }
                 }
             });
@@ -340,31 +408,11 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
 
     return (
         <div className="fixed inset-0 z-[100] bg-[#020617] flex flex-col font-[Vazirmatn] overflow-hidden">
-            {/* Ambient Background */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(30,27,75,0.4),transparent_80%)] pointer-events-none"></div>
             
-            {/* Smart Blackboard (Top) */}
-            <div className="absolute top-6 left-4 right-4 flex justify-center gap-3 flex-wrap z-20 pointer-events-none">
-                {keyTerms.map((term, idx) => (
-                    <div key={`${term}-${idx}`} className="bg-black/60 backdrop-blur-md border border-indigo-500/40 text-indigo-200 px-4 py-2 rounded-xl text-sm font-bold shadow-lg animate-bounce-in">
-                        {term}
-                    </div>
-                ))}
-            </div>
-
-            {/* Main Immersive Center */}
             <div className="flex-grow relative flex flex-col items-center justify-center">
-                
-                {/* Visualizer Core */}
                 <div className="relative w-80 h-80 flex items-center justify-center">
-                    {/* Ripple Effects */}
                     <div className={`absolute inset-0 rounded-full border border-indigo-500/20 transition-all duration-1000 ${status === 'speaking' ? 'scale-150 opacity-0' : 'scale-100 opacity-30'}`}></div>
-                    <div className={`absolute inset-0 rounded-full border border-fuchsia-500/20 transition-all duration-1000 delay-200 ${status === 'speaking' ? 'scale-125 opacity-0' : 'scale-90 opacity-30'}`}></div>
-                    
-                    {/* Core Glow */}
-                    <div className={`absolute inset-10 rounded-full bg-indigo-600/20 blur-3xl transition-all duration-300 ${status === 'speaking' ? 'opacity-80 scale-110' : 'opacity-40 scale-100'}`}></div>
-                    
-                    {/* Main Circle */}
                     <div className={`relative z-10 w-40 h-40 rounded-full bg-gradient-to-b from-slate-800 to-black border-4 flex items-center justify-center shadow-2xl transition-all duration-300 ${status === 'speaking' ? 'border-indigo-400 shadow-[0_0_50px_rgba(99,102,241,0.5)]' : 'border-slate-700'}`}>
                         {status === 'speaking' ? (
                             <SpeakerWaveIcon className="w-16 h-16 text-indigo-300 animate-pulse"/>
@@ -376,9 +424,8 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                     </div>
                 </div>
 
-                {/* Subtitles / Transcript */}
                 <div className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center gap-3 z-20 max-h-60 overflow-y-auto scrollbar-hide mask-linear-fade" ref={transcriptContainerRef}>
-                    {transcript.slice(-2).map((msg, i) => (
+                    {transcript.slice(-3).map((msg, i) => (
                         <div key={i} className={`max-w-md p-4 rounded-2xl backdrop-blur-md text-sm leading-relaxed shadow-lg border border-white/5 ${msg.role === 'ai' ? 'bg-indigo-900/40 text-indigo-100 rounded-tl-none' : 'bg-slate-800/60 text-slate-200 rounded-tr-none self-end'}`}>
                             {msg.text}
                         </div>
@@ -391,7 +438,6 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                 </div>
             </div>
 
-            {/* Floating Control Dock */}
             <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-50">
                 <div className="flex items-center gap-4 bg-[#1a1a1d]/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-2xl">
                     <button onClick={connect} className="p-3 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="اتصال مجدد">
@@ -402,7 +448,7 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
                     
                     <div className="flex flex-col items-center px-4">
                         <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-0.5">CLASS LIVE</span>
-                        <span className="text-xs font-bold text-white">{course.title}</span>
+                        <span className="text-xs font-bold text-white truncate max-w-[100px]">{course.title}</span>
                     </div>
 
                     <div className="h-8 w-[1px] bg-white/10"></div>
@@ -416,8 +462,7 @@ const LiveProfessorSession: React.FC<{ course: MicroCourse; onClose: () => void 
     );
 };
 
-// --- PDF Course Creator Component ---
-
+// --- PDF Course Creator ---
 const PdfCourseGenerator: React.FC<{ onCourseCreated: (course: MicroCourse) => void; onCancel: () => void }> = ({ onCourseCreated, onCancel }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [status, setStatus] = useState<'idle' | 'reading' | 'processing' | 'done'>('idle');
@@ -438,35 +483,22 @@ const PdfCourseGenerator: React.FC<{ onCourseCreated: (course: MicroCourse) => v
             const pdf = await pdfjs.getDocument(arrayBuffer).promise;
             
             let fullText = '';
-            const maxPages = Math.min(pdf.numPages, 30); // Limit pages for MVP to avoid token limits
+            const maxPages = Math.min(pdf.numPages, 40); 
             
             for (let i = 1; i <= maxPages; i++) {
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
                 const pageText = textContent.items.map((item: any) => item.str).join(' ');
                 fullText += pageText + '\n';
-                setProgress((i / maxPages) * 50); // First 50% is reading
+                setProgress((i / maxPages) * 50); 
             }
 
             setStatus('processing');
-            
-            // Generate Course with Gemini
             const prompt = `
-                Analyze this text extracted from a document.
-                Create a structured 7-day micro-course syllabus based on the key concepts.
-                
-                Text Snippet (first 20k chars):
-                ${fullText.substring(0, 20000)}...
-
-                Output JSON structure:
-                {
-                    "courseTitle": "Title based on document",
-                    "goal": "One sentence learning goal",
-                    "days": [
-                        { "day": 1, "focus": "Topic", "lesson": "Short explanation", "challenge": "Actionable task", "reflection": "Deep question" }
-                        ... (7 days)
-                    ]
-                }
+                Act as a professional curriculum designer. Analyze this text extracted from a textbook/document.
+                Create a structured 7-day micro-course syllabus based on the KEY CONCEPTS found in the text.
+                Text Snippet (first ~25k chars): ${fullText.substring(0, 25000)}...
+                Output ONLY a JSON object: { "courseTitle": "Title", "goal": "Goal", "days": [{ "day": 1, "focus": "Topic", "lesson": "Summary", "challenge": "Exercise", "reflection": "Question" }] }
                 Language: Persian.
             `;
 
@@ -489,8 +521,7 @@ const PdfCourseGenerator: React.FC<{ onCourseCreated: (course: MicroCourse) => v
                 createdAt: new Date().toISOString(),
                 chatHistory: [],
                 quizzes: [],
-                // Store extracted text for Live Professor context
-                pdfSource: fullText.substring(0, 50000) // Store reasonable amount for context
+                pdfSource: fullText.substring(0, 60000)
             };
 
             onCourseCreated(newCourse);
@@ -498,14 +529,14 @@ const PdfCourseGenerator: React.FC<{ onCourseCreated: (course: MicroCourse) => v
 
         } catch (error) {
             console.error("PDF Processing Error:", error);
-            alert("خطا در پردازش فایل. لطفا دوباره تلاش کنید.");
+            alert("خطا در پردازش فایل. لطفا فایل دیگری را امتحان کنید.");
             setStatus('idle');
             setProgress(0);
         }
     };
 
     return (
-        <div className="flex flex-col items-center justify-center h-full p-8">
+        <div className="flex flex-col items-center justify-center h-full p-8 bg-[#020617]">
             <div className="text-center mb-8">
                 <h3 className="text-2xl font-black text-white mb-2">تبدیل کتاب به کلاس درس</h3>
                 <p className="text-slate-400 text-sm">فایل PDF خود را رها کنید تا هوش مصنوعی آن را تدریس کند.</p>
@@ -518,11 +549,7 @@ const PdfCourseGenerator: React.FC<{ onCourseCreated: (course: MicroCourse) => v
                 `}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => { 
-                    e.preventDefault(); 
-                    setIsDragging(false); 
-                    if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); 
-                }}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); }}
                 onClick={() => fileInputRef.current?.click()}
             >
                 <input type="file" ref={fileInputRef} accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} />
@@ -571,25 +598,21 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
     const [isPdfMode, setIsPdfMode] = useState(false);
     const [newCourseGoal, setNewCourseGoal] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
-    const [activeTab, setActiveTab] = useState<'syllabus' | 'class' | 'quiz'>('syllabus');
+    const [activeTab, setActiveTab] = useState<'syllabus' | 'class' | 'quiz' | 'tutor'>('syllabus');
 
     const activeCourse = courses.find(c => c.id === activeCourseId);
 
     const getCoursesByCategory = (catId: string) => {
-        // Static categorization mapping based on ID patterns or keywords
-        // This is a simplification for the demo. Real app needs better categorization.
         return courses.filter(c => {
-            if (catId === 'konkur') return c.title.includes('کنکور') || c.goal.includes('آزمون') || c.id.startsWith('course-konkur');
-            if (catId === 'computer') return c.id.startsWith('course-comp');
-            if (catId === 'languages') return c.id.startsWith('course-lang');
-            if (catId === 'theology') return c.id.startsWith('course-theo');
-            if (catId === 'astronomy') return c.id.startsWith('course-astro');
-            if (catId === 'physics') return c.id.startsWith('course-phys') || c.id.startsWith('course-math');
-            if (catId === 'sciences') return c.id.startsWith('course-sci') || c.id.startsWith('course-bio') || c.id.startsWith('course-chem');
-            if (catId === 'humanities') return c.id.startsWith('course-human') || c.id.startsWith('course-lit') || c.id.startsWith('course-art') || c.id.startsWith('course-phil') || c.id.startsWith('course-hist');
-            
-            // Fallback for user generated courses
-            return true;
+            const id = c.id;
+            // Precise mapping based on App.tsx generation logic (prefix matching)
+            if (catId === 'school') return id.startsWith('course-school');
+            if (catId === 'tech') return id.startsWith('course-tech');
+            if (catId === 'lang') return id.startsWith('course-lang');
+            if (catId === 'business') return id.startsWith('course-business');
+            if (catId === 'art') return id.startsWith('course-art');
+            if (catId === 'lifestyle') return id.startsWith('course-lifestyle');
+            return false;
         });
     };
 
@@ -605,7 +628,7 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
             });
             const result = JSON.parse(response.text.trim());
             const newCourse: MicroCourse = {
-                id: `course-${Date.now()}`,
+                id: `course-lifestyle-${Date.now()}`, // Default to lifestyle for custom
                 title: result.courseTitle,
                 goal: newCourseGoal,
                 days: result.days.map((d: any) => ({ ...d, completed: false })),
@@ -625,10 +648,7 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
     };
 
     const handlePdfCourseCreated = (newCourse: MicroCourse) => {
-        // Ensure PDF courses are marked if for Konkur
-        if (newCourse.title.includes('کنکور') || newCourse.title.includes('آزمون')) {
-            newCourse.id = 'course-konkur-' + newCourse.id; // Tagging via ID hack for category sorting
-        }
+        newCourse.id = 'course-school-' + newCourse.id; // Assign to School category by default for PDFs
         const updated = [...courses, newCourse];
         setCourses(updated);
         onUpdateUserData({ ...userData, microCourses: updated });
@@ -640,13 +660,35 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
         if (!activeCourse) return;
         const newResult: QuizResult = { date: new Date().toISOString(), score, totalQuestions: 5 };
         const updatedCourse = { ...activeCourse, quizzes: [...(activeCourse.quizzes || []), newResult] };
-        // Simple XP logic
         const newXp = (userData.xp || 0) + (score * 20); 
         
         const updatedCourses = courses.map(c => c.id === activeCourse.id ? updatedCourse : c);
         setCourses(updatedCourses);
         onUpdateUserData({ ...userData, microCourses: updatedCourses, xp: newXp });
         setActiveTab('syllabus');
+    };
+
+    const handleToggleDay = (dayIndex: number) => {
+        if (!activeCourse) return;
+        const updatedDays = [...activeCourse.days];
+        updatedDays[dayIndex].completed = !updatedDays[dayIndex].completed;
+        
+        const completedCount = updatedDays.filter(d => d.completed).length;
+        const newProgress = Math.round((completedCount / updatedDays.length) * 100);
+        
+        const updatedCourse = { ...activeCourse, days: updatedDays, progress: newProgress };
+        const updatedCourses = courses.map(c => c.id === activeCourse.id ? updatedCourse : c);
+        
+        setCourses(updatedCourses);
+        onUpdateUserData({ ...userData, microCourses: updatedCourses });
+    };
+
+    const handleUpdateChat = (history: ChatMessage[]) => {
+        if (!activeCourse) return;
+        const updatedCourse = { ...activeCourse, chatHistory: history };
+        const updatedCourses = courses.map(c => c.id === activeCourse.id ? updatedCourse : c);
+        setCourses(updatedCourses);
+        onUpdateUserData({ ...userData, microCourses: updatedCourses });
     };
 
     // --- Screens ---
@@ -660,7 +702,6 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                 </div>
             </div>
 
-            {/* PDF Upload Banner */}
             <button 
                 onClick={() => setIsPdfMode(true)}
                 className="w-full mb-6 p-5 bg-gradient-to-r from-indigo-900/60 to-violet-900/60 border border-indigo-500/30 rounded-[2rem] flex items-center justify-between group hover:scale-[1.02] transition-transform shadow-lg"
@@ -671,7 +712,7 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                     </div>
                     <div className="text-right">
                         <h3 className="font-bold text-white text-lg">آپلود جزوه / کتاب</h3>
-                        <p className="text-xs text-slate-300">تبدیل PDF به کلاس درس تعاملی (مناسب کنکور)</p>
+                        <p className="text-xs text-slate-300">تبدیل PDF به کلاس درس تعاملی</p>
                     </div>
                 </div>
                 <div className="bg-indigo-600 p-2 rounded-full">
@@ -696,7 +737,7 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-white">{cat.label}</h3>
-                                    <p className="text-start text-[10px] text-slate-400 mt-1">ورود به دانشکده &larr;</p>
+                                    <p className="text-start text-[10px] text-slate-400 mt-1">مشاهده کلاس‌ها &larr;</p>
                                 </div>
                             </div>
                         </button>
@@ -709,7 +750,7 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                 className="w-full mt-6 py-4 border-2 border-dashed border-slate-700 rounded-[2rem] text-slate-400 font-bold hover:bg-slate-800 hover:text-white hover:border-indigo-500 transition-all flex items-center justify-center gap-2"
             >
                 <PlusIcon className="w-6 h-6"/>
-                تاسیس دوره جدید (موضوعی)
+                تاسیس دوره جدید
             </button>
         </div>
     );
@@ -725,28 +766,16 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                     <h2 className="text-xl font-black text-white">{cat?.label}</h2>
                 </div>
                 <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-32">
-                    {activeCategory === 'konkur' && (
-                        <div className="bg-rose-900/20 border border-rose-500/20 p-4 rounded-2xl flex items-center gap-4 mb-4">
-                            <div className="p-3 bg-rose-500 rounded-full text-white animate-pulse">
-                                <TrophyIcon className="w-6 h-6"/>
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-rose-200">مشاوره هوشمند کنکور</h3>
-                                <p className="text-xs text-rose-300">برای دریافت برنامه ریزی درسی، وارد یک دوره شوید و تماس زنده بگیرید.</p>
-                            </div>
-                        </div>
-                    )}
-
                     {list.length === 0 ? (
                         <div className="text-center py-20 opacity-50">
                             <BeakerIcon className="w-16 h-16 mx-auto mb-4 text-slate-600"/>
-                            <p>هنوز درسی در این دانشکده نیست.</p>
+                            <p>هنوز کلاسی در این دانشکده برگزار نشده است.</p>
                         </div>
                     ) : (
                         list.map(c => (
                             <div key={c.id} onClick={() => setActiveCourseId(c.id)} className="bg-slate-800/50 border border-slate-700 p-5 rounded-2xl cursor-pointer hover:bg-slate-800 transition-all group">
                                 <div className="flex justify-between items-start mb-3">
-                                    <h3 className="font-bold text-white text-lg">{c.title}</h3>
+                                    <h3 className="font-bold text-white text-lg truncate max-w-[200px]">{c.title}</h3>
                                     <ArrowLeftIcon className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors"/>
                                 </div>
                                 <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
@@ -765,8 +794,7 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
         if (!activeCourse) return null;
         if (activeTab === 'class') return <LiveProfessorSession course={activeCourse} onClose={() => setActiveTab('syllabus')} />;
         if (activeTab === 'quiz') return <QuizModal course={activeCourse} onComplete={handleQuizComplete} onClose={() => setActiveTab('syllabus')} />;
-
-        const isKonkur = activeCourse.id.includes('konkur') || activeCourse.title.includes('کنکور');
+        if (activeTab === 'tutor') return <CourseTutorChat course={activeCourse} onUpdateChat={handleUpdateChat} />;
 
         return (
             <div className="flex flex-col h-full">
@@ -784,36 +812,43 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2 relative z-10">هدف دوره</h3>
                         <p className="text-sm text-indigo-200 relative z-10">{activeCourse.goal}</p>
+                        <div className="w-full bg-slate-700/50 h-2 rounded-full overflow-hidden mt-4">
+                            <div className="bg-indigo-500 h-full transition-all duration-500" style={{ width: `${activeCourse.progress}%` }}></div>
+                        </div>
                         
-                        <div className="mt-4 flex justify-center gap-2 relative z-10">
+                        <div className="mt-6 flex justify-center gap-3 relative z-10">
                             <button onClick={() => setActiveTab('quiz')} className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-2">
-                                <PencilIcon className="w-4 h-4"/> آزمون مهارت
+                                <PencilIcon className="w-4 h-4"/> آزمون
+                            </button>
+                            <button onClick={() => setActiveTab('tutor')} className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-2">
+                                <ChatBubbleOvalLeftEllipsisIcon className="w-4 h-4"/> رفع اشکال
                             </button>
                         </div>
                     </div>
 
                     <div className="space-y-4">
-                        {activeCourse.days.map(day => (
-                            <div key={day.day} className="bg-slate-800/40 border border-slate-700 p-5 rounded-2xl group hover:border-indigo-500/30 transition-colors">
+                        {activeCourse.days.map((day, index) => (
+                            <div key={day.day} onClick={() => handleToggleDay(index)} className={`p-5 rounded-2xl cursor-pointer transition-all border ${day.completed ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-slate-800/40 border-slate-700 hover:bg-slate-800'}`}>
                                 <div className="flex justify-between items-center mb-2">
-                                    <span className="text-xs font-bold bg-white/5 px-3 py-1 rounded-lg text-indigo-300">جلسه {day.day}</span>
-                                    <CheckCircleIcon className={`w-5 h-5 ${day.completed ? 'text-green-500' : 'text-slate-600'}`}/>
+                                    <span className={`text-xs font-bold px-3 py-1 rounded-lg ${day.completed ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-slate-400'}`}>جلسه {day.day}</span>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${day.completed ? 'bg-green-500 border-green-500' : 'border-slate-600'}`}>
+                                        {day.completed && <CheckCircleIcon className="w-4 h-4 text-white"/>}
+                                    </div>
                                 </div>
-                                <h4 className="font-bold text-white mb-1">{day.lesson}</h4>
+                                <h4 className={`font-bold mb-1 ${day.completed ? 'text-indigo-200 line-through decoration-indigo-500/50' : 'text-white'}`}>{day.lesson}</h4>
                                 <p className="text-sm text-slate-400">{day.focus}</p>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Floating Action Button for Class */}
                 <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-30 w-max">
                     <button 
                         onClick={() => setActiveTab('class')}
-                        className={`flex items-center gap-3 text-white px-8 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-all border-4 border-[#020617] ${isKonkur ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/40' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/40'}`}
+                        className={`flex items-center gap-3 text-white px-8 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-all border-4 border-[#020617] bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/40`}
                     >
                         <MicrophoneIcon className="w-6 h-6"/>
-                        {isKonkur ? 'مشاوره و تدریس زنده' : 'شروع کلاس زنده'}
+                        شروع کلاس زنده
                     </button>
                 </div>
             </div>
@@ -822,10 +857,8 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
 
     return (
         <div className="fixed inset-0 z-50 bg-[#020617] font-[Vazirmatn] flex flex-col animate-fadeIn overflow-hidden">
-            {/* Background */}
             <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none"></div>
             
-            {/* Content Container - Ensures Scrolling */}
             <div className="relative z-10 w-full h-full flex flex-col min-h-0">
                 {isPdfMode ? (
                     <PdfCourseGenerator onCourseCreated={handlePdfCourseCreated} onCancel={() => setIsPdfMode(false)} />
@@ -849,7 +882,6 @@ const MicroCourseView: React.FC<MicroCourseViewProps> = ({ userData, onUpdateUse
                 ) : activeCourseId ? renderCourse() : activeCategory ? renderCategory() : renderHome()}
             </div>
 
-            {/* Bottom Dock (Only on main pages, not inside live class or specialized modes) */}
             {!isCreating && !isPdfMode && !activeCourseId && (
                 <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-40">
                     <button onClick={onClose} className="w-16 h-16 rounded-full bg-slate-800 border-4 border-[#020617] text-slate-400 hover:text-white flex items-center justify-center shadow-lg hover:scale-105 transition-all">

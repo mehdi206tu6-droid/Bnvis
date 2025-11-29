@@ -87,7 +87,7 @@ const ReadingWidget: React.FC<{ userData: OnboardingData, onClick: () => void }>
     }, [readingBooks.length]);
 
     if (readingBooks.length === 0) {
-        return <GridItem icon={BookOpenIcon} label="کتابخانه" color="text-yellow-400" glow="shadow-yellow-500/50" onClick={onClick} />;
+        return <GridItem icon={BookOpenIcon} label="کتاب‌باز" color="text-yellow-400" glow="shadow-yellow-500/50" onClick={onClick} />;
     }
 
     const book = readingBooks[index];
